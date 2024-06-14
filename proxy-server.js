@@ -1,25 +1,39 @@
-// proxy-server.js
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
+const cheerio = require('cheerio');
+
 const app = express();
 const port = 3001;
 
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    next();
-});
+app.use(cors());
 
-app.get('/card/:number', async (req, res) => {
-    const cardNumber = req.params.number;
-    const url = `https://www.pokemon-card.com/card-search/details.php/card/${cardNumber}`;
+app.get('/proxy', async (req, res) => {
+    const url = req.query.url;
+    if (!url) {
+        return res.status(400).send('URL is required');
+    }
 
     try {
         const response = await axios.get(url);
-        res.send(response.data);
+        const $ = cheerio.load(response.data);
+
+        // 画像URLを抽出
+        const imageUrls = [];
+        $('script').each((i, script) => {
+            const scriptContent = $(script).html();
+            if (scriptContent.includes('PCGDECK.searchItemCardPict')) {
+                const regex = /PCGDECK\.searchItemCardPict\[\d+\]='([^']+)'/g;
+                let match;
+                while ((match = regex.exec(scriptContent)) !== null) {
+                    imageUrls.push(`https://www.pokemon-card.com${match[1]}`);
+                }
+            }
+        });
+
+        res.json(imageUrls);
     } catch (error) {
-        res.status(500).send('Error fetching card information');
+        res.status(error.response.status).send(error.message);
     }
 });
 
