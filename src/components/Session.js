@@ -5,6 +5,7 @@ import { Button } from 'react-bootstrap';
 import axios from 'axios';
 import db from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import '../css/style.css';
 
 const Session = () => {
     const query = new URLSearchParams(useLocation().search);
@@ -26,15 +27,24 @@ const Session = () => {
         const url = `http://localhost:3001/proxy?url=https://www.pokemon-card.com/deck/confirm.html/deckID/${deckCode}`;
         try {
             const response = await axios.get(url);
-            console.log('Response data:', response.data); // レスポンスデータ全体をログ出力
+            console.log('Response data:', response.data);
 
             const parser = new DOMParser();
             const doc = parser.parseFromString(response.data, 'text/html');
-
-            // パースされたドキュメントの確認
             console.log('Parsed document:', doc);
 
-            // 関連するスクリプトタグの抽出
+            const hiddenInputs = doc.querySelectorAll('input[type="hidden"]');
+            const cardMap = new Map();
+
+            hiddenInputs.forEach(input => {
+                const value = input.value;
+                const cards = value.split('-');
+                cards.forEach(card => {
+                    const [id, count] = card.split('_');
+                    cardMap.set(id, parseInt(count, 10));
+                });
+            });
+
             const scriptTags = Array.from(doc.querySelectorAll('script'));
             const relevantScriptTag = scriptTags.find(script => script.textContent.includes('PCGDECK.searchItemCardPict'));
 
@@ -43,19 +53,25 @@ const Session = () => {
             }
 
             const scriptContent = relevantScriptTag.textContent;
-            console.log('Script content:', scriptContent); // スクリプト内容のログ出力
+            console.log('Script content:', scriptContent);
 
-            // 画像URLをマッチさせるための正規表現
-            const regex = /PCGDECK\.searchItemCardPict\[\d+\]='([^']+)';/g;
+            const regex = /PCGDECK\.searchItemCardPict\[(\d+)\]='([^']+)';/g;
             let match;
             const newSelectedDeckCards = [];
 
             while ((match = regex.exec(scriptContent)) !== null) {
-                console.log('Match found:', match); // 各マッチをログ出力
-                newSelectedDeckCards.push(`https://www.pokemon-card.com${match[1]}`);
+                const id = match[1];
+                const url = `https://www.pokemon-card.com${match[2]}`;
+                const count = cardMap.get(id);
+
+                if (count) {
+                    for (let i = 0; i < count; i++) {
+                        newSelectedDeckCards.push(url);
+                    }
+                }
             }
 
-            console.log('Extracted deck cards:', newSelectedDeckCards); // 抽出されたURLをログ出力
+            console.log('Extracted deck cards:', newSelectedDeckCards);
             setSelectedDeckCards(newSelectedDeckCards);
         } catch (error) {
             console.error('Error fetching deck information:', error);
@@ -92,7 +108,7 @@ const Session = () => {
                 />
                 <Button className="btn btn-secondary ml-2" onClick={fetchDeckInfo}>デッキ情報を取得</Button>
             </div>
-            <div className="mb-3">
+            <div className="mb-3 hover-zoom">
                 {selectedDeckCards.map((card, index) => (
                     <img key={index} src={card} alt={`Card ${index}`} className="img-thumbnail" style={{ width: '100px', margin: '5px' }} />
                 ))}

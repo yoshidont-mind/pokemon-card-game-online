@@ -1,0 +1,8 @@
+.hover-zoom img {
+    transition: transform 0.2s; /* スムーズな変化のためのトランジション */
+}
+
+.hover-zoom img:hover {
+    transform: scale(2.5); /* 画像を2.5倍に拡大 */
+    z-index: 1; /* 画像を前面に表示 */
+}
