@@ -15,6 +15,7 @@ const Home = () => {
                 hand: [],
                 bench: [],
                 activeSpot: [],
+                stadium: "",
                 discardPile: [],
                 prizeCards: [],
                 message: ""
@@ -25,6 +26,7 @@ const Home = () => {
                 hand: [],
                 bench: [],
                 activeSpot: [],
+                stadium: "",
                 discardPile: [],
                 prizeCards: [],
                 message: ""

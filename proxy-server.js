@@ -19,21 +19,36 @@ app.get('/proxy', async (req, res) => {
         const $ = cheerio.load(response.data);
 
         // 画像URLを抽出
-        const imageUrls = [];
-        $('script').each((i, script) => {
+        const scriptTags = $('script');
+        let imageUrls = [];
+        scriptTags.each((i, script) => {
             const scriptContent = $(script).html();
             if (scriptContent.includes('PCGDECK.searchItemCardPict')) {
-                const regex = /PCGDECK\.searchItemCardPict\[\d+\]='([^']+)'/g;
+                const regex = /PCGDECK\.searchItemCardPict\[(\d+)\]='([^']+)'/g;
                 let match;
                 while ((match = regex.exec(scriptContent)) !== null) {
-                    imageUrls.push(`https://www.pokemon-card.com${match[1]}`);
+                    imageUrls.push(`https://www.pokemon-card.com${match[2]}`);
                 }
             }
         });
 
-        res.json(imageUrls);
+        // カード情報を抽出
+        const hiddenInputs = $('input[type="hidden"]');
+        let cardData = [];
+        hiddenInputs.each((i, input) => {
+            const value = $(input).val();
+            if (value) {
+                const cards = value.split('-');
+                cards.forEach(card => {
+                    const [id, count] = card.split('_');
+                    cardData.push({ id, count: parseInt(count, 10) });
+                });
+            }
+        });
+
+        res.json({ imageUrls, cardData });
     } catch (error) {
-        res.status(error.response.status).send(error.message);
+        res.status(error.response ? error.response.status : 500).send(error.message);
     }
 });
 

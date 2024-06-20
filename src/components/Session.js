@@ -1,4 +1,3 @@
-// src/components/Session.js
 import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button } from 'react-bootstrap';
@@ -27,51 +26,18 @@ const Session = () => {
         const url = `http://localhost:3001/proxy?url=https://www.pokemon-card.com/deck/confirm.html/deckID/${deckCode}`;
         try {
             const response = await axios.get(url);
-            console.log('Response data:', response.data);
+            const { imageUrls, cardData } = response.data;
 
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(response.data, 'text/html');
-            console.log('Parsed document:', doc);
-
-            const hiddenInputs = doc.querySelectorAll('input[type="hidden"]');
-            const cardMap = new Map();
-
-            hiddenInputs.forEach(input => {
-                const value = input.value;
-                const cards = value.split('-');
-                cards.forEach(card => {
-                    const [id, count] = card.split('_');
-                    cardMap.set(id, parseInt(count, 10));
-                });
-            });
-
-            const scriptTags = Array.from(doc.querySelectorAll('script'));
-            const relevantScriptTag = scriptTags.find(script => script.textContent.includes('PCGDECK.searchItemCardPict'));
-
-            if (!relevantScriptTag) {
-                throw new Error('Relevant script tag not found');
-            }
-
-            const scriptContent = relevantScriptTag.textContent;
-            console.log('Script content:', scriptContent);
-
-            const regex = /PCGDECK\.searchItemCardPict\[(\d+)\]='([^']+)';/g;
-            let match;
-            const newSelectedDeckCards = [];
-
-            while ((match = regex.exec(scriptContent)) !== null) {
-                const id = match[1];
-                const url = `https://www.pokemon-card.com${match[2]}`;
-                const count = cardMap.get(id);
-
-                if (count) {
-                    for (let i = 0; i < count; i++) {
-                        newSelectedDeckCards.push(url);
+            let newSelectedDeckCards = [];
+            cardData.forEach(card => {
+                const matchingUrls = imageUrls.filter(url => url.includes(card.id));
+                if (matchingUrls.length > 0) {
+                    for (let i = 0; i < card.count; i++) {
+                        newSelectedDeckCards.push(matchingUrls[0]);
                     }
                 }
-            }
+            });
 
-            console.log('Extracted deck cards:', newSelectedDeckCards);
             setSelectedDeckCards(newSelectedDeckCards);
         } catch (error) {
             console.error('Error fetching deck information:', error);
@@ -79,14 +45,27 @@ const Session = () => {
         }
     };
 
+    const shuffleDeck = (deck) => {
+        for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+    };
+
     const saveDeck = async () => {
-        const playerField = `player${playerId}.all`;
+        const playerFieldAll = `player${playerId}.all`;
+        const playerFieldDeck = `player${playerId}.deck`;
         const sessionDoc = doc(db, 'sessions', sessionId);
 
         try {
+            const shuffledDeck = shuffleDeck([...selectedDeckCards]);
             await updateDoc(sessionDoc, {
-                [playerField]: selectedDeckCards
+                [playerFieldAll]: selectedDeckCards,
+                [playerFieldDeck]: shuffledDeck
             });
+            setSelectedDeckCards([]);
+            setDeckCode('');
             alert('デッキが保存されました。');
         } catch (error) {
             console.error('Error saving deck:', error);
@@ -101,6 +80,8 @@ const Session = () => {
             <div className="mb-3">
                 <input
                     type="text"
+                    id={deckCode}
+                    name={deckCode}
                     className="form-control d-inline-block w-75"
                     value={deckCode}
                     onChange={(e) => setDeckCode(e.target.value)}
