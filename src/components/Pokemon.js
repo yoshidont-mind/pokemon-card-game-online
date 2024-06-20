@@ -5,7 +5,7 @@ import { Badge } from "react-bootstrap";
 import '../css/Pokemon.css'; // Ensure this line is present to import the CSS file
 
 const Pokemon = ({
-                           images,
+                           images = [],
                            damage = 0,
                            isPoisoned = false,
                            isBurned = false,
