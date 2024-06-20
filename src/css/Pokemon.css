@@ -1,0 +1,35 @@
+.pokemon-card {
+    position: relative;
+    width: 100px;
+    height: 150px; /* カードの高さを指定 */
+}
+
+.card-images {
+    position: relative;
+    width: 100%;
+    height: 100%; /* カード画像の高さを指定 */
+}
+
+.pokemon-image {
+    position: absolute;
+    width: 100px;
+}
+
+.damage-badge {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    z-index: 10;
+}
+
+.status-badges {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 10;
+}
+
+.status-badge {
+    display: block;
+    margin-bottom: 2px;
+}
