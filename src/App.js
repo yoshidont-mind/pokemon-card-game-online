@@ -5,6 +5,7 @@ import Home from './components/Home';
 import Session from './components/Session';
 import Join from './components/Join';
 import PokemonTest from './components/PokemonTest';
+import UpdateGameDataTest from './components/UpdateGameDataTest';
 import PlayingFieldTest from './components/PlayingFieldTest';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
                 <Route path="/session" element={<Session />} />
                 <Route path="/join" element={<Join />} />
                 <Route path="/test/pokemon" element={<PokemonTest />} />
+                <Route path="/test/update-gamedata" element={<UpdateGameDataTest />} />
                 <Route path="/test/playing-field" element={<PlayingFieldTest />} />
             </Routes>
         </Router>

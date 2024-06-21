@@ -93,7 +93,13 @@ const PlayingField = ({ sessionId, playerId }) => {
                         </div>
                     </div>
                     <div className="col-3">
-                        <div className={`self ${styles.deck}`}>山札</div>
+                        <div className={`self ${styles.deck}`}>
+                            {playerData.deck.length > 0 ? (
+                                <div>山札（{playerData.deck.length}枚）</div>
+                            ) : (
+                                <div>山札（0枚）</div>
+                            )}
+                        </div>
                         <div className={`self ${styles.discardPile}`}>トラッシュ</div>
                     </div>
                 </div>
