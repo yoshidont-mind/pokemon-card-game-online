@@ -1,8 +1,8 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap/dist/css/bootstrap.min.css'; // index.jsで一括bootstrap読み込みしているので不要なはずだが、この行をコメントアウトするとピルの大きさやmarginが変わる
 import { Badge } from "react-bootstrap";
-import '../css/Pokemon.css'; // Ensure this line is present to import the CSS file
+import '../css/pokemon.css'; // Ensure this line is present to import the CSS file
 
 const Pokemon = ({
                            images = [],

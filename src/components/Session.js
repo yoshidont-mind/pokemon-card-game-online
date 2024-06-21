@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button } from 'react-bootstrap';
 import axios from 'axios';
 import db from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import PlayingField from './PlayingField';
 import '../css/style.css';
-import Pokemon from './Pokemon';
 
 const Session = () => {
     const query = new URLSearchParams(useLocation().search);
@@ -13,6 +13,18 @@ const Session = () => {
     const playerId = query.get('playerId');
     const [deckCode, setDeckCode] = useState('');
     const [selectedDeckCards, setSelectedDeckCards] = useState([]);
+    const [gameData, setGameData] = useState(null);
+
+    useEffect(() => {
+        const sessionDoc = doc(db, 'sessions', sessionId);
+        const unsubscribe = onSnapshot(sessionDoc, (doc) => {
+            if (doc.exists()) {
+                setGameData(doc.data());
+            }
+        });
+
+        return () => unsubscribe();
+    }, [sessionId]);
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(sessionId);
@@ -74,6 +86,12 @@ const Session = () => {
         }
     };
 
+    if (gameData && gameData[`player${playerId}`]?.all?.length > 0) {
+        return (
+            <PlayingField sessionId={sessionId} playerId={playerId} gameData={gameData} />
+        );
+    }
+
     return (
         <div className="container mt-5">
             <h3>セッションID: {sessionId}</h3>
@@ -81,8 +99,8 @@ const Session = () => {
             <div className="mb-3">
                 <input
                     type="text"
-                    id={deckCode}
-                    name={deckCode}
+                    id="deckCode"
+                    name="deckCode"
                     className="form-control d-inline-block w-75"
                     value={deckCode}
                     onChange={(e) => setDeckCode(e.target.value)}
