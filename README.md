@@ -88,14 +88,15 @@ Browser (React)
 
 ### 主要フロー
 1. セッション作成 (`/home`)
-- `Home` が `sessions` ドキュメントを作成し、`/session?id=...&playerId=1` へ遷移
+- `Home` が V2 スキーマの `sessions/{sessionId}` と `privateState/{playerId}` を初期化し、`/session?id=...&playerId=1` へ遷移
 
 2. デッキ取り込み (`/session`)
 - 入力したデッキコードでプロキシAPIを呼び、カード画像URLを取得
-- 枚数に応じて配列を組み立て、`playerX.all` / `playerX.deck` に保存
+- `cardId` を払い出して `privateState/{playerId}` の `cardCatalog` / `zones.deck` / `zones.hand` に保存
+- `sessions/{sessionId}.publicState.players.{playerId}.counters` を同期更新
 
 3. 盤面同期 (`/session` -> `PlayingField`)
-- `onSnapshot` でセッションを購読し、相手/自分の盤面を表示
+- `sessions/{sessionId}`（公開情報）と `privateState/{playerId}`（自分の秘匿情報）を購読して描画
 
 ---
 
@@ -110,7 +111,7 @@ Browser (React)
 | `/session?id=...&playerId=...` | `src/components/Session.js` | デッキコード入力・取り込み・保存・盤面遷移 |
 | `/test/pokemon` | `src/components/PokemonTest.js` | ポケモン表示コンポーネントの見た目確認 |
 | `/test/update-gamedata` | `src/components/UpdateGameDataTest.js` | JSONをセッションへ反映するテスト |
-| `/test/playing-field` | `src/components/PlayingFieldTest.js` | 現在はコメントアウト状態で実質未使用 |
+| `/test/playing-field` | `src/components/PlayingFieldTest.js` | テスト用プレースホルダ画面 |
 
 注意:
 - `src/App.js` に `/` ルートは定義されていないため、開発時は `http://localhost:3000/home` を直接開く
@@ -137,38 +138,98 @@ Browser (React)
 
 主要コレクション:
 - `sessions`
+- `sessions/{sessionId}/privateState/{playerId}`
 
-`sessions` ドキュメントの基本形（`Home.js` 初期化ベース）:
+`sessions/{sessionId}` の基本形（V2）:
 
 ```json
 {
-  "player1": {
-    "all": [],
-    "deck": [],
-    "hand": [],
-    "bench": [],
-    "activeSpot": [],
-    "stadium": "",
-    "discardPile": [],
-    "prizeCards": [],
-    "message": ""
+  "version": 2,
+  "status": "waiting",
+  "createdAt": "2026-02-18T00:00:00.000Z",
+  "createdBy": "player1",
+  "updatedAt": "2026-02-18T00:00:00.000Z",
+  "updatedBy": "player1",
+  "revision": 0,
+  "participants": {
+    "player1": {
+      "uid": null,
+      "displayName": null,
+      "joinedAt": null,
+      "lastSeenAt": null,
+      "connectionState": "unknown"
+    },
+    "player2": {
+      "uid": null,
+      "displayName": null,
+      "joinedAt": null,
+      "lastSeenAt": null,
+      "connectionState": "unknown"
+    }
   },
-  "player2": {
-    "all": [],
-    "deck": [],
-    "hand": [],
-    "bench": [],
-    "activeSpot": [],
-    "stadium": "",
-    "discardPile": [],
-    "prizeCards": [],
-    "message": ""
+  "publicState": {
+    "turnContext": {
+      "turnNumber": null,
+      "currentPlayer": null
+    },
+    "players": {
+      "player1": {
+        "board": {
+          "active": null,
+          "bench": [],
+          "discard": [],
+          "lostZone": [],
+          "prize": [],
+          "markers": []
+        },
+        "counters": {
+          "deckCount": 0,
+          "handCount": 0
+        }
+      },
+      "player2": {
+        "board": {
+          "active": null,
+          "bench": [],
+          "discard": [],
+          "lostZone": [],
+          "prize": [],
+          "markers": []
+        },
+        "counters": {
+          "deckCount": 0,
+          "handCount": 0
+        }
+      }
+    },
+    "stadium": null
   }
 }
 ```
 
+`sessions/{sessionId}/privateState/{playerId}` の基本形:
+
+```json
+{
+  "ownerPlayerId": "player1",
+  "updatedAt": "2026-02-18T00:00:00.000Z",
+  "updatedBy": "player1",
+  "revision": 0,
+  "zones": {
+    "deck": [],
+    "hand": []
+  },
+  "cardCatalog": {},
+  "initialDeckCardIds": []
+}
+```
+
 補足:
-- `public/sample_gamedata.json` では、`activeSpot` / `bench` の各要素は `images`, `damage`, 状態異常フラグを持つオブジェクト構造
+- 旧V1セッション（`player1/player2` 直下構造）は `compatRead` + `migrateV1ToV2` で読み取り互換対応
+- 移行CLI:
+  - `npm run migrate:sessions:v2 -- --project <projectId> --dry-run`
+  - `npm run migrate:sessions:v2 -- --project <projectId> --write --limit 10`
+  - `npm run verify:sessions:v2 -- --project <projectId>`
 
 ---
 
@@ -180,6 +241,8 @@ Browser (React)
   - `components/`: 画面・UIコンポーネント
   - `css/`: 盤面やカード表示のスタイル
   - `firebase.js`: Firebase初期化
+  - `game-state/`: V2スキーマ・ビルダー・移行・Invariant
+- `scripts/firestore/`: V1→V2移行CLI / V2検証CLI
 - `public/`
   - `sample_gamedata.json`: 盤面テスト用データ
 - `proxy-server.js`: デッキページ解析用のローカルプロキシ
@@ -260,14 +323,14 @@ npm start
 ## 既知の課題 / TODO
 
 - `PlayingField` の操作ボタンはUI中心で、実際の状態更新ロジックは未実装箇所が多い
-- `PlayingFieldTest.js` はコメントアウトされており未使用
+- `PlayingFieldTest.js` はプレースホルダ実装（本体テストは未着手）
 - `CardForm.js` は `GET /card/:number` を呼ぶが、`proxy-server.js` 側に該当APIがない
-- `App.test.js` は初期テンプレートのままで現行UIに一致しない可能性が高い
+- `App.test.js` はスモークテストのみで、ルーティング/操作の実運用テストは未整備
 - スマホ最適化は未着手（現状PC優先）
 
 ---
 
 ## References
 
-- `references/documents/260218_1_README_from_another_project.md`
-- `references/documents/260218_2_AGENTS_from_another_project.md`
+- `references/documents/260218_3_db_session_requirements_spec.md`
+- `references/documents/260218_4_full_implementation_roadmap.md`

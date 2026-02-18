@@ -16,17 +16,17 @@
 
 | ReqID | 優先度 | 要件本文 | 根拠箇所 | 実装Phase | 実装状態 | 検証状態 | 検証方法 | 証跡 |
 |---|---|---|---|---|---|---|---|---|
-| DB-REQ-001 | MUST | `cardInstanceId` を導入しカード実体を一意識別する | 5.1-1 | Phase 01 | Not Started | Not Started | 同名複数枚デッキでID重複なしを確認 | - |
-| DB-REQ-002 | MUST | カードメタ情報と現在位置/状態を分離する | 5.1-2 | Phase 01 | Not Started | Not Started | スキーマ定義と保存ドキュメントを確認 | - |
-| DB-REQ-003 | MUST | 1カードの複数ゾーン同時所属を禁止する | 5.1-3 | Phase 01 | Not Started | Not Started | 競合ケースを含む所属重複検証 | - |
-| DB-REQ-004 | MUST | `activeSpot` を配列ではなくオブジェクトまたはnullで固定する | 5.1-4 | Phase 01 | Not Started | Not Started | 保存データ型チェック | - |
-| DB-REQ-005 | MUST | 場の重なり順を配列順で保持できる | 5.1-5 | Phase 01 | Not Started | Not Started | 重ね順変更時の配列順反映確認 | - |
-| DB-REQ-006 | MUST | ロストゾーンをプレイヤーゾーンとして保持できる | 5.1-6 | Phase 01 | Not Started | Not Started | 両プレイヤー `lostZone` の存在確認 | - |
-| DB-REQ-007 | MUST | `isFaceDown` と `orientation` を保持できる | 5.1-7 | Phase 01 | Not Started | Not Started | 裏向き/横向き保存・再読込確認 | - |
+| DB-REQ-001 | MUST | `cardInstanceId` を導入しカード実体を一意識別する | 5.1-1 | Phase 01 | Done | Pass | 同名複数枚デッキでID重複なしを確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-002 | MUST | カードメタ情報と現在位置/状態を分離する | 5.1-2 | Phase 01 | Done | Pass | スキーマ定義と保存ドキュメントを確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-003 | MUST | 1カードの複数ゾーン同時所属を禁止する | 5.1-3 | Phase 01 | Done | Pass | 競合ケースを含む所属重複検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-004 | MUST | `activeSpot` を配列ではなくオブジェクトまたはnullで固定する | 5.1-4 | Phase 01 | Done | Pass | 保存データ型チェック | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-005 | MUST | 場の重なり順を配列順で保持できる | 5.1-5 | Phase 01 | Done | Pass | 重ね順変更時の配列順反映確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-006 | MUST | ロストゾーンをプレイヤーゾーンとして保持できる | 5.1-6 | Phase 01 | Done | Pass | 両プレイヤー `lostZone` の存在確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-007 | MUST | `isFaceDown` と `orientation` を保持できる | 5.1-7 | Phase 01 | Done | Pass | 裏向き/横向き保存・再読込確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
 | DB-REQ-008 | SHOULD | 任意座標（x/y）拡張欄を将来追加可能な構造にする | 5.1-8 | Phase 03 | Not Started | Not Started | 予約フィールド追加容易性をレビュー | - |
 | DB-REQ-009 | MUST | 相手手札・相手山札順序・相手サイド実体を参照不可にする | 5.2-1 | Phase 02 | Not Started | Not Started | 異なるplayer認証でread拒否を確認 | - |
-| DB-REQ-010 | MUST | 公開情報と秘匿情報を `publicState` / `privateState` に分離する | 5.2-2 | Phase 01 | Not Started | Not Started | ドキュメント構成とRules適用確認 | - |
-| DB-REQ-011 | MUST | 各カードに公開範囲を定義できる | 5.2-3 | Phase 01 | Not Started | Not Started | visibility値保存と表示制御確認 | - |
+| DB-REQ-010 | MUST | 公開情報と秘匿情報を `publicState` / `privateState` に分離する | 5.2-2 | Phase 01 | Done | Pass | ドキュメント構成とRules適用確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-011 | MUST | 各カードに公開範囲を定義できる | 5.2-3 | Phase 01 | Done | Pass | visibility値保存と表示制御確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
 | DB-REQ-012 | SHOULD | 一時公開の有効期限/解除契機を保持可能にする | 5.2-4 | Phase 02 | Not Started | Not Started | temporarilyRevealedの解除フロー確認 | - |
 | DB-REQ-013 | MUST | `sessionId` 単位で作成・参加・再開できる | 5.3-1 | Phase 02 | Not Started | Not Started | URL再入室で同一セッション復元確認 | - |
 | DB-REQ-014 | MUST | `player1/player2` と認可主体（UID/トークン）を紐づける | 5.3-2 | Phase 02 | Not Started | Not Started | なりすましアクセス拒否確認 | - |
@@ -60,20 +60,20 @@
 
 | ReqID | 優先度 | 要件本文 | 根拠箇所 | 実装Phase | 実装状態 | 検証状態 | 検証方法 | 証跡 |
 |---|---|---|---|---|---|---|---|---|
-| DB-REQ-038 | MUST | ルート構成として `sessions/{sessionId}` を持つ | 6.1 | Phase 01 | Not Started | Not Started | Firestoreコレクション構造確認 | - |
-| DB-REQ-039 | MUST | ルート構成として `sessions/{sessionId}/privateState/{playerId}` を持つ | 6.1 | Phase 01 | Not Started | Not Started | privateState作成確認 | - |
+| DB-REQ-038 | MUST | ルート構成として `sessions/{sessionId}` を持つ | 6.1 | Phase 01 | Done | Pass | Firestoreコレクション構造確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-039 | MUST | ルート構成として `sessions/{sessionId}/privateState/{playerId}` を持つ | 6.1 | Phase 01 | Done | Pass | privateState作成確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
 | DB-REQ-040 | SHOULD | 監査用 `sessions/{sessionId}/actions/{actionId}` を持てる | 6.1 | Phase 06 | Not Started | Not Started | actionsサブコレクション確認 | - |
-| DB-REQ-041 | MUST | `sessions/{sessionId}` に `version,status,createdAt,createdBy,updatedAt,updatedBy,revision,participants,publicState` を持つ | 6.2 | Phase 01 | Not Started | Not Started | 必須フィールド欠損チェック | - |
+| DB-REQ-041 | MUST | `sessions/{sessionId}` に `version,status,createdAt,createdBy,updatedAt,updatedBy,revision,participants,publicState` を持つ | 6.2 | Phase 01 | Done | Pass | 必須フィールド欠損チェック | references/implementation_logs/260218_phase01_data_model_migration.md |
 | DB-REQ-042 | MUST | `Participant` に `uid,displayName,joinedAt,lastSeenAt,connectionState` を持つ | 6.2 | Phase 02 | Not Started | Not Started | participant構造検証 | - |
-| DB-REQ-043 | MUST | `publicState` に `turnContext,players.player1.board,players.player2.board,stadium` を持つ | 6.3 | Phase 01 | Not Started | Not Started | publicState構造検証 | - |
-| DB-REQ-044 | MUST | `board` に `active,bench,discard,lostZone,prize,markers` を持つ | 6.3 | Phase 01 | Not Started | Not Started | board構造検証 | - |
-| DB-REQ-045 | MUST | `StackRef` に `stackId,cardIds,damage,specialConditions,orientation,isFaceDown` を持つ | 6.3 | Phase 01 | Not Started | Not Started | stack構造検証 | - |
-| DB-REQ-046 | MUST | `CardRef` に `cardId,orientation,isFaceDown,visibility` を持つ | 6.3 | Phase 01 | Not Started | Not Started | cardRef構造検証 | - |
-| DB-REQ-047 | MUST | `PrizeCardRef` に `cardId,isFaceDown,revealedTo` を持つ | 6.3 | Phase 01 | Not Started | Not Started | prize構造検証 | - |
-| DB-REQ-048 | MUST | `Marker` に `markerId,targetType,targetId,label,expiresHint,createdBy,createdAt` を持つ | 6.3 | Phase 01 | Not Started | Not Started | marker構造検証 | - |
-| DB-REQ-049 | MUST | `privateState/{playerId}` に `ownerPlayerId,updatedAt,updatedBy,revision,zones,cardCatalog` を持つ | 6.4 | Phase 01 | Not Started | Not Started | privateState構造検証 | - |
-| DB-REQ-050 | MUST | `zones` に `deck,hand` を持つ | 6.4 | Phase 01 | Not Started | Not Started | zones構造検証 | - |
-| DB-REQ-051 | MUST | `CardEntity` に `cardId,imageUrl,originalCardCode,ownerPlayerId,createdAt` を持つ | 6.4 | Phase 01 | Not Started | Not Started | cardCatalog構造検証 | - |
+| DB-REQ-043 | MUST | `publicState` に `turnContext,players.player1.board,players.player2.board,stadium` を持つ | 6.3 | Phase 01 | Done | Pass | publicState構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-044 | MUST | `board` に `active,bench,discard,lostZone,prize,markers` を持つ | 6.3 | Phase 01 | Done | Pass | board構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-045 | MUST | `StackRef` に `stackId,cardIds,damage,specialConditions,orientation,isFaceDown` を持つ | 6.3 | Phase 01 | Done | Pass | stack構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-046 | MUST | `CardRef` に `cardId,orientation,isFaceDown,visibility` を持つ | 6.3 | Phase 01 | Done | Pass | cardRef構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-047 | MUST | `PrizeCardRef` に `cardId,isFaceDown,revealedTo` を持つ | 6.3 | Phase 01 | Done | Pass | prize構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-048 | MUST | `Marker` に `markerId,targetType,targetId,label,expiresHint,createdBy,createdAt` を持つ | 6.3 | Phase 01 | Done | Pass | marker構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-049 | MUST | `privateState/{playerId}` に `ownerPlayerId,updatedAt,updatedBy,revision,zones,cardCatalog` を持つ | 6.4 | Phase 01 | Done | Pass | privateState構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-050 | MUST | `zones` に `deck,hand` を持つ | 6.4 | Phase 01 | Done | Pass | zones構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-051 | MUST | `CardEntity` に `cardId,imageUrl,originalCardCode,ownerPlayerId,createdAt` を持つ | 6.4 | Phase 01 | Done | Pass | cardCatalog構造検証 | references/implementation_logs/260218_phase01_data_model_migration.md |
 | DB-REQ-052 | MUST | 一時情報をサーバ保存する場合は確定直後に消去する | 6.4 注記 | Phase 02 | Not Started | Not Started | 一時領域の残存有無を確認 | - |
 
 ---
@@ -82,14 +82,14 @@
 
 | ReqID | 優先度 | 要件本文 | 根拠箇所 | 実装Phase | 実装状態 | 検証状態 | 検証方法 | 証跡 |
 |---|---|---|---|---|---|---|---|---|
-| DB-REQ-053 | MUST | 1つの `cardId` は同時に複数ゾーンへ存在しない | 7-1 | Phase 01 | Not Started | Not Started | 所属重複検知テスト | - |
-| DB-REQ-054 | MUST | public参照 `cardId` は対応 `cardCatalog` に必ず存在する | 7-2 | Phase 01 | Not Started | Not Started | 参照整合性チェック | - |
-| DB-REQ-055 | MUST | `active` は `null` または `StackRef` のみ | 7-3 | Phase 01 | Not Started | Not Started | 型ガードテスト | - |
-| DB-REQ-056 | MUST | `orientation` は `vertical|horizontal` のみ | 7-4 | Phase 01 | Not Started | Not Started | 不正値保存拒否テスト | - |
+| DB-REQ-053 | MUST | 1つの `cardId` は同時に複数ゾーンへ存在しない | 7-1 | Phase 01 | Done | Pass | 所属重複検知テスト | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-054 | MUST | public参照 `cardId` は対応 `cardCatalog` に必ず存在する | 7-2 | Phase 01 | Done | Pass | 参照整合性チェック | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-055 | MUST | `active` は `null` または `StackRef` のみ | 7-3 | Phase 01 | Done | Pass | 型ガードテスト | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-056 | MUST | `orientation` は `vertical|horizontal` のみ | 7-4 | Phase 01 | Done | Pass | 不正値保存拒否テスト | references/implementation_logs/260218_phase01_data_model_migration.md |
 | DB-REQ-057 | MUST | `visibility=ownerOnly` カードは相手privateStateから参照不能 | 7-5 | Phase 02 | Not Started | Not Started | ルールテスト（別UID） | - |
 | DB-REQ-058 | MUST | 更新成功時に `revision` が必ず +1 される | 7-6 | Phase 02 | Not Started | Not Started | 連続更新でrevision増分確認 | - |
 | DB-REQ-059 | MUST | `updatedAt` は単調増加する | 7-7 | Phase 02 | Not Started | Not Started | 時刻逆行がないことを確認 | - |
-| DB-REQ-060 | MUST | 論理削除を含め `cardId` 再利用を禁止する | 7-8 | Phase 01 | Not Started | Not Started | 再利用attempt拒否テスト | - |
+| DB-REQ-060 | MUST | 論理削除を含め `cardId` 再利用を禁止する | 7-8 | Phase 01 | Done | Pass | 再利用attempt拒否テスト | references/implementation_logs/260218_phase01_data_model_migration.md |
 
 ---
 
@@ -97,13 +97,13 @@
 
 | ReqID | 優先度 | 要件本文 | 根拠箇所 | 実装Phase | 実装状態 | 検証状態 | 検証方法 | 証跡 |
 |---|---|---|---|---|---|---|---|---|
-| DB-REQ-061 | MUST | `version` による段階移行を採用する | 10.1 | Phase 01 | Not Started | Not Started | version判定ロジック確認 | - |
-| DB-REQ-062 | MUST | 読込時にversion判定し旧データを変換して扱う | 10.1 | Phase 01 | Not Started | Not Started | 旧データ読込テスト | - |
-| DB-REQ-063 | MUST | `activeSpot: []` を `active: null` に正規化する | 10.2-1 | Phase 01 | Not Started | Not Started | 変換関数テスト | - |
-| DB-REQ-064 | MUST | `all` を初期デッキスナップショット用途へ固定する | 10.2-2 | Phase 01 | Not Started | Not Started | 更新対象除外を確認 | - |
-| DB-REQ-065 | MUST | URL配列ベースの手札/山札を `cardId` ベースへ変換する | 10.2-3 | Phase 01 | Not Started | Not Started | 変換後データ整合性確認 | - |
-| DB-REQ-066 | MUST | `lostZone` 未存在セッションを空配列補完する | 10.2-4 | Phase 01 | Not Started | Not Started | 補完処理テスト | - |
-| DB-REQ-067 | MUST | `revision` 未存在セッションを `0` 初期化する | 10.2-5 | Phase 01 | Not Started | Not Started | 初期化処理テスト | - |
+| DB-REQ-061 | MUST | `version` による段階移行を採用する | 10.1 | Phase 01 | Done | Pass | version判定ロジック確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-062 | MUST | 読込時にversion判定し旧データを変換して扱う | 10.1 | Phase 01 | Done | Pass | 旧データ読込テスト | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-063 | MUST | `activeSpot: []` を `active: null` に正規化する | 10.2-1 | Phase 01 | Done | Pass | 変換関数テスト | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-064 | MUST | `all` を初期デッキスナップショット用途へ固定する | 10.2-2 | Phase 01 | Done | Pass | 更新対象除外を確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-065 | MUST | URL配列ベースの手札/山札を `cardId` ベースへ変換する | 10.2-3 | Phase 01 | Done | Pass | 変換後データ整合性確認 | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-066 | MUST | `lostZone` 未存在セッションを空配列補完する | 10.2-4 | Phase 01 | Done | Pass | 補完処理テスト | references/implementation_logs/260218_phase01_data_model_migration.md |
+| DB-REQ-067 | MUST | `revision` 未存在セッションを `0` 初期化する | 10.2-5 | Phase 01 | Done | Pass | 初期化処理テスト | references/implementation_logs/260218_phase01_data_model_migration.md |
 | DB-REQ-068 | SHOULD | 旧スキーマ互換を移行完了後に削除可能とする | 10.3 | Phase 09 | Not Started | Not Started | 互換削除判断記録確認 | - |
 | DB-REQ-069 | SHOULD | 互換削除時期をリリースノートへ明記する | 10.3 | Phase 09 | Not Started | Not Started | リリースノート確認 | - |
 

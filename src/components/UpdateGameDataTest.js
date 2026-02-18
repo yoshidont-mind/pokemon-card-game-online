@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import db from '../firebase';
+import { isV2SessionDoc } from '../game-state/schemaV2';
 
 const UpdateGameData = () => {
     const [sessionId, setSessionId] = useState('');
@@ -21,9 +22,23 @@ const UpdateGameData = () => {
             const gameData = await response.json();
 
             const sessionRef = doc(db, 'sessions', sessionId);
-            await updateDoc(sessionRef, gameData);
+            const sessionDoc = gameData.sessionDoc || gameData.session || gameData;
+            await setDoc(sessionRef, sessionDoc);
 
-            alert('ゲームデータが更新されました');
+            const privateStateByPlayer =
+                gameData.privateState || gameData.privateStatesByPlayer || {};
+
+            await Promise.all(
+                Object.entries(privateStateByPlayer).map(([playerId, privateStateDoc]) =>
+                    setDoc(doc(db, 'sessions', sessionId, 'privateState', playerId), privateStateDoc)
+                )
+            );
+
+            alert(
+                isV2SessionDoc(sessionDoc)
+                    ? 'V2ゲームデータが更新されました'
+                    : 'ゲームデータが更新されました'
+            );
         } catch (error) {
             console.error('Error updating game data:', error);
             alert('ゲームデータの更新に失敗しました');

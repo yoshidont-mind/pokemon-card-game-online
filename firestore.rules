@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase 01: data model migration focus. Rules hardening is scheduled in Phase 02.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

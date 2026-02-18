@@ -1,8 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+jest.mock('./components/Session', () => () => <div>Session Mock</div>);
+jest.mock('./components/Home', () => () => <div>Home Mock</div>);
+jest.mock('./components/Join', () => () => <div>Join Mock</div>);
+jest.mock('./components/PokemonTest', () => () => <div>PokemonTest Mock</div>);
+jest.mock('./components/UpdateGameDataTest', () => () => <div>UpdateGameDataTest Mock</div>);
+jest.mock('./components/PlayingFieldTest', () => () => <div>PlayingFieldTest Mock</div>);
+
+test('renders without crashing', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
 });

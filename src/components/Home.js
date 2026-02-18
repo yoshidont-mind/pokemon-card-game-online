@@ -1,39 +1,37 @@
 // src/components/Home.js
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import db from '../firebase';
+import { createEmptyPrivateStateV2, createEmptySessionV2 } from '../game-state/builders';
 
 const Home = () => {
     const navigate = useNavigate();
 
     const createSession = async () => {
-        const newSession = {
-            player1: {
-                all: [],
-                deck: [],
-                hand: [],
-                bench: [],
-                activeSpot: [],
-                stadium: "",
-                discardPile: [],
-                prizeCards: [],
-                message: ""
-            },
-            player2: {
-                all: [],
-                deck: [],
-                hand: [],
-                bench: [],
-                activeSpot: [],
-                stadium: "",
-                discardPile: [],
-                prizeCards: [],
-                message: ""
-            }
-        };
+        const now = new Date().toISOString();
+        const newSession = createEmptySessionV2({
+            createdBy: 'player1',
+            now,
+        });
 
         const docRef = await addDoc(collection(db, 'sessions'), newSession);
+        await setDoc(
+            doc(db, 'sessions', docRef.id, 'privateState', 'player1'),
+            createEmptyPrivateStateV2({
+                ownerPlayerId: 'player1',
+                updatedBy: 'player1',
+                now,
+            })
+        );
+        await setDoc(
+            doc(db, 'sessions', docRef.id, 'privateState', 'player2'),
+            createEmptyPrivateStateV2({
+                ownerPlayerId: 'player2',
+                updatedBy: 'player1',
+                now,
+            })
+        );
         navigate(`/session?id=${docRef.id}&playerId=1`);
     };
 
