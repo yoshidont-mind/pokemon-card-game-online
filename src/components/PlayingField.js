@@ -4,6 +4,8 @@ import db from '../firebase';
 import Pokemon from './Pokemon';
 import styles from '../css/playingField.module.css';
 
+const CARD_BACK_IMAGE = '/card-back.svg';
+
 const PlayingField = ({ sessionId, playerId }) => {
     const [gameData, setGameData] = useState(null);
 
@@ -21,6 +23,9 @@ const PlayingField = ({ sessionId, playerId }) => {
     const opponentId = playerId === '1' ? '2' : '1';
     const opponentData = gameData ? gameData[`player${opponentId}`] : {};
     const playerData = gameData ? gameData[`player${playerId}`] : {};
+    const playerHand = Array.isArray(playerData.hand) ? playerData.hand : [];
+    const playerDeckCount = Array.isArray(playerData.deck) ? playerData.deck.length : 0;
+    const opponentDeckCount = Array.isArray(opponentData.deck) ? opponentData.deck.length : 0;
 
     if (!gameData) {
         return <div>Loading...</div>;
@@ -35,7 +40,12 @@ const PlayingField = ({ sessionId, playerId }) => {
                             <div className={`opponent ${styles.discardPile}`}>トラッシュ（相手）</div>
                         </div>
                         <div className="">
-                            <div className={`opponent ${styles.deck}`}>山札（相手）</div>
+                            <div className={`opponent ${styles.deck}`}>
+                                {opponentDeckCount > 0 && (
+                                    <img src={CARD_BACK_IMAGE} alt="Opponent Deck" className={styles.deckCardBack} />
+                                )}
+                                <div>山札（相手）{opponentDeckCount > 0 ? `（${opponentDeckCount}枚）` : ''}</div>
+                            </div>
                         </div>
                     </div>
                     <div className={"col-6"}>
@@ -64,7 +74,17 @@ const PlayingField = ({ sessionId, playerId }) => {
             <div id="playerField">
                 <div className="row">
                     <div className={`col-3 self ${styles.hand}`}>
-                        <div>手札</div>
+                        <div>手札（{playerHand.length}枚）</div>
+                        <div className={styles.handCards}>
+                            {playerHand.map((card, index) => (
+                                <img
+                                    key={`${card}-${index}`}
+                                    src={card}
+                                    alt={`Hand Card ${index + 1}`}
+                                    className={styles.handCardImage}
+                                />
+                            ))}
+                        </div>
                         <div className="action-buttons">
                             <button className="btn btn-primary m-1">見せる</button>
                             <button className="btn btn-primary m-1">ベンチに出す</button>
@@ -94,8 +114,11 @@ const PlayingField = ({ sessionId, playerId }) => {
                     </div>
                     <div className="col-3">
                         <div className={`self ${styles.deck}`}>
-                            {playerData.deck.length > 0 ? (
-                                <div>山札（{playerData.deck.length}枚）</div>
+                            {playerDeckCount > 0 ? (
+                                <>
+                                    <img src={CARD_BACK_IMAGE} alt="Deck" className={styles.deckCardBack} />
+                                    <div>山札（{playerDeckCount}枚）</div>
+                                </>
                             ) : (
                                 <div>山札（0枚）</div>
                             )}
