@@ -31,6 +31,13 @@
 - 盤面情報を Firestore の `onSnapshot` でリアルタイム同期できる
 - テスト用画面で `public/sample_gamedata.json` をセッションに反映できる
 
+### 盤面UI（Phase 03 時点）
+- 盤面レイアウトを「上: 相手領域 / 中央: スタジアム / 下: 自分領域」の紙プレイ寄せ構成に更新
+- 主要ゾーンに `data-zone` / `data-drop-group` を付与（Phase 04 の DnD 実装準備）
+- 手札エリアを浮遊トレイ化し、トグルで最小化/展開できる
+- 小道具BOX（ダメカン/状態異常）を右下ドッキングの折りたたみUIで追加
+- 裏向きカード画像は `card-back.jpg` に統一
+
 ### これから実現したいこと（要件）
 - ポケカ対戦に必要な手動操作を画面上で再現する
   - 例: ドロー、シャッフル、トラッシュ、場に出す、ダメカン配置、重ねる
@@ -337,7 +344,7 @@ firebase emulators:exec --only auth,firestore --project demo-pokemon-card-game-o
 ## 既知の課題 / TODO
 
 - `PlayingField` の操作ボタンはUI中心で、実際の状態更新ロジックは未実装箇所が多い
-- `PlayingFieldTest.js` はプレースホルダ実装（本体テストは未着手）
+- `PlayingFieldTest.js` はサンプルデータ固定の表示確認用途で、実対戦フロー結合テストではない
 - `CardForm.js` は `GET /card/:number` を呼ぶが、`proxy-server.js` 側に該当APIがない
 - `App.test.js` はスモークテストのみで、ルーティング/操作の実運用テストは未整備
 - スマホ最適化は未着手（現状PC優先）

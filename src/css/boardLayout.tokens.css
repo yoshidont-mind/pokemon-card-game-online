@@ -1,0 +1,20 @@
+:root {
+  --board-max-width: 1240px;
+  --board-bg: #8fb56f;
+  --board-border: #dce7cf;
+  --zone-bg: #f8f8f8;
+  --zone-border: #cbd5bf;
+  --zone-title: #1f2b16;
+  --zone-text: #2f3b24;
+  --zone-muted: #6b7a5d;
+  --zone-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+  --card-w: clamp(58px, 6vw, 88px);
+  --card-gap: clamp(6px, 0.8vw, 10px);
+  --zone-padding: clamp(8px, 1.2vw, 14px);
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --z-board: 1;
+  --z-toolbox: 25;
+  --z-hand: 30;
+  --z-overlay: 40;
+}

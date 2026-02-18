@@ -1,93 +1,383 @@
-.playingField {
-    background-color: #f8f9fa;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+.boardRoot {
+  position: relative;
+  z-index: var(--z-board);
+  width: min(100%, var(--board-max-width));
+  margin: 0 auto;
+  padding: clamp(12px, 2vw, 22px);
+  background: linear-gradient(180deg, #a4c788 0%, var(--board-bg) 55%, #7ca35f 100%);
+  border: 2px solid var(--board-border);
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
+  color: var(--zone-text);
 }
 
-.message {
+.statusBar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+  font-size: 0.86rem;
+  color: #edf5e6;
 }
 
-.deck, .discardPile, .stadium, .prizeCards, .activeSpot, .bench, .hand, .message {
-    background-color: #ffffff;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 20px;
-    margin-bottom: 10px;
+.opponentArea,
+.playerArea {
+  display: grid;
+  grid-template-columns: minmax(150px, 180px) 1fr minmax(150px, 180px);
+  gap: var(--card-gap);
+  align-items: stretch;
 }
 
-.deck img, .discardPile img, .stadium img, .prizeCards img, .bench img, .hand img {
-    max-width: 100%;
-    max-height: 100%;
+.centerArea {
+  margin: clamp(8px, 1.6vw, 18px) 0;
+  display: flex;
+  justify-content: center;
 }
 
-.activeSpot {
-    position: relative;
-    width: 100px;
-    height: 140px;
-    margin: 0 auto;
+.sideColumn {
+  display: grid;
+  gap: var(--card-gap);
 }
 
-.bench {
-    display: flex;
-    justify-content: space-around;
+.mainColumn {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: var(--card-gap);
 }
 
-.actionButtons .btn {
-    width: 100px;
+.benchRow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--card-gap);
+}
+
+.activeRow {
+  display: flex;
+  justify-content: center;
+}
+
+.zoneTile,
+.activeZone,
+.benchSlot,
+.centerZone {
+  background: var(--zone-bg);
+  border: 1px solid var(--zone-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--zone-shadow);
+  padding: var(--zone-padding);
+}
+
+.zoneTile {
+  min-height: clamp(84px, 10vw, 118px);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 6px;
+}
+
+.zoneTitle {
+  margin: 0;
+  font-size: clamp(0.72rem, 0.88vw, 0.84rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--zone-title);
+}
+
+.zoneValue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.zoneValueMuted {
+  color: var(--zone-muted);
+}
+
+.activeZone {
+  width: min(320px, 100%);
+  min-height: clamp(112px, 16vw, 170px);
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.activePlaceholder {
+  font-size: 0.88rem;
+  color: var(--zone-muted);
+}
+
+.benchSlot {
+  min-height: clamp(84px, 11vw, 132px);
+  display: grid;
+  place-items: center;
+}
+
+.benchPlaceholder {
+  font-size: 0.78rem;
+  color: var(--zone-muted);
 }
 
 .deckCardBack {
-    width: 72px;
-    height: auto;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    margin-bottom: 6px;
+  width: var(--card-w);
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+}
+
+.centerZone {
+  width: min(360px, 100%);
+  min-height: clamp(66px, 8.5vw, 92px);
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.panelToggle {
+  border: 1px solid #6f8659;
+  background: #f4faef;
+  color: #1f2b16;
+  border-radius: 999px;
+  font-weight: 700;
+  line-height: 1.1;
+  padding: 8px 14px;
+  min-height: 38px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+}
+
+.panelToggle:hover {
+  background: #ebf6e1;
+}
+
+.panelToggle:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 2px;
+}
+
+.handTrayRoot {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: var(--z-hand);
+  width: min(88vw, 760px);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.handTrayPanel {
+  width: 100%;
+  max-height: min(60vh, 420px);
+  overflow: hidden;
+  border: 1px solid #d6dfcb;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.handPreviewArea {
+  min-height: clamp(180px, 24vh, 320px);
+  display: grid;
+  place-items: center;
+  border: 1px dashed #b7c8aa;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f5fbef 0%, #edf6e3 100%);
+  padding: 8px;
 }
 
 .handCards {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-    margin: 8px 0 10px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0 8px;
+}
+
+.handCards::-webkit-scrollbar {
+  height: 7px;
+}
+
+.handCards::-webkit-scrollbar-thumb {
+  background: rgba(74, 96, 58, 0.35);
+  border-radius: 10px;
 }
 
 .handCardImage {
-    width: 72px;
-    height: auto;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  width: var(--card-w);
+  flex: 0 0 auto;
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
-.badge {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background-color: red;
-    color: white;
-    border-radius: 50%;
-    padding: 5px;
-    text-align: center;
+.handCardPreviewImage {
+  width: clamp(180px, 21vw, 280px);
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
 }
 
-.badgePoison {
-    background-color: purple;
+.handCardButton {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 2px;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-.badgeBurn {
-    background-color: red;
+.handCardButton:hover .handCardImage,
+.handCardButton:focus-visible .handCardImage,
+.handCardButtonActive .handCardImage {
+  transform: translateY(-6px) scale(1.05);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.28);
 }
 
-.badgeAsleep {
-    background-color: blue;
+.handCardButton:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 1px;
 }
 
-.badgeParalyzed {
-    background-color: yellow;
-    color: black;
+.handCardButtonActive {
+  border-color: #5f8d3d;
 }
 
-.badgeConfused {
-    background-color: grey;
+.toolboxRoot {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: var(--z-toolbox);
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  width: min(80vw, 300px);
+}
+
+.toolboxPanel {
+  width: min(80vw, 300px);
+  border: 1px solid #d6dfcb;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.toolboxGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.toolboxItem {
+  border: 1px solid #8ea37a;
+  border-radius: 999px;
+  background: #f4faef;
+  color: #1f2b16;
+  font-weight: 700;
+  padding: 6px 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.toolboxItem:hover {
+  filter: brightness(0.97);
+}
+
+.toolboxItem:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 1px;
+}
+
+.toolboxItem[data-tool-type='damage-counter'][data-tool-value='10'] {
+  background: #ffe277;
+  border-color: #d1a800;
+  color: #5d4700;
+}
+
+.toolboxItem[data-tool-type='damage-counter'][data-tool-value='50'] {
+  background: #ffbe73;
+  border-color: #d47612;
+  color: #5e2800;
+}
+
+.toolboxItem[data-tool-type='damage-counter'][data-tool-value='100'] {
+  background: #ff8f8f;
+  border-color: #d43333;
+  color: #5d0000;
+}
+
+.toolboxItem[data-tool-type='status-badge'][data-tool-value='poison'] {
+  background: #c7a8ff;
+  border-color: #7243c2;
+  color: #2d1257;
+}
+
+.toolboxItem[data-tool-type='status-badge'][data-tool-value='burn'] {
+  background: #ff9a8b;
+  border-color: #cf3f2e;
+  color: #61120a;
+}
+
+.toolboxItem[data-tool-type='status-badge'][data-tool-value='asleep'] {
+  background: #9deaff;
+  border-color: #2b9ac2;
+  color: #0c4256;
+}
+
+.toolboxItem[data-tool-type='status-badge'][data-tool-value='paralyzed'] {
+  background: #ffe88b;
+  border-color: #d7ad00;
+  color: #5f4a00;
+}
+
+.toolboxItem[data-tool-type='status-badge'][data-tool-value='confused'] {
+  background: #d7d9ff;
+  border-color: #6f75c9;
+  color: #23285e;
+}
+
+.panelEmptyText {
+  color: var(--zone-muted);
+  font-size: 0.88rem;
+  padding: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelToggle,
+  .toolboxItem,
+  .handCardImage {
+    transition: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .opponentArea,
+  .playerArea {
+    grid-template-columns: 1fr;
+  }
+
+  .benchRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .handTrayRoot {
+    width: min(94vw, 760px);
+    bottom: 8px;
+  }
+
+  .toolboxRoot {
+    right: 8px;
+    bottom: 70px;
+    width: min(90vw, 300px);
+  }
 }
