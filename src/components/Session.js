@@ -8,6 +8,7 @@ import PlayingField from './PlayingField';
 import '../css/style.css';
 
 const Session = () => {
+    const INITIAL_HAND_SIZE = 7;
     const query = new URLSearchParams(useLocation().search);
     const sessionId = query.get('id');
     const playerId = query.get('playerId');
@@ -69,13 +70,17 @@ const Session = () => {
     const saveDeck = async () => {
         const playerFieldAll = `player${playerId}.all`;
         const playerFieldDeck = `player${playerId}.deck`;
+        const playerFieldHand = `player${playerId}.hand`;
         const sessionDoc = doc(db, 'sessions', sessionId);
 
         try {
             const shuffledDeck = shuffleDeck([...selectedDeckCards]);
+            const initialHand = shuffledDeck.slice(0, INITIAL_HAND_SIZE);
+            const remainingDeck = shuffledDeck.slice(INITIAL_HAND_SIZE);
             await updateDoc(sessionDoc, {
                 [playerFieldAll]: selectedDeckCards,
-                [playerFieldDeck]: shuffledDeck
+                [playerFieldDeck]: remainingDeck,
+                [playerFieldHand]: initialHand
             });
             setSelectedDeckCards([]);
             setDeckCode('');
