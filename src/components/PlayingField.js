@@ -1,134 +1,178 @@
-import React, { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import db from '../firebase';
+import React from 'react';
 import Pokemon from './Pokemon';
 import styles from '../css/playingField.module.css';
+import { resolveCardRefsToImageUrls } from '../game-state/compatRead';
+import { toPlayerKey } from '../game-state/migrateV1ToV2';
 
-const CARD_BACK_IMAGE = '/card-back.svg';
+const CARD_BACK_IMAGE = '/card-back.jpg';
 
-const PlayingField = ({ sessionId, playerId }) => {
-    const [gameData, setGameData] = useState(null);
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
 
-    useEffect(() => {
-        const sessionDoc = doc(db, 'sessions', sessionId);
-        const unsubscribe = onSnapshot(sessionDoc, (doc) => {
-            if (doc.exists()) {
-                setGameData(doc.data());
-            }
-        });
+function getStackImages(stack, cardCatalog) {
+  return asArray(stack?.cardIds)
+    .map((cardId) => cardCatalog?.[cardId]?.imageUrl || null)
+    .filter(Boolean);
+}
 
-        return () => unsubscribe();
-    }, [sessionId]);
+function toPokemonProps(stack, cardCatalog) {
+  return {
+    images: getStackImages(stack, cardCatalog),
+    damage: Number(stack?.damage || 0),
+    isPoisoned: Boolean(stack?.specialConditions?.poisoned),
+    isBurned: Boolean(stack?.specialConditions?.burned),
+    isAsleep: Boolean(stack?.specialConditions?.asleep),
+    isParalyzed: Boolean(stack?.specialConditions?.paralyzed),
+    isConfused: Boolean(stack?.specialConditions?.confused),
+  };
+}
 
-    const opponentId = playerId === '1' ? '2' : '1';
-    const opponentData = gameData ? gameData[`player${opponentId}`] : {};
-    const playerData = gameData ? gameData[`player${playerId}`] : {};
-    const playerHand = Array.isArray(playerData.hand) ? playerData.hand : [];
-    const playerDeckCount = Array.isArray(playerData.deck) ? playerData.deck.length : 0;
-    const opponentDeckCount = Array.isArray(opponentData.deck) ? opponentData.deck.length : 0;
+const PlayingField = ({ playerId, sessionDoc, privateStateDoc }) => {
+  const ownerPlayerId = toPlayerKey(playerId);
+  const opponentPlayerId = ownerPlayerId === 'player1' ? 'player2' : 'player1';
 
-    if (!gameData) {
-        return <div>Loading...</div>;
-    }
+  const publicPlayers = sessionDoc?.publicState?.players || {};
+  const playerBoard = publicPlayers?.[ownerPlayerId]?.board || {};
+  const opponentBoard = publicPlayers?.[opponentPlayerId]?.board || {};
+  const playerCounters = publicPlayers?.[ownerPlayerId]?.counters || {};
+  const opponentCounters = publicPlayers?.[opponentPlayerId]?.counters || {};
 
-    return (
-        <div className={`game-board container mt-5 text-center ${styles.playingField}`}>
-            <div id="opponentField">
-                <div className="row mb-4">
-                    <div className={`col-3`}>
-                        <div className="">
-                            <div className={`opponent ${styles.discardPile}`}>トラッシュ（相手）</div>
-                        </div>
-                        <div className="">
-                            <div className={`opponent ${styles.deck}`}>
-                                {opponentDeckCount > 0 && (
-                                    <img src={CARD_BACK_IMAGE} alt="Opponent Deck" className={styles.deckCardBack} />
-                                )}
-                                <div>山札（相手）{opponentDeckCount > 0 ? `（${opponentDeckCount}枚）` : ''}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className={"col-6"}>
-                        <div className={`opponent ${styles.bench}`}>
-                            {opponentData.bench?.map((pokemon, index) => (
-                                <Pokemon key={index} {...pokemon} />
-                            ))}ベンチ（相手）
-                        </div>
-                        <div className={`row`}>
-                            <div className="col-4">
-                                <div className={`opponent ${styles.stadium}`}>スタジアム（相手）</div>
-                            </div>
-                            <div className="col-4">
-                                <div className={`opponent ${styles.activeSpot}`}>バトルポケモン（相手）</div>
-                            </div>
-                            <div className="col-4">
-                                <div className={`opponent ${styles.prizeCards}`}>サイド（相手）</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="col-3">
-                        <div className={`opponent ${styles.message}`}>{playerData.message}</div>
-                    </div>
-                </div>
+  const playerHandRefs = asArray(privateStateDoc?.zones?.hand);
+  const playerDeckRefs = asArray(privateStateDoc?.zones?.deck);
+  const playerCatalog = privateStateDoc?.cardCatalog || {};
+
+  const playerHandCards = resolveCardRefsToImageUrls(playerHandRefs, privateStateDoc);
+  const playerDeckCount = Number(playerCounters.deckCount ?? playerDeckRefs.length);
+  const opponentDeckCount = Number(opponentCounters.deckCount ?? 0);
+
+  const playerActive = playerBoard?.active;
+  const playerBench = asArray(playerBoard?.bench);
+  const opponentBenchCount = asArray(opponentBoard?.bench).length;
+
+  return (
+    <div className={`game-board container mt-5 text-center ${styles.playingField}`}>
+      <div id="opponentField">
+        <div className="row mb-4">
+          <div className="col-3">
+            <div className={`opponent ${styles.discardPile}`}>トラッシュ（相手）</div>
+            <div className={`opponent ${styles.deck}`}>
+              {opponentDeckCount > 0 && (
+                <img src={CARD_BACK_IMAGE} alt="Opponent Deck" className={styles.deckCardBack} />
+              )}
+              <div>山札（相手）{opponentDeckCount > 0 ? `（${opponentDeckCount}枚）` : '（0枚）'}</div>
             </div>
-            <div id="playerField">
-                <div className="row">
-                    <div className={`col-3 self ${styles.hand}`}>
-                        <div>手札（{playerHand.length}枚）</div>
-                        <div className={styles.handCards}>
-                            {playerHand.map((card, index) => (
-                                <img
-                                    key={`${card}-${index}`}
-                                    src={card}
-                                    alt={`Hand Card ${index + 1}`}
-                                    className={styles.handCardImage}
-                                />
-                            ))}
-                        </div>
-                        <div className="action-buttons">
-                            <button className="btn btn-primary m-1">見せる</button>
-                            <button className="btn btn-primary m-1">ベンチに出す</button>
-                            <button className="btn btn-primary m-1">バトル場に出す</button>
-                            <button className="btn btn-primary m-1">山札に戻す</button>
-                            <button className="btn btn-primary m-1">トラッシュ</button>
-                            <button className="btn btn-primary m-1">スタジアムに出す</button>
-                        </div>
-                    </div>
-                    <div className="col-6">
-                        <div className="row">
-                            <div className="col-4">
-                                <div className={`self ${styles.prizeCards}`}>サイド</div>
-                            </div>
-                            <div className="col-4">
-                                <div className={`self ${styles.activeSpot}`}>バトルポケモン（自分）</div>
-                            </div>
-                            <div className="col-4">
-                                <div className={`self ${styles.stadium}`}>スタジアム</div>
-                            </div>
-                        </div>
-                        <div className={`self ${styles.bench}`}>
-                            {playerData.bench?.map((pokemon, index) => (
-                                <Pokemon key={index} {...pokemon} />
-                            ))}ベンチ
-                        </div>
-                    </div>
-                    <div className="col-3">
-                        <div className={`self ${styles.deck}`}>
-                            {playerDeckCount > 0 ? (
-                                <>
-                                    <img src={CARD_BACK_IMAGE} alt="Deck" className={styles.deckCardBack} />
-                                    <div>山札（{playerDeckCount}枚）</div>
-                                </>
-                            ) : (
-                                <div>山札（0枚）</div>
-                            )}
-                        </div>
-                        <div className={`self ${styles.discardPile}`}>トラッシュ</div>
-                    </div>
+          </div>
+          <div className="col-6">
+            <div className={`opponent ${styles.bench}`}>ベンチ（相手）: {opponentBenchCount}体</div>
+            <div className="row">
+              <div className="col-4">
+                <div className={`opponent ${styles.stadium}`}>スタジアム（相手）</div>
+              </div>
+              <div className="col-4">
+                <div className={`opponent ${styles.activeSpot}`}>バトルポケモン（相手）</div>
+              </div>
+              <div className="col-4">
+                <div className={`opponent ${styles.prizeCards}`}>
+                  サイド（相手）: {asArray(opponentBoard?.prize).length}
                 </div>
+              </div>
             </div>
+          </div>
+          <div className="col-3">
+            <div className={`opponent ${styles.message}`}>
+              状態: {sessionDoc?.status || 'waiting'} / Rev: {sessionDoc?.revision ?? 0}
+            </div>
+          </div>
         </div>
-    );
+      </div>
+
+      <div id="playerField">
+        <div className="row">
+          <div className={`col-3 self ${styles.hand}`}>
+            <div>手札（{playerHandCards.length}枚）</div>
+            <div className={styles.handCards}>
+              {playerHandCards.map((card, index) => (
+                <img
+                  key={`${card}-${index}`}
+                  src={card}
+                  alt={`Hand Card ${index + 1}`}
+                  className={styles.handCardImage}
+                />
+              ))}
+            </div>
+            <div className="action-buttons">
+              <button className="btn btn-primary m-1" type="button">
+                見せる
+              </button>
+              <button className="btn btn-primary m-1" type="button">
+                ベンチに出す
+              </button>
+              <button className="btn btn-primary m-1" type="button">
+                バトル場に出す
+              </button>
+              <button className="btn btn-primary m-1" type="button">
+                山札に戻す
+              </button>
+              <button className="btn btn-primary m-1" type="button">
+                トラッシュ
+              </button>
+              <button className="btn btn-primary m-1" type="button">
+                スタジアムに出す
+              </button>
+            </div>
+          </div>
+
+          <div className="col-6">
+            <div className="row">
+              <div className="col-4">
+                <div className={`self ${styles.prizeCards}`}>
+                  サイド: {asArray(playerBoard?.prize).length}
+                </div>
+              </div>
+              <div className="col-4">
+                <div className={`self ${styles.activeSpot}`}>
+                  {playerActive ? (
+                    <Pokemon {...toPokemonProps(playerActive, playerCatalog)} />
+                  ) : (
+                    'バトルポケモン（自分）'
+                  )}
+                </div>
+              </div>
+              <div className="col-4">
+                <div className={`self ${styles.stadium}`}>スタジアム</div>
+              </div>
+            </div>
+            <div className={`self ${styles.bench}`}>
+              {playerBench.map((stack, index) => (
+                <Pokemon key={stack?.stackId || index} {...toPokemonProps(stack, playerCatalog)} />
+              ))}
+              {playerBench.length === 0 && 'ベンチ'}
+            </div>
+          </div>
+
+          <div className="col-3">
+            <div className={`self ${styles.deck}`}>
+              {playerDeckCount > 0 ? (
+                <>
+                  <img src={CARD_BACK_IMAGE} alt="Deck" className={styles.deckCardBack} />
+                  <div>山札（{playerDeckCount}枚）</div>
+                </>
+              ) : (
+                <div>山札（0枚）</div>
+              )}
+            </div>
+            <div className={`self ${styles.discardPile}`}>
+              トラッシュ: {asArray(playerBoard?.discard).length}
+            </div>
+            <div className={`self ${styles.discardPile}`}>
+              ロスト: {asArray(playerBoard?.lostZone).length}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default PlayingField;

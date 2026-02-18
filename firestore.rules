@@ -1,0 +1,144 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidPlayerId(playerId) {
+      return playerId == 'player1' || playerId == 'player2';
+    }
+
+    function isValidStatus(status) {
+      return status in ['waiting', 'ready', 'playing', 'finished', 'archived'];
+    }
+
+    function sessionParticipantUid(sessionDoc, playerId) {
+      return playerId == 'player1'
+        ? sessionDoc.participants.player1.uid
+        : sessionDoc.participants.player2.uid;
+    }
+
+    function isParticipantInDoc(sessionDoc) {
+      return isSignedIn() &&
+        (
+          sessionDoc.participants.player1.uid == request.auth.uid ||
+          sessionDoc.participants.player2.uid == request.auth.uid
+        );
+    }
+
+    // 参加前の slot claim を許可するため、空きslotがあるセッションは認証済みユーザーに read を許可。
+    function canReadForSlotClaim(sessionDoc) {
+      return isSignedIn() &&
+        (
+          sessionDoc.participants.player1.uid == null ||
+          sessionDoc.participants.player2.uid == null
+        );
+    }
+
+    function hasValidAuditFieldsOnCreate() {
+      return request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        request.resource.data.createdAt is string &&
+        request.resource.data.updatedAt is string &&
+        request.resource.data.revision == 0;
+    }
+
+    function hasValidAuditFieldsOnUpdate() {
+      return request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        request.resource.data.updatedAt is string &&
+        request.resource.data.revision == resource.data.revision + 1;
+    }
+
+    function participantUidsUnchanged() {
+      return request.resource.data.participants.player1.uid == resource.data.participants.player1.uid &&
+        request.resource.data.participants.player2.uid == resource.data.participants.player2.uid;
+    }
+
+    function isPlayerSlotClaim(playerId) {
+      return isValidPlayerId(playerId) &&
+        sessionParticipantUid(resource.data, playerId) == null &&
+        sessionParticipantUid(request.resource.data, playerId) == request.auth.uid &&
+        (
+          playerId == 'player1'
+            ? request.resource.data.participants.player2.uid == resource.data.participants.player2.uid
+            : request.resource.data.participants.player1.uid == resource.data.participants.player1.uid
+        );
+    }
+
+    function isClaimUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'participants',
+          'updatedAt',
+          'updatedBy',
+          'revision',
+          'status'
+        ]) &&
+        (isPlayerSlotClaim('player1') || isPlayerSlotClaim('player2'));
+    }
+
+    function hasValidSessionShape() {
+      return request.resource.data.version == 2 &&
+        request.resource.data.participants is map &&
+        request.resource.data.participants.player1 is map &&
+        request.resource.data.participants.player2 is map &&
+        isValidStatus(request.resource.data.status);
+    }
+
+    match /sessions/{sessionId} {
+      allow get, list: if isParticipantInDoc(resource.data) || canReadForSlotClaim(resource.data);
+
+      allow create: if isSignedIn() &&
+        hasValidSessionShape() &&
+        hasValidAuditFieldsOnCreate() &&
+        request.resource.data.participants.player1.uid == request.auth.uid &&
+        request.resource.data.participants.player2.uid == null;
+
+      allow update: if isSignedIn() &&
+        hasValidSessionShape() &&
+        request.resource.data.version == resource.data.version &&
+        hasValidAuditFieldsOnUpdate() &&
+        (
+          (isParticipantInDoc(resource.data) && participantUidsUnchanged()) ||
+          isClaimUpdate()
+        );
+
+      allow delete: if false;
+    }
+
+    match /sessions/{sessionId}/privateState/{playerId} {
+      function sessionDoc() {
+        return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+      }
+
+      function isPrivateOwner() {
+        return isSignedIn() &&
+          isValidPlayerId(playerId) &&
+          sessionParticipantUid(sessionDoc(), playerId) == request.auth.uid;
+      }
+
+      allow get, list: if isPrivateOwner();
+
+      allow create: if isPrivateOwner() &&
+        request.resource.data.ownerPlayerId == playerId &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        request.resource.data.updatedAt is string &&
+        request.resource.data.revision == 0;
+
+      allow update: if isPrivateOwner() &&
+        resource.data.ownerPlayerId == playerId &&
+        request.resource.data.ownerPlayerId == playerId &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        request.resource.data.updatedAt is string &&
+        request.resource.data.revision == resource.data.revision + 1;
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
