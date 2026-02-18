@@ -64,7 +64,7 @@
 - CORS `^2.8.5`
 
 データストア:
-- Firebase Firestore（Web SDK `firebase ^10.12.2`）
+- Firebase Firestore / Firebase Auth（Web SDK `firebase ^12.9.0`）
 
 テスト:
 - Jest + React Testing Library（CRA標準）
@@ -253,7 +253,7 @@ Browser (React)
 ## セットアップ（ローカル開発）
 
 ### 前提
-- Node.js 18系推奨（確認例: `v18.20.7`）
+- Node.js 20系（`.nvmrc` は `20.19.6`）
 - npm 10系
 - Firestore へアクセス可能な Firebase プロジェクト設定
 
@@ -272,6 +272,12 @@ node proxy-server.js
 npm start
 ```
 
+Auth/Firestore Emulator を使う場合:
+```bash
+REACT_APP_USE_FIREBASE_EMULATORS=true npm start
+firebase emulators:start --only auth,firestore --project demo-pokemon-card-game-online
+```
+
 ### 4. 動作確認
 1. `http://localhost:3000/home` を開く
 2. 「セッションを作成」
@@ -280,9 +286,17 @@ npm start
 
 ### トラブルシュート
 - `Missing or insufficient permissions`
-  - Firestore Rules を確認（`sessions` の read/write 許可）
+  - Firestore Rules / 参加者slot（`participants.player1|player2.uid`）を確認
+  - Firebase Authentication の Anonymous provider が有効化されているか確認
 - `npm ci` の `ENOTEMPTY ... node_modules/.cache/babel-loader`
   - `npm start` が動作中のことが多い。先に停止して再実行
+
+### テスト
+```bash
+CI=true npm test -- --watch=false
+npm run build
+firebase emulators:exec --only auth,firestore --project demo-pokemon-card-game-online "npm run test:rules"
+```
 
 ---
 
