@@ -89,7 +89,7 @@ test('hand tray toggle updates aria-expanded and panel visibility', async () => 
   });
 });
 
-test('hand card hover or click shows enlarged preview', async () => {
+test('hand card click toggles pinned state without separate preview pane', async () => {
   renderPlayingField();
 
   fireEvent.click(screen.getByRole('button', { name: /手札を開く/i }));
@@ -97,13 +97,14 @@ test('hand card hover or click shows enlarged preview', async () => {
   await waitFor(() => {
     expect(screen.getByRole('img', { name: /Hand Card 1/i })).toBeInTheDocument();
   });
+  expect(screen.queryByText(/拡大表示されます/)).not.toBeInTheDocument();
 
   const firstHandCardButton = screen.getByRole('button', { name: /手札 1 を拡大表示/i });
-  fireEvent.mouseEnter(firstHandCardButton);
-  expect(screen.getByRole('img', { name: /Hand Preview 1/i })).toBeInTheDocument();
-
   fireEvent.click(firstHandCardButton);
   expect(firstHandCardButton).toHaveAttribute('aria-pressed', 'true');
+
+  fireEvent.click(firstHandCardButton);
+  expect(firstHandCardButton).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('toolbox toggle updates aria-expanded and renders tool items', async () => {

@@ -1,6 +1,8 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import styles from '../css/playingField.module.css';
+import DraggableToolItem from './dnd/DraggableToolItem';
+import { buildDamageCounterDragPayload, buildStatusBadgeDragPayload } from '../interaction/dnd/buildDragPayload';
 
 const TOOLBOX_PANEL_ID = 'toolbox-panel';
 const DAMAGE_COUNTERS = [10, 50, 100];
@@ -31,16 +33,23 @@ const ToolboxPanel = ({ isOpen = false, onToggle = () => {} }) => {
             <p className={styles.zoneTitle}>ダメカン</p>
             <div className={styles.toolboxGrid}>
               {DAMAGE_COUNTERS.map((value) => (
-                <button
+                <DraggableToolItem
                   key={`damage-${value}`}
-                  type="button"
-                  className={styles.toolboxItem}
-                  data-tool-type="damage-counter"
-                  data-tool-value={String(value)}
-                  aria-label={`ダメカン ${value}`}
+                  dragId={`tool-damage-${value}`}
+                  dragPayload={buildDamageCounterDragPayload({ value })}
+                  className={styles.toolboxDraggable}
+                  draggingClassName={styles.draggingSource}
                 >
-                  {value}
-                </button>
+                  <button
+                    type="button"
+                    className={styles.toolboxItem}
+                    data-tool-type="damage-counter"
+                    data-tool-value={String(value)}
+                    aria-label={`ダメカン ${value}`}
+                  >
+                    {value}
+                  </button>
+                </DraggableToolItem>
               ))}
             </div>
           </section>
@@ -49,16 +58,23 @@ const ToolboxPanel = ({ isOpen = false, onToggle = () => {} }) => {
             <p className={styles.zoneTitle}>状態異常</p>
             <div className={styles.toolboxGrid}>
               {STATUS_BADGES.map((badge) => (
-                <button
+                <DraggableToolItem
                   key={badge.id}
-                  type="button"
-                  className={styles.toolboxItem}
-                  data-tool-type="status-badge"
-                  data-tool-value={badge.id}
-                  aria-label={`状態異常 ${badge.label}`}
+                  dragId={`tool-status-${badge.id}`}
+                  dragPayload={buildStatusBadgeDragPayload({ value: badge.id })}
+                  className={styles.toolboxDraggable}
+                  draggingClassName={styles.draggingSource}
                 >
-                  {badge.label}
-                </button>
+                  <button
+                    type="button"
+                    className={styles.toolboxItem}
+                    data-tool-type="status-badge"
+                    data-tool-value={badge.id}
+                    aria-label={`状態異常 ${badge.label}`}
+                  >
+                    {badge.label}
+                  </button>
+                </DraggableToolItem>
               ))}
             </div>
           </section>
