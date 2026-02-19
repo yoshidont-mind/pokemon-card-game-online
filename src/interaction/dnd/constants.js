@@ -1,0 +1,39 @@
+export const BENCH_SLOT_COUNT = 5;
+
+export const DRAG_TYPES = Object.freeze({
+  CARD: 'card',
+  DAMAGE_COUNTER: 'damage-counter',
+  STATUS_BADGE: 'status-badge',
+});
+
+export const DROP_TYPES = Object.freeze({
+  ZONE: 'zone',
+  STACK: 'stack',
+});
+
+export const ZONE_KINDS = Object.freeze({
+  ACTIVE: 'active',
+  BENCH: 'bench',
+  DISCARD: 'discard',
+  LOST: 'lost',
+});
+
+export const STACK_KINDS = Object.freeze({
+  ACTIVE: 'active',
+  BENCH: 'bench',
+});
+
+export const INTENT_ACTIONS = Object.freeze({
+  MOVE_CARD_FROM_HAND_TO_ZONE: 'move-card-from-hand-to-zone',
+  APPLY_TOOL_TO_STACK: 'apply-tool-to-stack',
+});
+
+export const REJECT_REASONS = Object.freeze({
+  INVALID_PAYLOAD: 'invalid-payload',
+  UNSUPPORTED_DRAG_TYPE: 'unsupported-drag-type',
+  UNSUPPORTED_SOURCE: 'unsupported-source',
+  UNSUPPORTED_TARGET: 'unsupported-target',
+  TARGET_OCCUPIED: 'target-occupied',
+  TARGET_NOT_FOUND: 'target-not-found',
+  PERMISSION_DENIED: 'permission-denied',
+});
