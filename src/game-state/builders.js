@@ -176,6 +176,10 @@ export function createEmptyPrivateStateV2({ ownerPlayerId, updatedBy = 'system',
       hand: [],
     },
     cardCatalog: {},
+    uiPrefs: {
+      handTrayOpen: false,
+      toolboxOpen: false,
+    },
   };
 }
 

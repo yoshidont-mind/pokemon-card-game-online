@@ -6,6 +6,14 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function normalizeUiPrefs(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    handTrayOpen: Boolean(source.handTrayOpen),
+    toolboxOpen: Boolean(source.toolboxOpen),
+  };
+}
+
 function normalizePrivateState(privateStateDoc, ownerPlayerId) {
   const fallback = createEmptyPrivateStateV2({
     ownerPlayerId,
@@ -27,6 +35,7 @@ function normalizePrivateState(privateStateDoc, ownerPlayerId) {
       privateStateDoc?.cardCatalog && typeof privateStateDoc.cardCatalog === 'object'
         ? privateStateDoc.cardCatalog
         : {},
+    uiPrefs: normalizeUiPrefs(privateStateDoc?.uiPrefs),
   };
 }
 
