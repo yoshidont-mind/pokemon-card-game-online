@@ -37,8 +37,8 @@ function createSessionDoc() {
   };
 }
 
-function createPrivateStateDoc() {
-  return {
+function createPrivateStateDoc(overrides = {}) {
+  const base = {
     ownerPlayerId: 'player1',
     zones: {
       deck: [],
@@ -59,16 +59,37 @@ function createPrivateStateDoc() {
         ownerPlayerId: 'player1',
       },
     },
+    uiPrefs: {
+      handTrayOpen: false,
+      toolboxOpen: false,
+    },
+  };
+
+  return {
+    ...base,
+    ...overrides,
+    zones: {
+      ...base.zones,
+      ...(overrides.zones || {}),
+    },
+    cardCatalog: {
+      ...base.cardCatalog,
+      ...(overrides.cardCatalog || {}),
+    },
+    uiPrefs: {
+      ...base.uiPrefs,
+      ...(overrides.uiPrefs || {}),
+    },
   };
 }
 
-function renderPlayingField() {
+function renderPlayingField(options = {}) {
   return render(
     <PlayingField
       sessionId="session-layout-test"
       playerId="player1"
       sessionDoc={createSessionDoc()}
-      privateStateDoc={createPrivateStateDoc()}
+      privateStateDoc={createPrivateStateDoc(options.privateStateOverrides)}
     />
   );
 }
@@ -123,6 +144,23 @@ test('toolbox toggle updates aria-expanded and renders tool items', async () => 
     expect(screen.getByRole('button', { name: /^ダメカン 100$/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^ダメカン 20$/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^状態異常 どく$/i })).toBeInTheDocument();
+  });
+});
+
+test('panel open states are restored from private uiPrefs', async () => {
+  renderPlayingField({
+    privateStateOverrides: {
+      uiPrefs: {
+        handTrayOpen: true,
+        toolboxOpen: true,
+      },
+    },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /手札を閉じる/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /小道具を閉じる/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^ダメカン 10$/i })).toBeInTheDocument();
   });
 });
 

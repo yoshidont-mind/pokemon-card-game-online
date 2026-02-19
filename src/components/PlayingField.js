@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import Pokemon from './Pokemon';
 import HandTray from './HandTray';
@@ -8,7 +8,10 @@ import DroppableStack from './dnd/DroppableStack';
 import BoardDragOverlay from './dnd/BoardDragOverlay';
 import '../css/boardLayout.tokens.css';
 import styles from '../css/playingField.module.css';
+import { getCurrentUid } from '../auth/authClient';
+import { ERROR_CODES, isGameStateError } from '../game-state/errors';
 import { toPlayerKey } from '../game-state/migrateV1ToV2';
+import { applyPrivateStateMutation } from '../game-state/privateStateMutation';
 import { buildStackDropPayload, buildZoneDropPayload } from '../interaction/dnd/buildDragPayload';
 import { STACK_KINDS, ZONE_KINDS } from '../interaction/dnd/constants';
 import { useBoardDnd } from '../interaction/dnd/useBoardDnd';
@@ -18,6 +21,14 @@ const BENCH_SLOTS = 5;
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function resolveUiPrefs(privateStateDoc) {
+  const source = privateStateDoc?.uiPrefs;
+  return {
+    handTrayOpen: Boolean(source?.handTrayOpen),
+    toolboxOpen: Boolean(source?.toolboxOpen),
+  };
 }
 
 function getStackImages(stack, cardCatalog) {
@@ -153,12 +164,76 @@ function BenchRow({
 }
 
 const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
-  const [isHandOpen, setIsHandOpen] = useState(false);
-  const [isToolboxOpen, setIsToolboxOpen] = useState(false);
-  const [mutationMessage, setMutationMessage] = useState('');
-
   const ownerPlayerId = toPlayerKey(playerId);
   const opponentPlayerId = ownerPlayerId === 'player1' ? 'player2' : 'player1';
+
+  const persistedUiPrefs = resolveUiPrefs(privateStateDoc);
+
+  const [isHandOpen, setIsHandOpen] = useState(persistedUiPrefs.handTrayOpen);
+  const [isToolboxOpen, setIsToolboxOpen] = useState(persistedUiPrefs.toolboxOpen);
+  const [mutationMessage, setMutationMessage] = useState('');
+
+  useEffect(() => {
+    setIsHandOpen(persistedUiPrefs.handTrayOpen);
+    setIsToolboxOpen(persistedUiPrefs.toolboxOpen);
+  }, [persistedUiPrefs.handTrayOpen, persistedUiPrefs.toolboxOpen]);
+
+  const persistUiPrefs = useCallback(
+    async (nextPartialPrefs) => {
+      const actorUid = getCurrentUid();
+      if (!sessionId || !ownerPlayerId || !actorUid) {
+        return;
+      }
+
+      try {
+        await applyPrivateStateMutation({
+          sessionId,
+          playerId: ownerPlayerId,
+          actorUid,
+          mutate: ({ privateStateDoc: draftPrivateStateDoc }) => {
+            const currentPrefs =
+              draftPrivateStateDoc?.uiPrefs && typeof draftPrivateStateDoc.uiPrefs === 'object'
+                ? draftPrivateStateDoc.uiPrefs
+                : {};
+
+            draftPrivateStateDoc.uiPrefs = {
+              handTrayOpen: Boolean(
+                nextPartialPrefs?.handTrayOpen ?? currentPrefs.handTrayOpen
+              ),
+              toolboxOpen: Boolean(
+                nextPartialPrefs?.toolboxOpen ?? currentPrefs.toolboxOpen
+              ),
+            };
+
+            return { privateStateDoc: draftPrivateStateDoc };
+          },
+        });
+      } catch (error) {
+        if (isGameStateError(error, ERROR_CODES.PERMISSION_DENIED)) {
+          setMutationMessage('表示設定の保存権限がありません。参加状態を確認してください。');
+          return;
+        }
+        setMutationMessage('表示設定の保存に失敗しました。再試行してください。');
+      }
+    },
+    [ownerPlayerId, sessionId]
+  );
+
+  const handleHandToggle = useCallback(() => {
+    setIsHandOpen((prev) => {
+      const next = !prev;
+      void persistUiPrefs({ handTrayOpen: next });
+      return next;
+    });
+  }, [persistUiPrefs]);
+
+  const handleToolboxToggle = useCallback(() => {
+    setIsToolboxOpen((prev) => {
+      const next = !prev;
+      void persistUiPrefs({ toolboxOpen: next });
+      return next;
+    });
+  }, [persistUiPrefs]);
 
   const publicPlayers = sessionDoc?.publicState?.players || {};
   const playerBoard = publicPlayers?.[ownerPlayerId]?.board || {};
@@ -395,8 +470,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
-        <HandTray cards={playerHandCards} isOpen={isHandOpen} onToggle={() => setIsHandOpen((prev) => !prev)} />
-        <ToolboxPanel isOpen={isToolboxOpen} onToggle={() => setIsToolboxOpen((prev) => !prev)} />
+        <HandTray cards={playerHandCards} isOpen={isHandOpen} onToggle={handleHandToggle} />
+        <ToolboxPanel isOpen={isToolboxOpen} onToggle={handleToolboxToggle} />
       </div>
       <BoardDragOverlay activeDragPayload={activeDragPayload} cardCatalog={playerCatalog} />
     </DndContext>

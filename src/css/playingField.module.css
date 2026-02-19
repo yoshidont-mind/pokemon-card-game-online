@@ -179,6 +179,57 @@
   gap: 6px;
 }
 
+.handTrayToolbar {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.handTrayHandle,
+.handTrayResetButton {
+  border: 1px solid #6f8659;
+  border-radius: 999px;
+  background: rgba(244, 250, 239, 0.96);
+  color: #1f2b16;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.handTrayHandle {
+  touch-action: none;
+  user-select: none;
+  min-width: 36px;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.handTrayHandle svg {
+  font-size: 0.9rem;
+}
+
+.handTrayHandleActive {
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px rgba(43, 91, 216, 0.22);
+}
+
+.handTrayHandle:hover,
+.handTrayResetButton:hover {
+  background: rgba(235, 246, 225, 0.98);
+}
+
+.handTrayHandle:focus-visible,
+.handTrayResetButton:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 1px;
+}
+
 .handTrayPanel {
   width: fit-content;
   max-width: min(92vw, 760px);
