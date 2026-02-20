@@ -45,6 +45,7 @@ function collectPrivateZoneCardIds(privateState) {
   const ids = [];
   ids.push(...collectIdsFromCardRefs(zones.deck));
   ids.push(...collectIdsFromCardRefs(zones.hand));
+  ids.push(...collectIdsFromCardRefs(zones.deckPeek));
   return ids;
 }
 
@@ -96,7 +97,7 @@ export function assertOrientation(sessionDoc, privateStatesByPlayer = {}) {
 
     const privateState = privateStatesByPlayer[playerId] || {};
     const zones = privateState.zones || {};
-    [...asArray(zones.deck), ...asArray(zones.hand)].forEach((ref, idx) => {
+    [...asArray(zones.deck), ...asArray(zones.hand), ...asArray(zones.deckPeek)].forEach((ref, idx) => {
       checkOrientation(ref?.orientation, `${playerId}.private.zones[${idx}].orientation`);
     });
   }

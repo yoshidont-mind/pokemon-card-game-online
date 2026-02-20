@@ -751,7 +751,7 @@ function DeckPeekModal({
           className={styles.deckPeekToolbarButton}
           onClick={onClose}
         >
-          閉じる
+          山札に戻す
         </button>
       </div>
       <div
@@ -769,7 +769,7 @@ function DeckPeekModal({
                   dragId={`deck-peek-card-${card.cardId}-${index}`}
                   dragPayload={buildCardDragPayload({
                     cardId: card.cardId,
-                    sourceZone: 'player-deck',
+                    sourceZone: 'player-deck-peek',
                   })}
                   className={joinClassNames(
                     styles.revealCardDraggable,
@@ -849,8 +849,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [randomDiscardCount, setRandomDiscardCount] = useState(1);
   const [isDeckPeekConfigOpen, setIsDeckPeekConfigOpen] = useState(false);
   const [deckPeekCount, setDeckPeekCount] = useState(1);
+  const [isDeckPeekSelectAll, setIsDeckPeekSelectAll] = useState(false);
   const [isDeckPeekOpen, setIsDeckPeekOpen] = useState(false);
-  const [deckPeekCardIds, setDeckPeekCardIds] = useState([]);
   const [sharedNoteDraft, setSharedNoteDraft] = useState('');
   const [editingSharedNoteId, setEditingSharedNoteId] = useState('');
   const [editingSharedNoteDraft, setEditingSharedNoteDraft] = useState('');
@@ -1016,6 +1016,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const opponentCounters = publicPlayers?.[opponentPlayerId]?.counters || {};
 
   const playerDeckRefs = asArray(privateStateDoc?.zones?.deck);
+  const playerDeckPeekRefs = asArray(privateStateDoc?.zones?.deckPeek);
   const playerCatalog = privateStateDoc?.cardCatalog;
   const publicCardCatalog = sessionDoc?.publicState?.publicCardCatalog;
   const normalizedPlayerCatalog = useMemo(
@@ -1202,16 +1203,20 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const displayPlayerDeckCount = Math.max(0, playerDeckCount - (isDraggingFromPlayerDeck ? 1 : 0));
   const displayPlayerPrizeCount = Math.max(0, playerPrizeCount - (isDraggingFromPlayerPrize ? 1 : 0));
   const deckPeekCards = useMemo(() => {
-    const cardIds = asArray(deckPeekCardIds).filter(Boolean);
-    const deckSet = new Set(playerDeckRefs.map((ref) => ref?.cardId).filter(Boolean));
-    return cardIds
-      .filter((cardId) => deckSet.has(cardId))
-      .map((cardId, index) => ({
-        cardId,
-        imageUrl: normalizedPlayerCatalog?.[cardId]?.imageUrl || renderCardCatalog?.[cardId]?.imageUrl || null,
-        index,
-      }));
-  }, [deckPeekCardIds, normalizedPlayerCatalog, playerDeckRefs, renderCardCatalog]);
+    return playerDeckPeekRefs
+      .map((ref, index) => {
+        const cardId = ref?.cardId;
+        if (!cardId) {
+          return null;
+        }
+        return {
+          cardId,
+          imageUrl: normalizedPlayerCatalog?.[cardId]?.imageUrl || renderCardCatalog?.[cardId]?.imageUrl || null,
+          index,
+        };
+      })
+      .filter(Boolean);
+  }, [normalizedPlayerCatalog, playerDeckPeekRefs, renderCardCatalog]);
 
   useEffect(() => {
     if (!lastCoinAt) {
@@ -1255,23 +1260,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [playerDeckCount]);
 
   useEffect(() => {
-    if (!isDeckPeekOpen) {
+    if (deckPeekCards.length > 0 && !isDeckPeekOpen) {
+      setIsDeckPeekOpen(true);
       return;
     }
-    const deckCardIdSet = new Set(playerDeckRefs.map((ref) => ref?.cardId).filter(Boolean));
-    setDeckPeekCardIds((previous) => {
-      const next = previous.filter((cardId) => deckCardIdSet.has(cardId));
-      if (next.length === previous.length) {
-        return previous;
-      }
-      return next;
-    });
-  }, [isDeckPeekOpen, playerDeckRefs]);
-
-  useEffect(() => {
-    if (isDeckPeekOpen && deckPeekCards.length === 0) {
+    if (deckPeekCards.length === 0 && isDeckPeekOpen) {
       setIsDeckPeekOpen(false);
-      setDeckPeekCardIds([]);
     }
   }, [deckPeekCards.length, isDeckPeekOpen]);
 
@@ -1291,7 +1285,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     setIsDeckPeekConfigOpen(false);
     setDeckPeekCount(1);
     setIsDeckPeekOpen(false);
-    setDeckPeekCardIds([]);
     setSharedNoteDraft('');
     setEditingSharedNoteId('');
     setEditingSharedNoteDraft('');
@@ -1778,11 +1771,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     if (playerDeckCount <= 0 || isMutating || isCoinSubmitting || isQuickActionSubmitting) {
       return;
     }
+    setIsDeckPeekSelectAll(false);
     setDeckPeekCount(clampPositiveInt(1, Math.max(1, playerDeckCount || 1)));
     setIsDeckPeekConfigOpen(true);
   }, [isCoinSubmitting, isMutating, isQuickActionSubmitting, playerDeckCount]);
 
   const handleCloseDeckPeekConfig = useCallback(() => {
+    setIsDeckPeekSelectAll(false);
     setIsDeckPeekConfigOpen(false);
   }, []);
 
@@ -1798,6 +1793,21 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     );
   }, [playerDeckCount]);
 
+  const handleToggleDeckPeekSelectAll = useCallback(
+    (event) => {
+      const checked = Boolean(event?.target?.checked);
+      setIsDeckPeekSelectAll(checked);
+      if (checked) {
+        setDeckPeekCount(Math.max(1, playerDeckCount || 1));
+      } else {
+        setDeckPeekCount((previous) =>
+          clampPositiveInt(previous, Math.max(1, playerDeckCount || 1))
+        );
+      }
+    },
+    [playerDeckCount]
+  );
+
   const handleConfirmDeckPeek = useCallback(async () => {
     const clampedCount = clampPositiveInt(deckPeekCount, Math.max(1, playerDeckCount || 1));
     const succeeded = await executeQuickOperation({
@@ -1812,64 +1822,104 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       return;
     }
 
-    const nextCardIds = playerDeckRefs
-      .slice(0, clampedCount)
-      .map((ref) => ref?.cardId)
-      .filter(Boolean);
-    setDeckPeekCardIds(nextCardIds);
     setIsDeckPeekOpen(true);
+    setIsDeckPeekSelectAll(false);
     setIsDeckPeekConfigOpen(false);
-  }, [deckPeekCount, executeQuickOperation, playerDeckCount, playerDeckRefs]);
-
-  const syncDeckPeekBroadcast = useCallback(
-    async ({ isOpen, count }) => {
-      await executeSessionMutation({
-        invalidMessage: '山札閲覧状態の同期に失敗しました。再試行してください。',
-        mutate: ({ sessionDoc, now }) => {
-          if (!sessionDoc.publicState.turnContext || typeof sessionDoc.publicState.turnContext !== 'object') {
-            sessionDoc.publicState.turnContext = {};
-          }
-          sessionDoc.publicState.turnContext.deckPeekState = {
-            byPlayerId: ownerPlayerId,
-            isOpen: Boolean(isOpen),
-            count: Math.max(0, Number(count) || 0),
-            updatedAt: now,
-          };
-          return { sessionDoc };
-        },
-      });
-    },
-    [executeSessionMutation, ownerPlayerId]
-  );
+  }, [deckPeekCount, executeQuickOperation, playerDeckCount]);
 
   const handleCloseDeckPeekModal = useCallback(() => {
-    setIsDeckPeekOpen(false);
-    setDeckPeekCardIds([]);
-    void syncDeckPeekBroadcast({
-      isOpen: false,
-      count: 0,
+    void executeSessionMutation({
+      invalidMessage: '山札閲覧モーダルを閉じる処理に失敗しました。再試行してください。',
+      mutate: ({ sessionDoc, privateStateDoc, now }) => {
+        const deck = asArray(privateStateDoc?.zones?.deck);
+        const deckPeek = asArray(privateStateDoc?.zones?.deckPeek);
+        if (deckPeek.length > 0) {
+          const returningToDeck = deckPeek
+            .map((ref) => ref?.cardId)
+            .filter(Boolean)
+            .map((cardId) => ({
+              cardId,
+              orientation: 'vertical',
+              isFaceDown: true,
+              visibility: 'ownerOnly',
+            }));
+          privateStateDoc.zones.deck = [...returningToDeck, ...deck];
+        }
+        privateStateDoc.zones.deckPeek = [];
+
+        const counters = sessionDoc?.publicState?.players?.[ownerPlayerId]?.counters;
+        if (counters && typeof counters === 'object') {
+          counters.deckCount = asArray(privateStateDoc?.zones?.deck).length;
+        }
+
+        if (!sessionDoc.publicState.turnContext || typeof sessionDoc.publicState.turnContext !== 'object') {
+          sessionDoc.publicState.turnContext = {};
+        }
+        sessionDoc.publicState.turnContext.deckPeekState = {
+          byPlayerId: ownerPlayerId,
+          isOpen: false,
+          count: 0,
+          updatedAt: now,
+        };
+
+        return {
+          sessionDoc,
+          privateStateDoc,
+        };
+      },
     });
-  }, [syncDeckPeekBroadcast]);
+    setIsDeckPeekOpen(false);
+  }, [executeSessionMutation, ownerPlayerId]);
 
   const handleRevealOneMoreDeckCard = useCallback(() => {
-    if (!isDeckPeekOpen) {
-      return;
-    }
-    const visibleCardIdSet = new Set(deckPeekCardIds);
-    const nextCardRef = playerDeckRefs.find(
-      (ref) => ref?.cardId && !visibleCardIdSet.has(ref.cardId)
-    );
-    if (!nextCardRef?.cardId) {
+    if (!isDeckPeekOpen || playerDeckCount <= 0) {
       return;
     }
 
-    const nextCardIds = [...deckPeekCardIds, nextCardRef.cardId];
-    setDeckPeekCardIds(nextCardIds);
-    void syncDeckPeekBroadcast({
-      isOpen: true,
-      count: nextCardIds.length,
+    void executeSessionMutation({
+      invalidMessage: '山札を追加で閲覧できませんでした。再試行してください。',
+      mutate: ({ sessionDoc, privateStateDoc, now }) => {
+        const deck = asArray(privateStateDoc?.zones?.deck);
+        const deckPeek = asArray(privateStateDoc?.zones?.deckPeek);
+        const [nextCardRef] = deck.splice(0, 1);
+        if (!nextCardRef?.cardId) {
+          return {
+            sessionDoc,
+            privateStateDoc,
+          };
+        }
+
+        deckPeek.push({
+          cardId: nextCardRef.cardId,
+          orientation: 'vertical',
+          isFaceDown: false,
+          visibility: 'ownerOnly',
+        });
+        privateStateDoc.zones.deck = deck;
+        privateStateDoc.zones.deckPeek = deckPeek;
+
+        const counters = sessionDoc?.publicState?.players?.[ownerPlayerId]?.counters;
+        if (counters && typeof counters === 'object') {
+          counters.deckCount = deck.length;
+        }
+
+        if (!sessionDoc.publicState.turnContext || typeof sessionDoc.publicState.turnContext !== 'object') {
+          sessionDoc.publicState.turnContext = {};
+        }
+        sessionDoc.publicState.turnContext.deckPeekState = {
+          byPlayerId: ownerPlayerId,
+          isOpen: deckPeek.length > 0,
+          count: deckPeek.length,
+          updatedAt: now,
+        };
+
+        return {
+          sessionDoc,
+          privateStateDoc,
+        };
+      },
     });
-  }, [deckPeekCardIds, isDeckPeekOpen, playerDeckRefs, syncDeckPeekBroadcast]);
+  }, [executeSessionMutation, isDeckPeekOpen, ownerPlayerId, playerDeckCount]);
 
   const handlePrizeTakeOne = useCallback(() => {
     void executeQuickOperation({
@@ -2152,14 +2202,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const isDeckPeekSubmitDisabled =
     isQuickActionSubmitting || isMutating || isCoinSubmitting || playerDeckCount <= 0;
   const deckPeekMaxCount = Math.max(1, playerDeckCount || 1);
-  const displayDeckPeekCount = clampPositiveInt(deckPeekCount, deckPeekMaxCount);
-  const canRevealOneMoreDeckCard = useMemo(() => {
-    if (!isDeckPeekOpen) {
-      return false;
-    }
-    const visibleCardIdSet = new Set(deckPeekCardIds);
-    return playerDeckRefs.some((ref) => ref?.cardId && !visibleCardIdSet.has(ref.cardId));
-  }, [deckPeekCardIds, isDeckPeekOpen, playerDeckRefs]);
+  const displayDeckPeekCount = isDeckPeekSelectAll
+    ? deckPeekMaxCount
+    : clampPositiveInt(deckPeekCount, deckPeekMaxCount);
+  const isDeckPeekStepDisabled = isDeckPeekAdjustDisabled || isDeckPeekSelectAll;
+  const canRevealOneMoreDeckCard = isDeckPeekOpen && playerDeckCount > 0;
   const opponentDeckPeekState = turnContext?.deckPeekState;
   const opponentDeckPeekCount =
     opponentDeckPeekState &&
@@ -2895,7 +2942,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 type="button"
                 className={styles.randomDiscardStepButton}
                 onClick={handleDecrementDeckPeekCount}
-                disabled={isDeckPeekAdjustDisabled || displayDeckPeekCount <= 1}
+                disabled={isDeckPeekStepDisabled || displayDeckPeekCount <= 1}
                 aria-label="閲覧枚数を1枚減らす"
               >
                 -
@@ -2905,12 +2952,23 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 type="button"
                 className={styles.randomDiscardStepButton}
                 onClick={handleIncrementDeckPeekCount}
-                disabled={isDeckPeekAdjustDisabled || displayDeckPeekCount >= deckPeekMaxCount}
+                disabled={isDeckPeekStepDisabled || displayDeckPeekCount >= deckPeekMaxCount}
                 aria-label="閲覧枚数を1枚増やす"
               >
                 +
               </button>
             </div>
+            <label className={styles.deckPeekSelectAllRow}>
+              <input
+                type="checkbox"
+                className={styles.deckPeekSelectAllCheckbox}
+                checked={isDeckPeekSelectAll}
+                onChange={handleToggleDeckPeekSelectAll}
+                disabled={isQuickActionSubmitting || isMutating || isCoinSubmitting || playerDeckCount <= 0}
+                aria-label="閲覧枚数を全て選択"
+              />
+              全て（{deckPeekMaxCount}枚）
+            </label>
             <p className={styles.randomDiscardHint}>
               {playerDeckCount <= 0 ? '山札が0枚のため閲覧できません。' : '枚数確定後に山札モーダルが開きます。'}
             </p>

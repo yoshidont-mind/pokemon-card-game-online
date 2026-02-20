@@ -421,6 +421,27 @@
   color: #1f2b16;
 }
 
+.deckPeekSelectAllRow {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #2b3a1f;
+}
+
+.deckPeekSelectAllCheckbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #6f8659;
+  cursor: pointer;
+}
+
+.deckPeekSelectAllCheckbox:disabled {
+  cursor: not-allowed;
+}
+
 .randomDiscardHint {
   margin: 0;
   font-size: 0.74rem;

@@ -161,6 +161,20 @@ function takeCardRefFromSource({
     return sourceCardRef;
   }
 
+  if (sourceZone === 'player-deck-peek') {
+    const deckPeek = asArray(privateStateDoc?.zones?.deckPeek);
+    const deckPeekIndex = deckPeek.findIndex((ref) => ref?.cardId === cardId);
+    if (deckPeekIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in deck peek zone.`
+      );
+    }
+    const [sourceCardRef] = deckPeek.splice(deckPeekIndex, 1);
+    privateStateDoc.zones.deckPeek = deckPeek;
+    return sourceCardRef;
+  }
+
   throw new GameStateError(
     ERROR_CODES.INVALID_STATE,
     `Unsupported source zone: ${String(sourceZone)}`
@@ -186,7 +200,7 @@ function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, actio
 
   const sourceImageUrl = sourceCardRef?.imageUrl || resolveImageUrlFromPrivateState(privateStateDoc, cardId);
   const targetZoneKind = action.targetZoneKind;
-  const consumesDeckPeekCard = sourceZone === 'player-deck' && targetZoneKind !== ZONE_KINDS.DECK;
+  const consumesDeckPeekCard = sourceZone === 'player-deck-peek';
 
   if (targetZoneKind === ZONE_KINDS.ACTIVE) {
     if (publicBoard.active) {
@@ -317,6 +331,10 @@ function moveCardToDeckEdge({ sessionDoc, privateStateDoc, playerId, action }) {
     at: new Date().toISOString(),
   };
 
+  if (sourceZone === 'player-deck-peek') {
+    consumeDeckPeekCount(sessionDoc, playerId, 1);
+  }
+
   if (
     sessionDoc.status === SESSION_STATUS.WAITING ||
     sessionDoc.status === SESSION_STATUS.READY
@@ -344,13 +362,14 @@ function resolveTargetStack(board, stackKind, benchIndex) {
   return null;
 }
 
-function moveTopCardFromSourceToHand({
+function moveTopCardFromSourceToZone({
   sessionDoc,
   privateStateDoc,
   playerId,
   action,
 }) {
   const sourceZone = action?.sourceZone;
+  const targetZoneKind = action?.targetZoneKind || ZONE_KINDS.HAND;
   const hand = asArray(privateStateDoc?.zones?.hand);
   const board = resolvePlayerBoard(sessionDoc, playerId);
   const counters = resolvePlayerCounters(sessionDoc, playerId);
@@ -362,8 +381,13 @@ function moveTopCardFromSourceToHand({
     privateStateDoc.zones.deck = deck;
     movingCardId = topCardRef?.cardId || null;
     counters.deckCount = deck.length;
-    consumeDeckPeekCount(sessionDoc, playerId, movingCardId ? 1 : 0);
   } else if (sourceZone === 'player-prize') {
+    if (targetZoneKind !== ZONE_KINDS.HAND) {
+      throw new GameStateError(
+        ERROR_CODES.INVALID_STATE,
+        `Unsupported targetZoneKind for source ${sourceZone}: ${String(targetZoneKind)}`
+      );
+    }
     const prize = asArray(board.prize);
     if (prize.length > 0) {
       const randomIndex = Math.floor(Math.random() * prize.length);
@@ -382,9 +406,24 @@ function moveTopCardFromSourceToHand({
     throw new GameStateError(ERROR_CODES.NOT_FOUND, 'No card available to move from source zone.');
   }
 
-  hand.push(createOwnerVisibleCardRef(movingCardId));
-  privateStateDoc.zones.hand = hand;
-  counters.handCount = hand.length;
+  if (targetZoneKind === ZONE_KINDS.HAND) {
+    hand.push(createOwnerVisibleCardRef(movingCardId));
+    privateStateDoc.zones.hand = hand;
+    counters.handCount = hand.length;
+  } else if (targetZoneKind === ZONE_KINDS.DISCARD) {
+    const imageUrl = resolveImageUrlFromPrivateState(privateStateDoc, movingCardId);
+    board.discard = [
+      ...asArray(board.discard),
+      createPublicCardRef(movingCardId, {
+        imageUrl,
+      }),
+    ];
+  } else {
+    throw new GameStateError(
+      ERROR_CODES.INVALID_STATE,
+      `Unsupported targetZoneKind: ${String(targetZoneKind)}`
+    );
+  }
 
   if (
     sessionDoc.status === SESSION_STATUS.WAITING ||
@@ -466,7 +505,7 @@ export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId,
   }
 
   if (intent.action.kind === INTENT_ACTIONS.MOVE_TOP_CARD_FROM_SOURCE_TO_HAND) {
-    return moveTopCardFromSourceToHand({
+    return moveTopCardFromSourceToZone({
       sessionDoc,
       privateStateDoc,
       playerId,

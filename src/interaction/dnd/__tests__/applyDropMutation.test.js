@@ -249,13 +249,18 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.sessionDoc.publicState.players.player1.counters.handCount).toBe(1);
   });
 
-  test('moves a card from deck to reveal zone', () => {
+  test('moves a card from deck peek zone to reveal zone', () => {
     const { sessionDoc, privateStateDoc } = createDocs();
+    privateStateDoc.zones.deck = [];
+    privateStateDoc.zones.deckPeek = [
+      { cardId: 'c_player1_099', orientation: 'vertical', isFaceDown: false, visibility: 'ownerOnly' },
+    ];
+    sessionDoc.publicState.players.player1.counters.deckCount = 0;
     sessionDoc.publicState.turnContext = {
       deckPeekState: {
         byPlayerId: 'player1',
         isOpen: true,
-        count: 2,
+        count: 1,
         updatedAt: '2026-02-20T10:00:00.000Z',
       },
     };
@@ -269,17 +274,52 @@ describe('mutateDocsForDropIntent', () => {
         action: {
           kind: 'move-card-from-hand-to-zone',
           cardId: 'c_player1_099',
-          sourceZone: 'player-deck',
+          sourceZone: 'player-deck-peek',
           targetZoneKind: 'reveal',
         },
       },
     });
 
     expect(result.privateStateDoc.zones.deck).toHaveLength(0);
+    expect(result.privateStateDoc.zones.deckPeek).toHaveLength(0);
     expect(result.sessionDoc.publicState.players.player1.counters.deckCount).toBe(0);
     expect(result.sessionDoc.publicState.players.player1.board.reveal).toHaveLength(1);
     expect(result.sessionDoc.publicState.players.player1.board.reveal[0].cardId).toBe('c_player1_099');
+    expect(result.sessionDoc.publicState.turnContext.deckPeekState.count).toBe(0);
+    expect(result.sessionDoc.publicState.turnContext.deckPeekState.isOpen).toBe(false);
+  });
+
+  test('moves top card from deck pile to discard zone', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.turnContext = {
+      deckPeekState: {
+        byPlayerId: 'player1',
+        isOpen: true,
+        count: 1,
+        updatedAt: '2026-02-20T10:00:00.000Z',
+      },
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-top-card-from-source-to-hand',
+          sourceZone: 'player-deck',
+          targetZoneKind: 'discard',
+        },
+      },
+    });
+
+    expect(result.privateStateDoc.zones.deck).toHaveLength(0);
+    expect(result.sessionDoc.publicState.players.player1.counters.deckCount).toBe(0);
+    expect(result.sessionDoc.publicState.players.player1.board.discard).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.discard[0].cardId).toBe('c_player1_099');
     expect(result.sessionDoc.publicState.turnContext.deckPeekState.count).toBe(1);
+    expect(result.sessionDoc.publicState.turnContext.deckPeekState.isOpen).toBe(true);
   });
 
   test('moves a hand card to deck top edge and records deck insert event', () => {
@@ -304,5 +344,48 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.privateStateDoc.zones.deck[0].cardId).toBe('c_player1_001');
     expect(result.sessionDoc.publicState.players.player1.counters.deckCount).toBe(2);
     expect(result.sessionDoc.publicState.turnContext.lastDeckInsertEvent.position).toBe('top');
+  });
+
+  test('moves a deck peek card to deck bottom edge and keeps deck size', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    privateStateDoc.zones.deck = [
+      { cardId: 'c_player1_098', orientation: 'vertical', isFaceDown: true, visibility: 'ownerOnly' },
+    ];
+    privateStateDoc.zones.deckPeek = [
+      { cardId: 'c_player1_099', orientation: 'vertical', isFaceDown: false, visibility: 'ownerOnly' },
+    ];
+    sessionDoc.publicState.players.player1.counters.deckCount = 1;
+    sessionDoc.publicState.turnContext = {
+      deckPeekState: {
+        byPlayerId: 'player1',
+        isOpen: true,
+        count: 1,
+        updatedAt: '2026-02-20T10:00:00.000Z',
+      },
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-to-deck-edge',
+          cardId: 'c_player1_099',
+          sourceZone: 'player-deck-peek',
+          targetDeckEdge: 'bottom',
+        },
+      },
+    });
+
+    expect(result.privateStateDoc.zones.deck).toHaveLength(2);
+    expect(result.privateStateDoc.zones.deck[0].cardId).toBe('c_player1_098');
+    expect(result.privateStateDoc.zones.deck[1].cardId).toBe('c_player1_099');
+    expect(result.privateStateDoc.zones.deckPeek).toHaveLength(0);
+    expect(result.sessionDoc.publicState.players.player1.counters.deckCount).toBe(2);
+    expect(result.sessionDoc.publicState.turnContext.deckPeekState.count).toBe(0);
+    expect(result.sessionDoc.publicState.turnContext.deckPeekState.isOpen).toBe(false);
+    expect(result.sessionDoc.publicState.turnContext.lastDeckInsertEvent.position).toBe('bottom');
   });
 });

@@ -10,6 +10,7 @@ export const STACK_KIND = Object.freeze({
 export const PRIVATE_ZONE = Object.freeze({
   HAND: 'hand',
   DECK: 'deck',
+  DECK_PEEK: 'deckPeek',
 });
 
 export const PUBLIC_ZONE = Object.freeze({
@@ -94,7 +95,11 @@ export function resolvePrivateZone(privateStateDoc, zoneName) {
     throw new GameStateError(ERROR_CODES.INVALID_STATE, 'privateStateDoc.zones is missing.');
   }
 
-  if (zoneName !== PRIVATE_ZONE.HAND && zoneName !== PRIVATE_ZONE.DECK) {
+  if (
+    zoneName !== PRIVATE_ZONE.HAND &&
+    zoneName !== PRIVATE_ZONE.DECK &&
+    zoneName !== PRIVATE_ZONE.DECK_PEEK
+  ) {
     throw new GameStateError(ERROR_CODES.INVALID_STATE, `Unsupported private zone: ${String(zoneName)}`);
   }
 
