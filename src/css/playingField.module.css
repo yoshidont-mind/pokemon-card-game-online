@@ -355,6 +355,62 @@
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
+.randomDiscardConfigCard {
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid #d4deca;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.randomDiscardCountRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.randomDiscardStepButton {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid #6f8659;
+  background: #f4faef;
+  color: #1f2b16;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.randomDiscardStepButton:hover {
+  background: #e8f3df;
+}
+
+.randomDiscardStepButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.randomDiscardCountValue {
+  min-width: 60px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1f2b16;
+}
+
+.randomDiscardHint {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #607152;
+}
+
 .benchRow {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

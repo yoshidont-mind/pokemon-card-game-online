@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PlayingField from '../PlayingField';
 
 function createSessionDoc(overrides = {}) {
@@ -274,6 +274,34 @@ test('opens opponent hand action menu from fixed button', async () => {
 
   await waitFor(() => {
     expect(screen.getByRole('button', { name: '手札の公開を要求' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '手札のランダム破壊を要求' })).toBeInTheDocument();
+  });
+});
+
+test('opens random discard request modal and allows count adjustment', async () => {
+  renderPlayingField();
+
+  fireEvent.click(screen.getByRole('button', { name: '相手手札（6枚）' }));
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: '手札のランダム破壊を要求' })).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: '手札のランダム破壊を要求' }));
+
+  const modal = await screen.findByRole('dialog');
+  await waitFor(() => {
+    expect(within(modal).getByText('手札のランダム破壊を要求')).toBeInTheDocument();
+    expect(within(modal).getByText('1 枚')).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: '要求枚数を1枚増やす' }));
+  await waitFor(() => {
+    expect(within(modal).getByText('2 枚')).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: '要求枚数を1枚減らす' }));
+  await waitFor(() => {
+    expect(within(modal).getByText('1 枚')).toBeInTheDocument();
   });
 });
 
@@ -552,6 +580,86 @@ test('shows rejection banner when OP-B12 selected discard request is rejected', 
 
   await waitFor(() => {
     expect(screen.getByText('相手がカード破壊リクエストを拒否しました。')).toBeInTheDocument();
+  });
+});
+
+test('shows completion banner when OP-B11 random discard request is resolved', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          operationRequests: [
+            {
+              requestId: 'req_b11_completed',
+              opId: 'OP-B11',
+              requestType: 'opponent-discard-random-hand',
+              status: 'completed',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 2 },
+              result: { discardedCount: 2 },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手手札からランダムに2枚トラッシュしました。')).toBeInTheDocument();
+  });
+});
+
+test('shows rejection banner when OP-B11 random discard request is rejected', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          operationRequests: [
+            {
+              requestId: 'req_b11_rejected',
+              opId: 'OP-B11',
+              requestType: 'opponent-discard-random-hand',
+              status: 'rejected',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 1 },
+              result: { reason: 'rejected-by-target-player' },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手が手札ランダム破壊リクエストを拒否しました。')).toBeInTheDocument();
   });
 });
 
