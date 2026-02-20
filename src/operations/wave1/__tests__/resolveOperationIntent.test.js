@@ -124,7 +124,55 @@ describe('resolveOperationIntent', () => {
     expect(result.message).toMatch(/opponent/i);
   });
 
-  test('accepts opponent reveal request when target is opponent', () => {
+  test('accepts OP-B12 selected discard request when target and cardId are valid', () => {
+    const intent = buildOperationIntent({
+      opId: OPERATION_IDS.OP_B12,
+      actorPlayerId: 'player1',
+      payload: {
+        targetPlayerId: 'player2',
+        cardId: 'c_player2_hand_001',
+      },
+    });
+
+    const result = resolveOperationIntent({
+      intent,
+      sessionDoc: createSessionDoc(),
+      privateStateDoc: createPrivateStateDoc(),
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.mode).toBe('request');
+    expect(result.action.payload.targetPlayerId).toBe('player2');
+    expect(result.action.payload.cardId).toBe('c_player2_hand_001');
+  });
+
+  test('accepts OP-B12 selected discard request when cardIds are provided', () => {
+    const intent = buildOperationIntent({
+      opId: OPERATION_IDS.OP_B12,
+      actorPlayerId: 'player1',
+      payload: {
+        targetPlayerId: 'player2',
+        cardIds: ['c_player2_hand_001', 'c_player2_hand_002'],
+      },
+    });
+
+    const result = resolveOperationIntent({
+      intent,
+      sessionDoc: createSessionDoc(),
+      privateStateDoc: createPrivateStateDoc(),
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.payload.cardIds).toEqual([
+      'c_player2_hand_001',
+      'c_player2_hand_002',
+    ]);
+    expect(result.action.payload.cardId).toBe('c_player2_hand_001');
+  });
+
+  test('rejects OP-B12 request when cardId is missing', () => {
     const intent = buildOperationIntent({
       opId: OPERATION_IDS.OP_B12,
       actorPlayerId: 'player1',
@@ -140,9 +188,8 @@ describe('resolveOperationIntent', () => {
       actorPlayerId: 'player1',
     });
 
-    expect(result.accepted).toBe(true);
-    expect(result.action.mode).toBe('request');
-    expect(result.action.payload.targetPlayerId).toBe('player2');
+    expect(result.accepted).toBe(false);
+    expect(result.message).toMatch(/cardId/i);
   });
 
   test('accepts OP-A03 reveal request when target is opponent', () => {

@@ -49,6 +49,18 @@ function normalizeCount(value, fallback = 1) {
   return fallback;
 }
 
+function normalizeCardIdList(payload = {}) {
+  const fromArray = asArray(payload?.cardIds)
+    .map((cardId) => (typeof cardId === 'string' ? cardId.trim() : ''))
+    .filter(Boolean);
+  if (fromArray.length > 0) {
+    return Array.from(new Set(fromArray));
+  }
+
+  const single = typeof payload?.cardId === 'string' ? payload.cardId.trim() : '';
+  return single ? [single] : [];
+}
+
 function ensureTurnContext(sessionDoc) {
   if (!sessionDoc.publicState.turnContext || typeof sessionDoc.publicState.turnContext !== 'object') {
     sessionDoc.publicState.turnContext = {
@@ -345,6 +357,7 @@ function createOperationRequest({
   now,
 }) {
   const requests = ensureOperationRequests(sessionDoc);
+  const normalizedCardIds = normalizeCardIdList(payload);
   const request = {
     requestId: `req_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
     opId,
@@ -353,7 +366,9 @@ function createOperationRequest({
     actorPlayerId,
     targetPlayerId,
     payload: {
-      count: normalizeCount(payload?.count, 1),
+      count: normalizeCount(payload?.count, normalizedCardIds.length || 1),
+      cardId: normalizedCardIds[0] || '',
+      cardIds: normalizedCardIds,
       note: payload?.note || '',
     },
     createdAt: now,
@@ -428,6 +443,46 @@ function applyRequestApproval({
     request.result = {
       revealedCount: hand.length,
       revealedCardIds: hand.map((ref) => ref?.cardId).filter(Boolean),
+    };
+    return;
+  }
+
+  if (request.requestType === 'opponent-discard-selected-hand') {
+    const cardIds = normalizeCardIdList(request?.payload);
+    if (!cardIds.length) {
+      throw new GameStateError(
+        ERROR_CODES.INVALID_STATE,
+        'cardId or cardIds is required for selected-hand discard request.'
+      );
+    }
+
+    const handCardIdSet = new Set(hand.map((entry) => entry?.cardId).filter(Boolean));
+    const missingCardIds = cardIds.filter((cardId) => !handCardIdSet.has(cardId));
+    if (missingCardIds.length > 0) {
+      throw new GameStateError(
+        ERROR_CODES.NOT_FOUND,
+        `Target cards not found in hand: ${missingCardIds.join(', ')}`
+      );
+    }
+
+    const discarded = [];
+    cardIds.forEach((cardId) => {
+      const picked = removeCardRefByCardId(hand, cardId);
+      if (picked?.cardId) {
+        discarded.push(picked.cardId);
+      }
+    });
+
+    const discard = resolvePublicZone(board, PUBLIC_ZONE.DISCARD);
+    discard.push(...discarded.map((cardId) => createPublicCardRefFromHelper(cardId)));
+
+    request.status = OPERATION_REQUEST_STATUS.COMPLETED;
+    request.resolvedAt = now;
+    request.resolvedByPlayerId = playerId;
+    request.result = {
+      discardedCount: discarded.length,
+      discardedCardId: discarded[0] || null,
+      discardedCardIds: discarded,
     };
     return;
   }
@@ -1070,8 +1125,10 @@ export async function applyOperationMutation({
     const requestType =
       action.opId === OPERATION_IDS.OP_B11
         ? 'opponent-discard-random-hand'
-        : action.opId === OPERATION_IDS.OP_A03 || action.opId === OPERATION_IDS.OP_B12
+        : action.opId === OPERATION_IDS.OP_A03
           ? 'opponent-reveal-hand'
+          : action.opId === OPERATION_IDS.OP_B12
+            ? 'opponent-discard-selected-hand'
           : null;
 
     if (!requestType) {

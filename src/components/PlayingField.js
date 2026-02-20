@@ -256,6 +256,14 @@ function formatPendingRequestLabel(request) {
     return '手札を公開してよいか確認されています。';
   }
 
+  if (request.requestType === 'opponent-discard-selected-hand') {
+    const selectedCount = Math.max(
+      asArray(request?.payload?.cardIds).filter(Boolean).length,
+      request?.payload?.cardId ? 1 : 0
+    );
+    return `指定された手札 ${selectedCount || 1} 枚をトラッシュしてよいか確認されています。`;
+  }
+
   return '相手から操作の承認が必要です。';
 }
 
@@ -424,11 +432,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     cardIds: [],
   });
   const [opponentRevealActiveIndex, setOpponentRevealActiveIndex] = useState(null);
+  const [opponentRevealSelectedCardIds, setOpponentRevealSelectedCardIds] = useState([]);
   const [opponentRevealActiveShift, setOpponentRevealActiveShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
   const handledRevealRequestIdsRef = useRef(new Set());
   const hasInitializedHandledRevealRef = useRef(false);
+  const handledSelectedDiscardRequestIdsRef = useRef(new Set());
+  const hasInitializedHandledSelectedDiscardRef = useRef(false);
   const opponentRevealButtonRefs = useRef({});
 
   const clearMutationNotice = useCallback(() => {
@@ -587,12 +598,36 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     () => toRevealRequestCards(opponentHandRevealState.cardIds, renderCardCatalog),
     [opponentHandRevealState.cardIds, renderCardCatalog]
   );
+  const selectedOpponentRevealCardIds = useMemo(() => {
+    if (!opponentRevealSelectedCardIds.length) {
+      return [];
+    }
+    const availableCardIdSet = new Set(opponentHandRevealCards.map((entry) => entry.cardId).filter(Boolean));
+    return opponentRevealSelectedCardIds.filter((cardId) => availableCardIdSet.has(cardId));
+  }, [opponentHandRevealCards, opponentRevealSelectedCardIds]);
+  const selectedOpponentRevealCardCount = selectedOpponentRevealCardIds.length;
   const opponentRevealColumnCount = Math.max(1, Math.min(10, opponentHandRevealCards.length || 1));
   const pendingApprovalRequests = useMemo(
     () => listPendingOperationRequests(sessionDoc, ownerPlayerId),
     [ownerPlayerId, sessionDoc]
   );
   const blockingRequest = pendingApprovalRequests[0] || null;
+  const blockingRequestCardIds = useMemo(() => {
+    const payloadCardIds = asArray(blockingRequest?.payload?.cardIds)
+      .map((cardId) => (typeof cardId === 'string' ? cardId.trim() : ''))
+      .filter(Boolean);
+    const singleCardId =
+      typeof blockingRequest?.payload?.cardId === 'string' ? blockingRequest.payload.cardId.trim() : '';
+    const merged = payloadCardIds.length > 0 ? payloadCardIds : singleCardId ? [singleCardId] : [];
+    return Array.from(new Set(merged));
+  }, [blockingRequest]);
+  const blockingRequestCardImageUrls = useMemo(
+    () =>
+      blockingRequestCardIds
+        .map((cardId) => renderCardCatalog?.[cardId]?.imageUrl || null)
+        .filter(Boolean),
+    [blockingRequestCardIds, renderCardCatalog]
+  );
   const hasBlockingRequest = Boolean(blockingRequest);
   const isOpponentHandRevealOpen = Boolean(opponentHandRevealState.requestId);
   const isUiInteractionBlocked = hasBlockingRequest || isOpponentHandRevealOpen;
@@ -719,15 +754,19 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   useEffect(() => {
     handledRevealRequestIdsRef.current = new Set();
     hasInitializedHandledRevealRef.current = false;
+    handledSelectedDiscardRequestIdsRef.current = new Set();
+    hasInitializedHandledSelectedDiscardRef.current = false;
     setOpponentHandRevealState({
       requestId: '',
       cardIds: [],
     });
+    setOpponentRevealSelectedCardIds([]);
   }, [ownerPlayerId]);
 
   useEffect(() => {
     if (!isOpponentHandRevealOpen) {
       setOpponentRevealActiveIndex(null);
+      setOpponentRevealSelectedCardIds([]);
       setOpponentRevealActiveShift((previous) => {
         if (
           previous.x === POPUP_CARD_BASE_SHIFT.x &&
@@ -739,6 +778,20 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       });
     }
   }, [isOpponentHandRevealOpen]);
+
+  useEffect(() => {
+    setOpponentRevealSelectedCardIds((previous) => {
+      if (!previous.length) {
+        return previous;
+      }
+      const availableCardIdSet = new Set(opponentHandRevealCards.map((entry) => entry.cardId).filter(Boolean));
+      const next = previous.filter((cardId) => availableCardIdSet.has(cardId));
+      if (next.length === previous.length) {
+        return previous;
+      }
+      return next;
+    });
+  }, [opponentHandRevealCards]);
 
   const recalcOpponentRevealCardShift = useCallback(() => {
     if (
@@ -836,6 +889,51 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, [clearMutationNotice, operationRequests, ownerPlayerId, pushAlertNotice]);
 
+  useEffect(() => {
+    const selectedDiscardRequestsForActor = operationRequests.filter(
+      (request) =>
+        request?.requestType === 'opponent-discard-selected-hand' &&
+        request?.actorPlayerId === ownerPlayerId
+    );
+
+    if (!hasInitializedHandledSelectedDiscardRef.current) {
+      selectedDiscardRequestsForActor
+        .filter((request) => request?.status && request.status !== 'pending')
+        .forEach((request) => {
+          if (request?.requestId) {
+            handledSelectedDiscardRequestIdsRef.current.add(request.requestId);
+          }
+        });
+      hasInitializedHandledSelectedDiscardRef.current = true;
+      return;
+    }
+
+    selectedDiscardRequestsForActor.forEach((request) => {
+      if (!request?.requestId || request.status === 'pending') {
+        return;
+      }
+      if (handledSelectedDiscardRequestIdsRef.current.has(request.requestId)) {
+        return;
+      }
+      handledSelectedDiscardRequestIdsRef.current.add(request.requestId);
+
+      if (request.status === 'rejected') {
+        pushAlertNotice('相手がカード破壊リクエストを拒否しました。');
+        return;
+      }
+
+      const discardedCount = Math.max(
+        asArray(request?.result?.discardedCardIds).filter(Boolean).length,
+        Number(request?.result?.discardedCount || 0)
+      );
+      if (discardedCount > 1) {
+        pushSuccessNotice(`相手手札の指定カードを${discardedCount}枚トラッシュしました。`);
+      } else {
+        pushSuccessNotice('相手手札の指定カードをトラッシュしました。');
+      }
+    });
+  }, [operationRequests, ownerPlayerId, pushAlertNotice, pushSuccessNotice]);
+
   const handleCoinToss = useCallback(async () => {
     if (!sessionId || !ownerPlayerId || isCoinSubmitting || isMutating) {
       return;
@@ -908,13 +1006,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         isCoinSubmitting ||
         isQuickActionSubmitting
       ) {
-        return;
+        return false;
       }
 
       const actorUid = getCurrentUid();
       if (!actorUid) {
         pushAlertNotice('認証情報を取得できませんでした。ページを再読み込みしてください。');
-        return;
+        return false;
       }
 
       const intentDraft = buildOperationIntent({
@@ -934,7 +1032,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         pushAlertNotice(
           resolvedIntent?.message || invalidMessage || '操作を実行できませんでした。状態を確認してください。'
         );
-        return;
+        return false;
       }
 
       setIsQuickActionSubmitting(true);
@@ -951,6 +1049,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         } else {
           clearMutationNotice();
         }
+        return true;
       } catch (error) {
         if (isGameStateError(error, ERROR_CODES.REVISION_CONFLICT)) {
           pushAlertNotice('他端末の更新と競合しました。最新状態で再実行してください。');
@@ -959,6 +1058,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         } else {
           pushAlertNotice('操作の確定に失敗しました。再試行してください。');
         }
+        return false;
       } finally {
         setIsQuickActionSubmitting(false);
       }
@@ -1031,7 +1131,38 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       requestId: '',
       cardIds: [],
     });
+    setOpponentRevealSelectedCardIds([]);
   }, []);
+
+  const handleRequestOpponentSelectedCardDiscard = useCallback(async () => {
+    if (!selectedOpponentRevealCardIds.length) {
+      pushAlertNotice('破壊対象のカードを選択してください。');
+      return;
+    }
+
+    const succeeded = await executeQuickOperation({
+      opId: OPERATION_IDS.OP_B12,
+      payload: {
+        targetPlayerId: opponentPlayerId,
+        cardIds: selectedOpponentRevealCardIds,
+      },
+      invalidMessage: 'カード破壊リクエストを送信できませんでした。状態を確認してください。',
+      successMessage:
+        selectedOpponentRevealCardIds.length > 1
+          ? `${selectedOpponentRevealCardIds.length}枚のカード破壊リクエストを送信しました。`
+          : 'カード破壊リクエストを送信しました。',
+    });
+
+    if (!succeeded) {
+      return;
+    }
+
+    setOpponentHandRevealState({
+      requestId: '',
+      cardIds: [],
+    });
+    setOpponentRevealSelectedCardIds([]);
+  }, [executeQuickOperation, opponentPlayerId, pushAlertNotice, selectedOpponentRevealCardIds]);
 
   const handleApproveBlockingRequest = useCallback(() => {
     if (!blockingRequest?.requestId) {
@@ -1461,6 +1592,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               {opponentHandRevealCards.length > 0 ? (
                 opponentHandRevealCards.map((card, index) => {
                   const isActive = opponentRevealActiveIndex === index;
+                  const isSelected = selectedOpponentRevealCardIds.includes(card.cardId);
 
                   if (card.imageUrl) {
                     return (
@@ -1482,7 +1614,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                           type="button"
                           className={joinClassNames(
                             styles.popupCardButton,
-                            isActive ? styles.popupCardButtonActive : ''
+                            isActive ? styles.popupCardButtonActive : '',
+                            isSelected ? styles.popupCardButtonSelected : ''
                           )}
                           style={
                             isActive
@@ -1498,6 +1631,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                           onMouseLeave={() => setOpponentRevealActiveIndex(null)}
                           onFocus={() => setOpponentRevealActiveIndex(index)}
                           onBlur={() => setOpponentRevealActiveIndex(null)}
+                          onDoubleClick={() =>
+                            setOpponentRevealSelectedCardIds((previous) => {
+                              const targetCardId = card.cardId;
+                              if (!targetCardId) {
+                                return previous;
+                              }
+                              if (previous.includes(targetCardId)) {
+                                return previous.filter((entry) => entry !== targetCardId);
+                              }
+                              return [...previous, targetCardId];
+                            })
+                          }
                         >
                           <img
                             src={card.imageUrl}
@@ -1525,7 +1670,23 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 <p className={styles.requestBlockingMeta}>公開カードはありません。</p>
               )}
             </div>
+            <p className={styles.requestBlockingMeta}>
+              破壊したいカードをダブルクリックして選択できます。
+            </p>
             <div className={styles.requestBlockingActions}>
+              <button
+                type="button"
+                className={styles.requestRejectButton}
+                onClick={handleRequestOpponentSelectedCardDiscard}
+                disabled={
+                  selectedOpponentRevealCardCount === 0 ||
+                  isQuickActionSubmitting ||
+                  isMutating ||
+                  isCoinSubmitting
+                }
+              >
+                選択されたカードの破壊を要求
+              </button>
               <button
                 type="button"
                 className={styles.requestApproveButton}
@@ -1543,10 +1704,28 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             <p className={styles.requestBlockingTitle}>相手から確認依頼があります</p>
             <p className={styles.requestBlockingMeta}>依頼元: {blockingRequest?.actorPlayerId}</p>
             <p className={styles.requestBlockingText}>{formatPendingRequestLabel(blockingRequest)}</p>
-            {pendingApprovalRequests.length > 1 ? (
-              <p className={styles.requestBlockingMeta}>
-                保留中: {pendingApprovalRequests.length} 件（先頭から処理されます）
-              </p>
+              {pendingApprovalRequests.length > 1 ? (
+                <p className={styles.requestBlockingMeta}>
+                  保留中: {pendingApprovalRequests.length} 件（先頭から処理されます）
+                </p>
+              ) : null}
+            {blockingRequest?.requestType === 'opponent-discard-selected-hand' ? (
+              <div className={styles.requestBlockingSelectedCards}>
+                {blockingRequestCardImageUrls.length > 0 ? (
+                  blockingRequestCardImageUrls.map((imageUrl, index) => (
+                    <img
+                      key={`request-card-${index + 1}`}
+                      src={imageUrl}
+                      alt={`相手が破壊を要求しているカード ${index + 1}`}
+                      className={styles.requestBlockingSelectedCardImage}
+                    />
+                  ))
+                ) : (
+                  <p className={styles.requestBlockingMeta}>
+                    対象カード: {blockingRequestCardIds.length > 0 ? `${blockingRequestCardIds.length}枚` : '不明'}
+                  </p>
+                )}
+              </div>
             ) : null}
             <div className={styles.requestBlockingActions}>
               <button

@@ -42,6 +42,18 @@ function isNonNegativeInteger(value) {
   return Number.isInteger(value) && value >= 0;
 }
 
+function normalizeCardIdList(payload) {
+  const fromArray = asArray(payload?.cardIds)
+    .map((cardId) => (typeof cardId === 'string' ? cardId.trim() : ''))
+    .filter(Boolean);
+  if (fromArray.length > 0) {
+    return Array.from(new Set(fromArray));
+  }
+
+  const fromSingle = typeof payload?.cardId === 'string' ? payload.cardId.trim() : '';
+  return fromSingle ? [fromSingle] : [];
+}
+
 function doesActorOwnCard(privateStateDoc, cardId) {
   if (!cardId) {
     return false;
@@ -137,6 +149,15 @@ function validateCorePayload(opId, payload, privateStateDoc) {
     if (payload.targetPlayerId === payload.actorPlayerId) {
       return 'targetPlayerId must be opponent for request operation.';
     }
+  }
+
+  if (opId === 'OP-B12') {
+    const normalizedCardIds = normalizeCardIdList(payload);
+    if (!normalizedCardIds.length) {
+      return 'cardId or cardIds is required for OP-B12.';
+    }
+    payload.cardIds = normalizedCardIds;
+    payload.cardId = normalizedCardIds[0];
   }
 
   return null;
