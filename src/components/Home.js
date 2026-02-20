@@ -4,11 +4,18 @@ import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import db from '../firebase';
 import { createEmptyPrivateStateV2, createEmptySessionV2 } from '../game-state/builders';
+import {
+    INITIAL_PRIZE_COUNT_DEFAULT,
+    INITIAL_PRIZE_COUNT_MAX,
+    INITIAL_PRIZE_COUNT_MIN,
+    normalizeInitialPrizeCount,
+} from '../game-state/setupUtils';
 import { ensureSignedIn } from '../auth/authClient';
 
 const Home = () => {
     const navigate = useNavigate();
     const [isAuthReady, setIsAuthReady] = useState(false);
+    const [initialPrizeCount, setInitialPrizeCount] = useState(INITIAL_PRIZE_COUNT_DEFAULT);
 
     useEffect(() => {
         let isMounted = true;
@@ -47,6 +54,10 @@ const Home = () => {
             createdBy: actorUid,
             now,
         });
+        newSession.publicState.setup = {
+            ...newSession.publicState.setup,
+            initialPrizeCount: normalizeInitialPrizeCount(initialPrizeCount),
+        };
         newSession.participants.player1 = {
             ...newSession.participants.player1,
             uid: actorUid,
@@ -70,8 +81,29 @@ const Home = () => {
 
     return (
         <div className="container mt-5">
+            <div className="mb-4" style={{ maxWidth: '480px' }}>
+                <label htmlFor="initial-prize-count" className="form-label fw-bold">
+                    初期サイド枚数: {initialPrizeCount} 枚
+                </label>
+                <input
+                    id="initial-prize-count"
+                    type="range"
+                    className="form-range"
+                    min={INITIAL_PRIZE_COUNT_MIN}
+                    max={INITIAL_PRIZE_COUNT_MAX}
+                    step="1"
+                    value={initialPrizeCount}
+                    onChange={(event) =>
+                        setInitialPrizeCount(normalizeInitialPrizeCount(event.target.value))
+                    }
+                />
+                <div className="d-flex justify-content-between small text-muted">
+                    <span>{INITIAL_PRIZE_COUNT_MIN}枚</span>
+                    <span>{INITIAL_PRIZE_COUNT_MAX}枚</span>
+                </div>
+            </div>
             <button className="btn btn-primary me-3" onClick={createSession} disabled={!isAuthReady}>
-                セッションを作成
+                セッションを開始
             </button>
             <button className="btn btn-secondary" onClick={() => navigate('/join')}>セッションに参加</button>
             {!isAuthReady && <div className="mt-3 text-muted">認証を初期化中...</div>}

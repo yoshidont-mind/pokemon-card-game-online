@@ -62,6 +62,10 @@ function isZoneOccupied(boardSnapshot, playerId, zoneKind, benchIndex) {
   return false;
 }
 
+function isSupportedCardSourceZone(sourceZone) {
+  return sourceZone === 'player-hand' || sourceZone === 'player-reveal';
+}
+
 export function createBoardSnapshot(sessionDoc) {
   const players = sessionDoc?.publicState?.players || {};
 
@@ -93,10 +97,42 @@ export function resolveDropIntent({
   }
 
   if (dropPayload.dropType === DROP_TYPES.ZONE) {
+    if (dragPayload.dragType === DRAG_TYPES.PILE_CARD) {
+      if (
+        dragPayload.sourceZone !== 'player-deck' &&
+        dragPayload.sourceZone !== 'player-prize'
+      ) {
+        return reject(REJECT_REASONS.UNSUPPORTED_SOURCE);
+      }
+      if (dropPayload.targetPlayerId !== actorPlayerId) {
+        return reject(REJECT_REASONS.PERMISSION_DENIED);
+      }
+      if (dropPayload.zoneKind !== ZONE_KINDS.HAND) {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+      }
+      if (!Number.isFinite(dragPayload.availableCount) || Number(dragPayload.availableCount) <= 0) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      return accept({
+        action: {
+          kind: INTENT_ACTIONS.MOVE_TOP_CARD_FROM_SOURCE_TO_HAND,
+          sourceZone: dragPayload.sourceZone,
+          targetPlayerId: actorPlayerId,
+          targetZoneKind: ZONE_KINDS.HAND,
+          targetZoneId: dropPayload.zoneId,
+        },
+        highlightTarget: {
+          type: DROP_TYPES.ZONE,
+          zoneId: dropPayload.zoneId,
+        },
+      });
+    }
+
     if (dragPayload.dragType !== DRAG_TYPES.CARD) {
       return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
     }
-    if (dragPayload.sourceZone !== 'player-hand') {
+    if (!isSupportedCardSourceZone(dragPayload.sourceZone)) {
       return reject(REJECT_REASONS.UNSUPPORTED_SOURCE);
     }
     if (dropPayload.targetPlayerId !== actorPlayerId) {
@@ -104,11 +140,23 @@ export function resolveDropIntent({
     }
 
     if (
+      dropPayload.zoneKind !== ZONE_KINDS.HAND &&
       dropPayload.zoneKind !== ZONE_KINDS.ACTIVE &&
       dropPayload.zoneKind !== ZONE_KINDS.BENCH &&
+      dropPayload.zoneKind !== ZONE_KINDS.REVEAL &&
       dropPayload.zoneKind !== ZONE_KINDS.DISCARD &&
-      dropPayload.zoneKind !== ZONE_KINDS.LOST
+      dropPayload.zoneKind !== ZONE_KINDS.LOST &&
+      dropPayload.zoneKind !== ZONE_KINDS.PRIZE &&
+      dropPayload.zoneKind !== ZONE_KINDS.STADIUM
     ) {
+      return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+    }
+
+    if (dragPayload.sourceZone === 'player-hand' && dropPayload.zoneKind === ZONE_KINDS.HAND) {
+      return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+    }
+
+    if (dragPayload.sourceZone === 'player-reveal' && dropPayload.zoneKind === ZONE_KINDS.REVEAL) {
       return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
     }
 

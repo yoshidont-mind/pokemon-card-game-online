@@ -22,6 +22,18 @@ const BoardDragOverlay = ({ activeDragPayload, cardCatalog = {} }) => {
     );
   }
 
+  if (activeDragPayload.dragType === DRAG_TYPES.PILE_CARD) {
+    const sourceLabel = activeDragPayload.sourceZone === 'player-prize' ? 'サイド' : '山札';
+    return (
+      <DragOverlay>
+        <div className={styles.dragOverlayPileCard}>
+          <img src="/card-back.jpg" alt="Dragging Face-down Card" className={styles.dragOverlayCard} />
+          <span className={styles.dragOverlayPileLabel}>{sourceLabel}から1枚</span>
+        </div>
+      </DragOverlay>
+    );
+  }
+
   if (activeDragPayload.dragType === DRAG_TYPES.DAMAGE_COUNTER) {
     return (
       <DragOverlay>
@@ -46,6 +58,7 @@ BoardDragOverlay.propTypes = {
     dragType: PropTypes.string,
     cardId: PropTypes.string,
     toolValue: PropTypes.string,
+    sourceZone: PropTypes.string,
   }),
   cardCatalog: PropTypes.objectOf(
     PropTypes.shape({

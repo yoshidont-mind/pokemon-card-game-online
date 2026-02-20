@@ -26,12 +26,25 @@ function normalizeBenchSlots(benchValue) {
   return slots;
 }
 
-function createPublicCardRef(cardId) {
+function createPublicCardRef(cardId, overrides = {}) {
+  const ref = createCardRef({
+    cardId,
+    orientation: overrides.orientation || ORIENTATION.VERTICAL,
+    isFaceDown: Boolean(overrides.isFaceDown),
+    visibility: overrides.visibility || VISIBILITY.PUBLIC,
+  });
+  if (typeof overrides.imageUrl === 'string' && overrides.imageUrl.trim() !== '') {
+    ref.imageUrl = overrides.imageUrl;
+  }
+  return ref;
+}
+
+function createOwnerVisibleCardRef(cardId) {
   return createCardRef({
     cardId,
     orientation: ORIENTATION.VERTICAL,
     isFaceDown: false,
-    visibility: VISIBILITY.PUBLIC,
+    visibility: VISIBILITY.OWNER_ONLY,
   });
 }
 
@@ -57,24 +70,58 @@ function resolvePlayerCounters(sessionDoc, playerId) {
   return counters;
 }
 
-function moveCardFromHandToZone({ sessionDoc, privateStateDoc, playerId, action }) {
+function ensureRevealZone(board) {
+  if (!Array.isArray(board?.reveal)) {
+    board.reveal = [];
+  }
+  return board.reveal;
+}
+
+function resolveImageUrlFromPrivateState(privateStateDoc, cardId) {
+  return privateStateDoc?.cardCatalog?.[cardId]?.imageUrl || null;
+}
+
+function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, action }) {
   const cardId = action?.cardId;
   if (!cardId) {
     throw new GameStateError(ERROR_CODES.INVALID_STATE, 'cardId is required.');
   }
 
-  const hand = asArray(privateStateDoc?.zones?.hand);
-  const handIndex = hand.findIndex((ref) => ref?.cardId === cardId);
-  if (handIndex < 0) {
+  const sourceZone = action?.sourceZone || 'player-hand';
+  const publicBoard = resolvePlayerBoard(sessionDoc, playerId);
+  const playerCounters = resolvePlayerCounters(sessionDoc, playerId);
+  let sourceCardRef = null;
+
+  if (sourceZone === 'player-hand') {
+    const hand = asArray(privateStateDoc?.zones?.hand);
+    const handIndex = hand.findIndex((ref) => ref?.cardId === cardId);
+    if (handIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in hand.`
+      );
+    }
+    [sourceCardRef] = hand.splice(handIndex, 1);
+    privateStateDoc.zones.hand = hand;
+    playerCounters.handCount = hand.length;
+  } else if (sourceZone === 'player-reveal') {
+    const reveal = ensureRevealZone(publicBoard);
+    const revealIndex = reveal.findIndex((ref) => ref?.cardId === cardId);
+    if (revealIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in reveal zone.`
+      );
+    }
+    [sourceCardRef] = reveal.splice(revealIndex, 1);
+  } else {
     throw new GameStateError(
-      ERROR_CODES.INVARIANT_VIOLATION,
-      `Card ${cardId} is not in hand.`
+      ERROR_CODES.INVALID_STATE,
+      `Unsupported source zone: ${String(sourceZone)}`
     );
   }
 
-  const [cardRef] = hand.splice(handIndex, 1);
-  const publicBoard = resolvePlayerBoard(sessionDoc, playerId);
-  const playerCounters = resolvePlayerCounters(sessionDoc, playerId);
+  const sourceImageUrl = sourceCardRef?.imageUrl || resolveImageUrlFromPrivateState(privateStateDoc, cardId);
   const targetZoneKind = action.targetZoneKind;
 
   if (targetZoneKind === ZONE_KINDS.ACTIVE) {
@@ -84,7 +131,7 @@ function moveCardFromHandToZone({ sessionDoc, privateStateDoc, playerId, action 
     publicBoard.active = createStackRef({
       stackId: `s_${playerId}_active`,
       cardIds: [cardId],
-      orientation: cardRef?.orientation || ORIENTATION.VERTICAL,
+      orientation: sourceCardRef?.orientation || ORIENTATION.VERTICAL,
       isFaceDown: false,
     });
   } else if (targetZoneKind === ZONE_KINDS.BENCH) {
@@ -100,14 +147,45 @@ function moveCardFromHandToZone({ sessionDoc, privateStateDoc, playerId, action 
     bench[benchIndex] = createStackRef({
       stackId: `s_${playerId}_bench_${benchIndex + 1}`,
       cardIds: [cardId],
-      orientation: cardRef?.orientation || ORIENTATION.VERTICAL,
+      orientation: sourceCardRef?.orientation || ORIENTATION.VERTICAL,
       isFaceDown: false,
     });
     publicBoard.bench = bench;
+  } else if (targetZoneKind === ZONE_KINDS.REVEAL) {
+    const reveal = ensureRevealZone(publicBoard);
+    reveal.push(createPublicCardRef(cardId, { imageUrl: sourceImageUrl }));
   } else if (targetZoneKind === ZONE_KINDS.DISCARD) {
-    publicBoard.discard = [...asArray(publicBoard.discard), createPublicCardRef(cardId)];
+    publicBoard.discard = [
+      ...asArray(publicBoard.discard),
+      createPublicCardRef(cardId, {
+        imageUrl: sourceImageUrl,
+      }),
+    ];
   } else if (targetZoneKind === ZONE_KINDS.LOST) {
-    publicBoard.lostZone = [...asArray(publicBoard.lostZone), createPublicCardRef(cardId)];
+    publicBoard.lostZone = [
+      ...asArray(publicBoard.lostZone),
+      createPublicCardRef(cardId, {
+        imageUrl: sourceImageUrl,
+      }),
+    ];
+  } else if (targetZoneKind === ZONE_KINDS.PRIZE) {
+    publicBoard.prize = [
+      ...asArray(publicBoard.prize),
+      createPublicCardRef(cardId, {
+        isFaceDown: true,
+      }),
+    ];
+  } else if (targetZoneKind === ZONE_KINDS.HAND) {
+    const hand = asArray(privateStateDoc?.zones?.hand);
+    hand.push(createOwnerVisibleCardRef(cardId));
+    privateStateDoc.zones.hand = hand;
+    playerCounters.handCount = hand.length;
+  } else if (targetZoneKind === ZONE_KINDS.STADIUM) {
+    sessionDoc.publicState.stadium = {
+      cardId,
+      ownerPlayerId: playerId,
+      placedVia: 'dnd',
+    };
   } else {
     throw new GameStateError(
       ERROR_CODES.INVALID_STATE,
@@ -115,8 +193,6 @@ function moveCardFromHandToZone({ sessionDoc, privateStateDoc, playerId, action 
     );
   }
 
-  privateStateDoc.zones.hand = hand;
-  playerCounters.handCount = hand.length;
   if (
     sessionDoc.status === SESSION_STATUS.WAITING ||
     sessionDoc.status === SESSION_STATUS.READY
@@ -142,6 +218,60 @@ function resolveTargetStack(board, stackKind, benchIndex) {
     return asArray(board.bench)[index] || null;
   }
   return null;
+}
+
+function moveTopCardFromSourceToHand({
+  sessionDoc,
+  privateStateDoc,
+  playerId,
+  action,
+}) {
+  const sourceZone = action?.sourceZone;
+  const hand = asArray(privateStateDoc?.zones?.hand);
+  const board = resolvePlayerBoard(sessionDoc, playerId);
+  const counters = resolvePlayerCounters(sessionDoc, playerId);
+  let movingCardId = null;
+
+  if (sourceZone === 'player-deck') {
+    const deck = asArray(privateStateDoc?.zones?.deck);
+    const [topCardRef] = deck.splice(0, 1);
+    privateStateDoc.zones.deck = deck;
+    movingCardId = topCardRef?.cardId || null;
+    counters.deckCount = deck.length;
+  } else if (sourceZone === 'player-prize') {
+    const prize = asArray(board.prize);
+    if (prize.length > 0) {
+      const randomIndex = Math.floor(Math.random() * prize.length);
+      const [picked] = prize.splice(randomIndex, 1);
+      board.prize = prize;
+      movingCardId = picked?.cardId || null;
+    }
+  } else {
+    throw new GameStateError(
+      ERROR_CODES.INVALID_STATE,
+      `Unsupported sourceZone for pile move: ${String(sourceZone)}`
+    );
+  }
+
+  if (!movingCardId) {
+    throw new GameStateError(ERROR_CODES.NOT_FOUND, 'No card available to move from source zone.');
+  }
+
+  hand.push(createOwnerVisibleCardRef(movingCardId));
+  privateStateDoc.zones.hand = hand;
+  counters.handCount = hand.length;
+
+  if (
+    sessionDoc.status === SESSION_STATUS.WAITING ||
+    sessionDoc.status === SESSION_STATUS.READY
+  ) {
+    sessionDoc.status = SESSION_STATUS.PLAYING;
+  }
+
+  return {
+    sessionDoc,
+    privateStateDoc,
+  };
 }
 
 function applyToolToStack({ sessionDoc, action }) {
@@ -202,7 +332,16 @@ export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId,
   }
 
   if (intent.action.kind === INTENT_ACTIONS.MOVE_CARD_FROM_HAND_TO_ZONE) {
-    return moveCardFromHandToZone({
+    return moveCardFromSourceToZone({
+      sessionDoc,
+      privateStateDoc,
+      playerId,
+      action: intent.action,
+    });
+  }
+
+  if (intent.action.kind === INTENT_ACTIONS.MOVE_TOP_CARD_FROM_SOURCE_TO_HAND) {
+    return moveTopCardFromSourceToHand({
       sessionDoc,
       privateStateDoc,
       playerId,

@@ -14,9 +14,35 @@ import { toPlayerKey } from '../game-state/migrateV1ToV2';
 import { CONNECTION_STATES, touchSessionPresence } from '../game-state/presence';
 import { claimPlayerSlot } from '../game-state/sessionParticipation';
 import { SESSION_STATUS, isV1SessionDoc, isV2SessionDoc } from '../game-state/schemaV2';
+import { INITIAL_PRIZE_COUNT_DEFAULT, normalizeInitialPrizeCount, takeInitialPrizeRefsFromDeck } from '../game-state/setupUtils';
 import { applySessionMutation } from '../game-state/transactionRunner';
 
 const INITIAL_HAND_SIZE = 7;
+
+function mergeOwnedCardsIntoPublicCatalog({ sessionDoc, ownerPlayerId, privateCardCatalog }) {
+  const nextPublicCardCatalog =
+    sessionDoc?.publicState?.publicCardCatalog &&
+    typeof sessionDoc.publicState.publicCardCatalog === 'object'
+      ? { ...sessionDoc.publicState.publicCardCatalog }
+      : {};
+
+  Object.keys(nextPublicCardCatalog).forEach((cardId) => {
+    if (cardId.startsWith(`c_${ownerPlayerId}_`)) {
+      delete nextPublicCardCatalog[cardId];
+    }
+  });
+
+  Object.values(privateCardCatalog || {}).forEach((cardEntity) => {
+    const cardId = cardEntity?.cardId;
+    const imageUrl =
+      typeof cardEntity?.imageUrl === 'string' ? cardEntity.imageUrl.trim() : '';
+    if (cardId && imageUrl) {
+      nextPublicCardCatalog[cardId] = imageUrl;
+    }
+  });
+
+  return nextPublicCardCatalog;
+}
 
 const Session = () => {
   const query = new URLSearchParams(useLocation().search);
@@ -158,6 +184,101 @@ const Session = () => {
     if (!isAuthReady || !isPlayerSlotReady || !sessionId || !ownerPlayerId) {
       return undefined;
     }
+    if (!isV2SessionDoc(rawSessionDoc)) {
+      return undefined;
+    }
+
+    const privateCardCatalog = rawPrivateStateDoc?.cardCatalog;
+    if (!privateCardCatalog || typeof privateCardCatalog !== 'object') {
+      return undefined;
+    }
+
+    const ownedPrefix = `c_${ownerPlayerId}_`;
+    const hasOwnedCards = Object.keys(privateCardCatalog).some((cardId) =>
+      cardId.startsWith(ownedPrefix)
+    );
+    if (!hasOwnedCards) {
+      return undefined;
+    }
+
+    const nextPublicCardCatalog = mergeOwnedCardsIntoPublicCatalog({
+      sessionDoc: rawSessionDoc,
+      ownerPlayerId,
+      privateCardCatalog,
+    });
+    const currentPublicCardCatalog =
+      rawSessionDoc?.publicState?.publicCardCatalog &&
+      typeof rawSessionDoc.publicState.publicCardCatalog === 'object'
+        ? rawSessionDoc.publicState.publicCardCatalog
+        : {};
+
+    const currentOwnedEntries = Object.entries(currentPublicCardCatalog)
+      .filter(([cardId]) => cardId.startsWith(ownedPrefix))
+      .sort(([leftId], [rightId]) => leftId.localeCompare(rightId));
+    const nextOwnedEntries = Object.entries(nextPublicCardCatalog)
+      .filter(([cardId]) => cardId.startsWith(ownedPrefix))
+      .sort(([leftId], [rightId]) => leftId.localeCompare(rightId));
+
+    const isAlreadySynced =
+      currentOwnedEntries.length === nextOwnedEntries.length &&
+      currentOwnedEntries.every(
+        ([cardId, imageUrl], index) =>
+          nextOwnedEntries[index]?.[0] === cardId &&
+          nextOwnedEntries[index]?.[1] === imageUrl
+      );
+    if (isAlreadySynced) {
+      return undefined;
+    }
+
+    const actorUid = getCurrentUid();
+    if (!actorUid) {
+      return undefined;
+    }
+
+    let isDisposed = false;
+    const expectedRevision = Number.isFinite(rawSessionDoc?.revision) ? rawSessionDoc.revision : 0;
+
+    const syncPublicCardCatalog = async () => {
+      try {
+        await applySessionMutation({
+          sessionId,
+          playerId: ownerPlayerId,
+          actorUid,
+          expectedRevision,
+          touchPrivateState: false,
+          mutate: ({ sessionDoc: draftSessionDoc }) => {
+            draftSessionDoc.publicState.publicCardCatalog = mergeOwnedCardsIntoPublicCatalog({
+              sessionDoc: draftSessionDoc,
+              ownerPlayerId,
+              privateCardCatalog,
+            });
+            return { sessionDoc: draftSessionDoc };
+          },
+        });
+      } catch (error) {
+        if (
+          isGameStateError(error, ERROR_CODES.REVISION_CONFLICT) ||
+          isGameStateError(error, ERROR_CODES.PERMISSION_DENIED)
+        ) {
+          return;
+        }
+        if (!isDisposed) {
+          console.warn('Failed to sync publicCardCatalog:', error);
+        }
+      }
+    };
+
+    void syncPublicCardCatalog();
+
+    return () => {
+      isDisposed = true;
+    };
+  }, [isAuthReady, isPlayerSlotReady, ownerPlayerId, rawPrivateStateDoc, rawSessionDoc, sessionId]);
+
+  useEffect(() => {
+    if (!isAuthReady || !isPlayerSlotReady || !sessionId || !ownerPlayerId) {
+      return undefined;
+    }
 
     let isDisposed = false;
 
@@ -294,6 +415,11 @@ const Session = () => {
         actorUid,
         expectedRevision,
         mutate: ({ sessionDoc, now }) => {
+          const initialPrizeCount = normalizeInitialPrizeCount(
+            sessionDoc?.publicState?.setup?.initialPrizeCount,
+            INITIAL_PRIZE_COUNT_DEFAULT
+          );
+
           const nextPrivateState = createPrivateStateFromDeckImageUrls({
             ownerPlayerId,
             imageUrls: selectedDeckCards,
@@ -302,11 +428,19 @@ const Session = () => {
             now,
             shuffle: true,
           });
+          const initialPrizeRefs = takeInitialPrizeRefsFromDeck(nextPrivateState, initialPrizeCount);
 
           const opponentPlayerId = ownerPlayerId === 'player1' ? 'player2' : 'player1';
           const opponentDeckCount = Number(
             sessionDoc?.publicState?.players?.[opponentPlayerId]?.counters?.deckCount || 0
           );
+
+          sessionDoc.publicState.publicCardCatalog = mergeOwnedCardsIntoPublicCatalog({
+            sessionDoc,
+            ownerPlayerId,
+            privateCardCatalog: nextPrivateState.cardCatalog,
+          });
+          sessionDoc.publicState.players[ownerPlayerId].board.prize = initialPrizeRefs;
 
           sessionDoc.publicState.players[ownerPlayerId].counters = {
             deckCount: nextPrivateState.zones.deck.length,

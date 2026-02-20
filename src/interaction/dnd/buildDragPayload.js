@@ -16,6 +16,21 @@ export function buildCardDragPayload({ cardId, sourceZone = 'player-hand' }) {
   };
 }
 
+export function buildPileCardDragPayload({
+  sourceZone,
+  availableCount = 0,
+}) {
+  if (!sourceZone || typeof sourceZone !== 'string') {
+    return null;
+  }
+
+  return {
+    dragType: DRAG_TYPES.PILE_CARD,
+    sourceZone,
+    availableCount: Number.isFinite(availableCount) ? Math.max(0, Number(availableCount)) : 0,
+  };
+}
+
 export function buildDamageCounterDragPayload({ value }) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) {

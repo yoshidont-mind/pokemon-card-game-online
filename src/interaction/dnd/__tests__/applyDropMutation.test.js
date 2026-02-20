@@ -13,6 +13,7 @@ function createDocs() {
             board: {
               active: null,
               bench: [],
+              reveal: [],
               discard: [],
               lostZone: [],
               prize: [],
@@ -37,6 +38,7 @@ function createDocs() {
                 isFaceDown: false,
               },
               bench: [],
+              reveal: [],
               discard: [],
               lostZone: [],
               prize: [],
@@ -136,5 +138,111 @@ describe('mutateDocsForDropIntent', () => {
     expect(nextBench[3]).toBeTruthy();
     expect(nextBench[3].cardIds).toEqual(['c_player1_001']);
     expect(nextBench[4]).toBeNull();
+  });
+
+  test('moves a hand card to prize zone as face-down', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-from-hand-to-zone',
+          cardId: 'c_player1_001',
+          targetZoneKind: 'prize',
+        },
+      },
+    });
+
+    expect(result.privateStateDoc.zones.hand).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.prize).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.prize[0].isFaceDown).toBe(true);
+  });
+
+  test('moves a hand card to stadium zone', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-from-hand-to-zone',
+          cardId: 'c_player1_001',
+          targetZoneKind: 'stadium',
+        },
+      },
+    });
+
+    expect(result.privateStateDoc.zones.hand).toHaveLength(1);
+    expect(result.sessionDoc.publicState.stadium).toBeTruthy();
+    expect(result.sessionDoc.publicState.stadium.cardId).toBe('c_player1_001');
+  });
+
+  test('moves a hand card to reveal zone and keeps imageUrl for opponent display', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-from-hand-to-zone',
+          cardId: 'c_player1_001',
+          sourceZone: 'player-hand',
+          targetZoneKind: 'reveal',
+        },
+      },
+    });
+
+    expect(result.privateStateDoc.zones.hand).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.reveal).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.reveal[0].imageUrl).toBe(
+      'https://example.com/1.jpg'
+    );
+  });
+
+  test('moves a card from reveal zone to discard', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.reveal = [
+      {
+        cardId: 'c_player1_001',
+        orientation: 'vertical',
+        isFaceDown: false,
+        visibility: 'public',
+        imageUrl: 'https://example.com/1.jpg',
+      },
+    ];
+    privateStateDoc.zones.hand = [
+      { cardId: 'c_player1_002', orientation: 'vertical', isFaceDown: false, visibility: 'ownerOnly' },
+    ];
+    sessionDoc.publicState.players.player1.counters.handCount = 1;
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-from-hand-to-zone',
+          cardId: 'c_player1_001',
+          sourceZone: 'player-reveal',
+          targetZoneKind: 'discard',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.reveal).toHaveLength(0);
+    expect(result.sessionDoc.publicState.players.player1.board.discard).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.discard[0].cardId).toBe('c_player1_001');
+    expect(result.sessionDoc.publicState.players.player1.counters.handCount).toBe(1);
   });
 });

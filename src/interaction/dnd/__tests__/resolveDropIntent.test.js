@@ -145,4 +145,85 @@ describe('resolveDropIntent', () => {
     expect(result.accepted).toBe(false);
     expect(result.reason).toBe(REJECT_REASONS.PERMISSION_DENIED);
   });
+
+  test('accepts moving a hand card to prize zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-prize',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.PRIZE,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.PRIZE);
+  });
+
+  test('accepts moving a hand card to stadium zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'center-stadium',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.STADIUM,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.STADIUM);
+  });
+
+  test('accepts moving a hand card to reveal zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-reveal',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.REVEAL,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.REVEAL);
+  });
+
+  test('accepts moving a reveal card to discard zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-reveal' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-discard',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DISCARD,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.sourceZone).toBe('player-reveal');
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.DISCARD);
+  });
 });
