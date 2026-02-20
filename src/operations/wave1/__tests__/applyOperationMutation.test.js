@@ -217,7 +217,7 @@ describe('mutateDocsForOperationIntent', () => {
     sessionDoc.publicState.operationRequests = [
       {
         requestId: 'req_002',
-        opId: OPERATION_IDS.OP_B12,
+        opId: OPERATION_IDS.OP_A03,
         requestType: 'opponent-reveal-hand',
         status: 'pending',
         actorPlayerId: 'player1',
@@ -260,6 +260,116 @@ describe('mutateDocsForOperationIntent', () => {
       'c_player2_hand_003',
     ]);
     expect(privateStateDoc.zones.hand).toHaveLength(3);
+  });
+
+  test('request approve resolves OP-B12 selected discard request', () => {
+    const sessionDoc = createSessionDoc();
+    sessionDoc.publicState.operationRequests = [
+      {
+        requestId: 'req_002_b12',
+        opId: OPERATION_IDS.OP_B12,
+        requestType: 'opponent-discard-selected-hand',
+        status: 'pending',
+        actorPlayerId: 'player1',
+        targetPlayerId: 'player2',
+        payload: {
+          cardId: 'c_player2_hand_002',
+        },
+        createdAt: '2026-02-19T03:00:00.000Z',
+        resolvedAt: null,
+        resolvedByPlayerId: null,
+        result: null,
+      },
+    ];
+
+    const privateStateDoc = createPrivateStateDoc({
+      ownerPlayerId: 'player2',
+      handCardIds: ['c_player2_hand_001', 'c_player2_hand_002', 'c_player2_hand_003'],
+    });
+
+    mutateDocsForOperationIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player2',
+      intent: {
+        action: {
+          opId: INTERNAL_OPERATION_IDS.REQUEST_APPROVE,
+          mode: 'request-resolution',
+          payload: {
+            requestId: 'req_002_b12',
+            action: 'approve',
+          },
+        },
+      },
+      now: '2026-02-19T03:11:30.000Z',
+    });
+
+    expect(sessionDoc.publicState.operationRequests[0].status).toBe('completed');
+    expect(sessionDoc.publicState.operationRequests[0].resolvedByPlayerId).toBe('player2');
+    expect(sessionDoc.publicState.operationRequests[0].result.discardedCardIds).toEqual([
+      'c_player2_hand_002',
+    ]);
+    expect(privateStateDoc.zones.hand.map((ref) => ref.cardId)).toEqual([
+      'c_player2_hand_001',
+      'c_player2_hand_003',
+    ]);
+    expect(
+      sessionDoc.publicState.players.player2.board.discard.some(
+        (ref) => ref.cardId === 'c_player2_hand_002'
+      )
+    ).toBe(true);
+  });
+
+  test('request approve resolves OP-B12 selected discard request for multiple cards', () => {
+    const sessionDoc = createSessionDoc();
+    sessionDoc.publicState.operationRequests = [
+      {
+        requestId: 'req_002_b12_multi',
+        opId: OPERATION_IDS.OP_B12,
+        requestType: 'opponent-discard-selected-hand',
+        status: 'pending',
+        actorPlayerId: 'player1',
+        targetPlayerId: 'player2',
+        payload: {
+          cardIds: ['c_player2_hand_001', 'c_player2_hand_003'],
+        },
+        createdAt: '2026-02-19T03:00:00.000Z',
+        resolvedAt: null,
+        resolvedByPlayerId: null,
+        result: null,
+      },
+    ];
+
+    const privateStateDoc = createPrivateStateDoc({
+      ownerPlayerId: 'player2',
+      handCardIds: ['c_player2_hand_001', 'c_player2_hand_002', 'c_player2_hand_003'],
+    });
+
+    mutateDocsForOperationIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player2',
+      intent: {
+        action: {
+          opId: INTERNAL_OPERATION_IDS.REQUEST_APPROVE,
+          mode: 'request-resolution',
+          payload: {
+            requestId: 'req_002_b12_multi',
+            action: 'approve',
+          },
+        },
+      },
+      now: '2026-02-19T03:11:45.000Z',
+    });
+
+    expect(sessionDoc.publicState.operationRequests[0].status).toBe('completed');
+    expect(sessionDoc.publicState.operationRequests[0].result.discardedCardIds).toEqual([
+      'c_player2_hand_001',
+      'c_player2_hand_003',
+    ]);
+    expect(privateStateDoc.zones.hand.map((ref) => ref.cardId)).toEqual([
+      'c_player2_hand_002',
+    ]);
   });
 
   test('request reject marks pending request as rejected', () => {
@@ -353,17 +463,18 @@ describe('mutateDocsForOperationIntent', () => {
       {
         requestId: 'req_005',
         opId: OPERATION_IDS.OP_B12,
-        requestType: 'opponent-reveal-hand',
+        requestType: 'opponent-discard-selected-hand',
         status: 'completed',
         actorPlayerId: 'player1',
         targetPlayerId: 'player2',
-        payload: { count: 1 },
+        payload: { cardId: 'c_player2_hand_001' },
         createdAt: '2026-02-19T03:00:00.000Z',
         resolvedAt: '2026-02-19T03:10:00.000Z',
         resolvedByPlayerId: 'player2',
         result: {
-          revealedCount: 2,
-          revealedCardIds: ['c_player2_hand_001', 'c_player2_hand_002'],
+          discardedCount: 1,
+          discardedCardId: 'c_player2_hand_001',
+          discardedCardIds: ['c_player2_hand_001'],
         },
       },
     ];

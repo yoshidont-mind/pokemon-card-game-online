@@ -131,9 +131,9 @@ describe('OperationPanel', () => {
         opId: 'OP-B12',
         status: 'completed',
         resolvedByPlayerId: 'player2',
-        requestType: 'opponent-reveal-hand',
+        requestType: 'opponent-discard-selected-hand',
         result: {
-          revealedCardIds: ['c_player2_hand_001', 'c_player2_hand_002'],
+          discardedCardIds: ['c_player2_hand_001'],
         },
       },
     ]);
@@ -150,7 +150,7 @@ describe('OperationPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /操作パネルを開く/i }));
 
     expect(screen.getByText(/承認済み\/拒否済みリクエスト/i)).toBeInTheDocument();
-    expect(screen.getByText(/公開カード:/i)).toBeInTheDocument();
+    expect(screen.getByText(/指定破棄カード:/i)).toBeInTheDocument();
     expect(screen.getByText(/c_player2_hand_001/i)).toBeInTheDocument();
   });
 

@@ -287,6 +287,8 @@
   border-radius: 8px;
   cursor: pointer;
   line-height: 0;
+  position: relative;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .popupCardButton:focus-visible {
@@ -296,6 +298,17 @@
 
 .popupCardButtonActive {
   border-color: #5f8d3d;
+}
+
+.popupCardButtonSelected {
+  border: 3px solid #d73d3d;
+  background: rgba(255, 120, 120, 0.14);
+  transform: translateY(-6px);
+  box-shadow: 0 10px 20px rgba(163, 32, 32, 0.28);
+}
+
+.popupCardButtonSelected .popupCardImage {
+  filter: saturate(0.92) contrast(0.98) hue-rotate(-8deg);
 }
 
 .popupCardImage {
@@ -324,6 +337,22 @@
   place-items: center;
   text-align: center;
   padding: 6px;
+}
+
+.requestBlockingSelectedCards {
+  margin-top: 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, max-content));
+  gap: 8px;
+  justify-content: center;
+}
+
+.requestBlockingSelectedCardImage {
+  width: min(120px, 26vw);
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid #d5dfcb;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
 .benchRow {

@@ -381,6 +381,60 @@ test('opponent hand reveal modal caps columns at 10 and wraps beyond 10 cards', 
   expect(screen.getByRole('button', { name: '公開手札 1 を拡大表示' })).toBeInTheDocument();
 });
 
+test('opponent hand reveal modal supports selecting a card for OP-B12 discard request', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          publicCardCatalog: {
+            c_player2_hand_001: 'https://example.com/p2_hand_001.jpg',
+          },
+          operationRequests: [
+            {
+              requestId: 'req_reveal_b12',
+              opId: 'OP-A03',
+              requestType: 'opponent-reveal-hand',
+              status: 'completed',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 1 },
+              result: {
+                revealedCardIds: ['c_player2_hand_001'],
+              },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: '公開手札 1 を拡大表示' })).toBeInTheDocument();
+  });
+
+  const requestDiscardButton = screen.getByRole('button', { name: '選択されたカードの破壊を要求' });
+  expect(requestDiscardButton).toBeDisabled();
+
+  fireEvent.doubleClick(screen.getByRole('button', { name: '公開手札 1 を拡大表示' }));
+
+  await waitFor(() => {
+    expect(requestDiscardButton).not.toBeDisabled();
+  });
+});
+
 test('shows rejection banner when opponent rejects reveal request', async () => {
   const privateStateDoc = createPrivateStateDoc();
   const { rerender } = render(
@@ -421,6 +475,86 @@ test('shows rejection banner when opponent rejects reveal request', async () => 
   });
 });
 
+test('shows completion banner when OP-B12 selected discard request is resolved', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          operationRequests: [
+            {
+              requestId: 'req_b12_completed',
+              opId: 'OP-B12',
+              requestType: 'opponent-discard-selected-hand',
+              status: 'completed',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { cardId: 'c_player2_hand_001' },
+              result: { discardedCardIds: ['c_player2_hand_001'] },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手手札の指定カードをトラッシュしました。')).toBeInTheDocument();
+  });
+});
+
+test('shows rejection banner when OP-B12 selected discard request is rejected', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          operationRequests: [
+            {
+              requestId: 'req_b12_rejected',
+              opId: 'OP-B12',
+              requestType: 'opponent-discard-selected-hand',
+              status: 'rejected',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { cardId: 'c_player2_hand_001' },
+              result: { reason: 'rejected-by-target-player' },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手がカード破壊リクエストを拒否しました。')).toBeInTheDocument();
+  });
+});
+
 test('opponent side column is ordered lost -> discard -> deck for point symmetry', () => {
   const { container } = renderPlayingField();
   const opponentArea = container.querySelector('[data-zone="opponent-area"]');
@@ -440,16 +574,19 @@ test('shows blocking request modal when pending approval exists for current play
   renderPlayingField({
     sessionOverrides: {
       publicState: {
+        publicCardCatalog: {
+          c_player1_001: 'https://example.com/p1_hand_001.jpg',
+        },
         operationRequests: [
           {
             requestId: 'req_101',
             opId: 'OP-B12',
-            requestType: 'opponent-reveal-hand',
+            requestType: 'opponent-discard-selected-hand',
             status: 'pending',
             actorPlayerId: 'player2',
             targetPlayerId: 'player1',
             payload: {
-              count: 1,
+              cardId: 'c_player1_001',
             },
           },
         ],
@@ -459,6 +596,7 @@ test('shows blocking request modal when pending approval exists for current play
 
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(screen.getByText('相手から確認依頼があります')).toBeInTheDocument();
+  expect(screen.getByAltText('相手が破壊を要求しているカード 1')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /承認して実行/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /^拒否$/i })).toBeInTheDocument();
 });

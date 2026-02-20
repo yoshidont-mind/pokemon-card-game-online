@@ -132,6 +132,15 @@ function formatResolvedRequestSummary(request) {
       : '破棄カード: なし';
   }
 
+  if (request.requestType === 'opponent-discard-selected-hand') {
+    const ids = Array.isArray(request?.result?.discardedCardIds)
+      ? request.result.discardedCardIds
+      : [];
+    return ids.length
+      ? `指定破棄カード: ${ids.join(', ')}`
+      : '指定破棄カード: なし';
+  }
+
   return request?.result ? JSON.stringify(request.result) : '';
 }
 
