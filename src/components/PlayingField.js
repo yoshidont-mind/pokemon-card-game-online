@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import Pokemon from './Pokemon';
 import HandTray from './HandTray';
@@ -33,11 +33,22 @@ import { useBoardDnd } from '../interaction/dnd/useBoardDnd';
 const CARD_BACK_IMAGE = '/card-back.jpg';
 const COIN_FRONT_IMAGE = '/coin-front.png';
 const COIN_BACK_IMAGE = '/coin-back.png';
+const POPUP_CARD_HOVER_SCALE = 5;
+const POPUP_CARD_BASE_SHIFT = Object.freeze({
+  x: 0,
+  y: -40,
+});
+const POPUP_CARD_VIEWPORT_MARGIN_PX = 6;
 const COIN_RESULT_LABEL = Object.freeze({
   heads: 'オモテ',
   tails: 'ウラ',
 });
 const BENCH_SLOTS = 5;
+const MUTATION_NOTICE_TONE = Object.freeze({
+  SUCCESS: 'success',
+  ALERT: 'alert',
+});
+const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できません|見つかりません|不正|invalid|error|denied|not found/i;
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -102,6 +113,15 @@ function toRevealCards(board, cardCatalog = {}) {
     .filter((entry) => Boolean(entry.imageUrl));
 }
 
+function toRevealRequestCards(cardIds, cardCatalog = {}) {
+  return asArray(cardIds)
+    .map((cardId, index) => ({
+      cardId: cardId || `revealed-card-${index + 1}`,
+      imageUrl: cardCatalog?.[cardId]?.imageUrl || null,
+    }))
+    .filter((entry) => Boolean(entry.cardId));
+}
+
 function buildRenderCardCatalog(privateCardCatalog = {}, publicCardCatalog = {}) {
   const normalizedPublicCatalog = {};
   Object.entries(publicCardCatalog || {}).forEach(([cardId, imageUrl]) => {
@@ -162,29 +182,64 @@ function joinClassNames(...classNames) {
   return classNames.filter(Boolean).join(' ');
 }
 
-function formatZoneLabel(zone) {
-  if (zone === 'deck') {
-    return '山札';
+function clampValue(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function normalizeMutationNoticeText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function detectMutationNoticeTone(message) {
+  const normalizedMessage = normalizeMutationNoticeText(message);
+  if (!normalizedMessage) {
+    return MUTATION_NOTICE_TONE.SUCCESS;
   }
-  if (zone === 'hand') {
-    return '手札';
+  return ALERT_MESSAGE_PATTERN.test(normalizedMessage)
+    ? MUTATION_NOTICE_TONE.ALERT
+    : MUTATION_NOTICE_TONE.SUCCESS;
+}
+
+function resolvePopupCardHoverShift({
+  cardRect,
+  viewportWidth,
+  viewportHeight,
+  scale = POPUP_CARD_HOVER_SCALE,
+}) {
+  if (
+    !cardRect ||
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight)
+  ) {
+    return { ...POPUP_CARD_BASE_SHIFT };
   }
-  if (zone === 'discard') {
-    return 'トラッシュ';
-  }
-  if (zone === 'lost' || zone === 'lostZone') {
-    return 'ロスト';
-  }
-  if (zone === 'prize') {
-    return 'サイド';
-  }
-  if (zone === 'active') {
-    return 'バトル場';
-  }
-  if (zone === 'bench') {
-    return 'ベンチ';
-  }
-  return zone || '不明';
+
+  const originX = cardRect.left + cardRect.width / 2;
+  const originY = cardRect.bottom;
+
+  const scaledLeft = originX + (cardRect.left - originX) * scale;
+  const scaledRight = originX + (cardRect.right - originX) * scale;
+  const scaledTop = originY + (cardRect.top - originY) * scale;
+  const scaledBottom = originY + (cardRect.bottom - originY) * scale;
+
+  const minShiftX = POPUP_CARD_VIEWPORT_MARGIN_PX - scaledLeft;
+  const maxShiftX = viewportWidth - POPUP_CARD_VIEWPORT_MARGIN_PX - scaledRight;
+  const minShiftY = POPUP_CARD_VIEWPORT_MARGIN_PX - scaledTop;
+  const maxShiftY = viewportHeight - POPUP_CARD_VIEWPORT_MARGIN_PX - scaledBottom;
+
+  const resolvedX =
+    minShiftX <= maxShiftX
+      ? clampValue(POPUP_CARD_BASE_SHIFT.x, minShiftX, maxShiftX)
+      : (minShiftX + maxShiftX) / 2;
+  const resolvedY =
+    minShiftY <= maxShiftY
+      ? clampValue(POPUP_CARD_BASE_SHIFT.y, minShiftY, maxShiftY)
+      : (minShiftY + maxShiftY) / 2;
+
+  return {
+    x: Math.round(resolvedX),
+    y: Math.round(resolvedY),
+  };
 }
 
 function formatPendingRequestLabel(request) {
@@ -356,10 +411,80 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   const [isHandOpen, setIsHandOpen] = useState(persistedUiPrefs.handTrayOpen);
   const [isToolboxOpen, setIsToolboxOpen] = useState(persistedUiPrefs.toolboxOpen);
-  const [mutationMessage, setMutationMessage] = useState('');
+  const [mutationNotice, setMutationNotice] = useState({
+    text: '',
+    tone: MUTATION_NOTICE_TONE.SUCCESS,
+  });
   const [isCoinSubmitting, setIsCoinSubmitting] = useState(false);
   const [isQuickActionSubmitting, setIsQuickActionSubmitting] = useState(false);
   const [isCoinAnimating, setIsCoinAnimating] = useState(false);
+  const [isOpponentHandMenuOpen, setIsOpponentHandMenuOpen] = useState(false);
+  const [opponentHandRevealState, setOpponentHandRevealState] = useState({
+    requestId: '',
+    cardIds: [],
+  });
+  const [opponentRevealActiveIndex, setOpponentRevealActiveIndex] = useState(null);
+  const [opponentRevealActiveShift, setOpponentRevealActiveShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
+  const handledRevealRequestIdsRef = useRef(new Set());
+  const hasInitializedHandledRevealRef = useRef(false);
+  const opponentRevealButtonRefs = useRef({});
+
+  const clearMutationNotice = useCallback(() => {
+    setMutationNotice((previous) => {
+      if (!previous?.text) {
+        return previous;
+      }
+      return {
+        text: '',
+        tone: MUTATION_NOTICE_TONE.SUCCESS,
+      };
+    });
+  }, []);
+
+  const pushMutationNotice = useCallback(
+    (message, preferredTone = null) => {
+      const normalizedMessage = normalizeMutationNoticeText(message);
+      if (!normalizedMessage) {
+        clearMutationNotice();
+        return;
+      }
+      const tone =
+        preferredTone === MUTATION_NOTICE_TONE.ALERT
+          ? MUTATION_NOTICE_TONE.ALERT
+          : preferredTone === MUTATION_NOTICE_TONE.SUCCESS
+            ? MUTATION_NOTICE_TONE.SUCCESS
+            : detectMutationNoticeTone(normalizedMessage);
+
+      setMutationNotice({
+        text: normalizedMessage,
+        tone,
+      });
+    },
+    [clearMutationNotice]
+  );
+
+  const pushAlertNotice = useCallback(
+    (message) => {
+      pushMutationNotice(message, MUTATION_NOTICE_TONE.ALERT);
+    },
+    [pushMutationNotice]
+  );
+
+  const pushSuccessNotice = useCallback(
+    (message) => {
+      pushMutationNotice(message, MUTATION_NOTICE_TONE.SUCCESS);
+    },
+    [pushMutationNotice]
+  );
+
+  const handleExternalMutationMessage = useCallback(
+    (message) => {
+      pushMutationNotice(message);
+    },
+    [pushMutationNotice]
+  );
 
   useEffect(() => {
     setIsHandOpen(persistedUiPrefs.handTrayOpen);
@@ -398,13 +523,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         });
       } catch (error) {
         if (isGameStateError(error, ERROR_CODES.PERMISSION_DENIED)) {
-          setMutationMessage('表示設定の保存権限がありません。参加状態を確認してください。');
+          pushAlertNotice('表示設定の保存権限がありません。参加状態を確認してください。');
           return;
         }
-        setMutationMessage('表示設定の保存に失敗しました。再試行してください。');
+        pushAlertNotice('表示設定の保存に失敗しました。再試行してください。');
       }
     },
-    [ownerPlayerId, sessionId]
+    [ownerPlayerId, pushAlertNotice, sessionId]
   );
 
   const handleHandToggle = useCallback(() => {
@@ -455,15 +580,22 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const opponentDeckCount = Number(opponentCounters.deckCount ?? 0);
   const opponentHandCount = Number(opponentCounters.handCount ?? 0);
   const opponentPrizeCount = asArray(opponentBoard?.prize).length;
+  const operationRequests = asArray(sessionDoc?.publicState?.operationRequests);
   const playerRevealCards = toRevealCards(playerBoard, renderCardCatalog);
   const opponentRevealCards = toRevealCards(opponentBoard, renderCardCatalog);
+  const opponentHandRevealCards = useMemo(
+    () => toRevealRequestCards(opponentHandRevealState.cardIds, renderCardCatalog),
+    [opponentHandRevealState.cardIds, renderCardCatalog]
+  );
+  const opponentRevealColumnCount = Math.max(1, Math.min(10, opponentHandRevealCards.length || 1));
   const pendingApprovalRequests = useMemo(
     () => listPendingOperationRequests(sessionDoc, ownerPlayerId),
     [ownerPlayerId, sessionDoc]
   );
   const blockingRequest = pendingApprovalRequests[0] || null;
   const hasBlockingRequest = Boolean(blockingRequest);
-  const playerMarkers = asArray(playerBoard?.markers).slice(-5).reverse();
+  const isOpponentHandRevealOpen = Boolean(opponentHandRevealState.requestId);
+  const isUiInteractionBlocked = hasBlockingRequest || isOpponentHandRevealOpen;
 
   const playerActive = playerBoard?.active;
   const opponentActive = opponentBoard?.active;
@@ -554,8 +686,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     sessionId,
     playerId: ownerPlayerId,
     sessionDoc,
-    isInteractionLocked: hasBlockingRequest,
-    onMutationMessage: setMutationMessage,
+    isInteractionLocked: isUiInteractionBlocked,
+    onMutationMessage: handleExternalMutationMessage,
   });
 
   const isDraggingPileCard = activeDragPayload?.dragType === 'pile-card';
@@ -564,20 +696,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     isDraggingPileCard && activeDragPayload?.sourceZone === 'player-prize';
   const displayPlayerDeckCount = Math.max(0, playerDeckCount - (isDraggingFromPlayerDeck ? 1 : 0));
   const displayPlayerPrizeCount = Math.max(0, playerPrizeCount - (isDraggingFromPlayerPrize ? 1 : 0));
-  const turnNumber = Number.isInteger(turnContext?.turnNumber) ? turnContext.turnNumber : null;
-  const currentTurnPlayerId = turnContext?.currentPlayer;
-  const currentTurnOwnerLabel =
-    currentTurnPlayerId === ownerPlayerId
-      ? '自分'
-      : currentTurnPlayerId === opponentPlayerId
-        ? '相手'
-        : '未設定';
-  const goodsUsedCount = Number.isInteger(turnContext?.goodsUsedCount)
-    ? turnContext.goodsUsedCount
-    : 0;
-  const supportUsed = Boolean(turnContext?.supportUsed);
-  const lastRandomSelection = turnContext?.lastRandomSelection || null;
-  const randomSelectionCardCount = asArray(lastRandomSelection?.cardIds).length;
 
   useEffect(() => {
     if (!lastCoinAt) {
@@ -592,6 +710,132 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     };
   }, [lastCoinAt]);
 
+  useEffect(() => {
+    if (isUiInteractionBlocked) {
+      setIsOpponentHandMenuOpen(false);
+    }
+  }, [isUiInteractionBlocked]);
+
+  useEffect(() => {
+    handledRevealRequestIdsRef.current = new Set();
+    hasInitializedHandledRevealRef.current = false;
+    setOpponentHandRevealState({
+      requestId: '',
+      cardIds: [],
+    });
+  }, [ownerPlayerId]);
+
+  useEffect(() => {
+    if (!isOpponentHandRevealOpen) {
+      setOpponentRevealActiveIndex(null);
+      setOpponentRevealActiveShift((previous) => {
+        if (
+          previous.x === POPUP_CARD_BASE_SHIFT.x &&
+          previous.y === POPUP_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...POPUP_CARD_BASE_SHIFT };
+      });
+    }
+  }, [isOpponentHandRevealOpen]);
+
+  const recalcOpponentRevealCardShift = useCallback(() => {
+    if (
+      !isOpponentHandRevealOpen ||
+      opponentRevealActiveIndex === null ||
+      typeof window === 'undefined'
+    ) {
+      setOpponentRevealActiveShift((previous) => {
+        if (
+          previous.x === POPUP_CARD_BASE_SHIFT.x &&
+          previous.y === POPUP_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...POPUP_CARD_BASE_SHIFT };
+      });
+      return;
+    }
+
+    const buttonNode = opponentRevealButtonRefs.current[opponentRevealActiveIndex];
+    if (!buttonNode) {
+      return;
+    }
+
+    const next = resolvePopupCardHoverShift({
+      cardRect: buttonNode.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      scale: POPUP_CARD_HOVER_SCALE,
+    });
+
+    setOpponentRevealActiveShift((previous) => {
+      if (previous.x === next.x && previous.y === next.y) {
+        return previous;
+      }
+      return next;
+    });
+  }, [isOpponentHandRevealOpen, opponentRevealActiveIndex]);
+
+  useEffect(() => {
+    recalcOpponentRevealCardShift();
+  }, [recalcOpponentRevealCardShift]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isOpponentHandRevealOpen) {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      recalcOpponentRevealCardShift();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpponentHandRevealOpen, recalcOpponentRevealCardShift]);
+
+  useEffect(() => {
+    const revealRequestsForActor = operationRequests.filter(
+      (request) =>
+        request?.requestType === 'opponent-reveal-hand' &&
+        request?.actorPlayerId === ownerPlayerId
+    );
+
+    if (!hasInitializedHandledRevealRef.current) {
+      revealRequestsForActor
+        .filter((request) => request?.status && request.status !== 'pending')
+        .forEach((request) => {
+          if (request?.requestId) {
+            handledRevealRequestIdsRef.current.add(request.requestId);
+          }
+        });
+      hasInitializedHandledRevealRef.current = true;
+      return;
+    }
+
+    revealRequestsForActor.forEach((request) => {
+      if (!request?.requestId || request.status === 'pending') {
+        return;
+      }
+      if (handledRevealRequestIdsRef.current.has(request.requestId)) {
+        return;
+      }
+      handledRevealRequestIdsRef.current.add(request.requestId);
+
+      if (request.status === 'rejected') {
+        pushAlertNotice('相手が手札公開リクエストを拒否しました。');
+        return;
+      }
+
+      const revealedCardIds = asArray(request?.result?.revealedCardIds).filter(Boolean);
+      setOpponentHandRevealState({
+        requestId: request.requestId,
+        cardIds: revealedCardIds,
+      });
+      clearMutationNotice();
+    });
+  }, [clearMutationNotice, operationRequests, ownerPlayerId, pushAlertNotice]);
+
   const handleCoinToss = useCallback(async () => {
     if (!sessionId || !ownerPlayerId || isCoinSubmitting || isMutating) {
       return;
@@ -599,7 +843,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
     const actorUid = getCurrentUid();
     if (!actorUid) {
-      setMutationMessage('認証情報を取得できませんでした。ページを再読み込みしてください。');
+      pushAlertNotice('認証情報を取得できませんでした。ページを再読み込みしてください。');
       return;
     }
 
@@ -617,7 +861,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
 
     if (!resolvedIntent?.accepted) {
-      setMutationMessage(
+      pushAlertNotice(
         resolvedIntent?.message || 'コイントスを実行できませんでした。状態を確認してください。'
       );
       return;
@@ -632,19 +876,28 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         expectedRevision: Number.isFinite(sessionDoc?.revision) ? sessionDoc.revision : 0,
         intent: resolvedIntent,
       });
-      setMutationMessage('');
+      clearMutationNotice();
     } catch (error) {
       if (isGameStateError(error, ERROR_CODES.REVISION_CONFLICT)) {
-        setMutationMessage('他端末の更新と競合しました。最新状態で再実行してください。');
+        pushAlertNotice('他端末の更新と競合しました。最新状態で再実行してください。');
       } else if (isGameStateError(error, ERROR_CODES.PERMISSION_DENIED)) {
-        setMutationMessage('操作権限がありません。セッション参加状態を確認してください。');
+        pushAlertNotice('操作権限がありません。セッション参加状態を確認してください。');
       } else {
-        setMutationMessage('操作の確定に失敗しました。再試行してください。');
+        pushAlertNotice('操作の確定に失敗しました。再試行してください。');
       }
     } finally {
       setIsCoinSubmitting(false);
     }
-  }, [isCoinSubmitting, isMutating, ownerPlayerId, privateStateDoc, sessionDoc, sessionId]);
+  }, [
+    clearMutationNotice,
+    isCoinSubmitting,
+    isMutating,
+    ownerPlayerId,
+    privateStateDoc,
+    pushAlertNotice,
+    sessionDoc,
+    sessionId,
+  ]);
 
   const executeQuickOperation = useCallback(
     async ({ opId, payload = {}, invalidMessage, successMessage }) => {
@@ -660,7 +913,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
       const actorUid = getCurrentUid();
       if (!actorUid) {
-        setMutationMessage('認証情報を取得できませんでした。ページを再読み込みしてください。');
+        pushAlertNotice('認証情報を取得できませんでした。ページを再読み込みしてください。');
         return;
       }
 
@@ -678,7 +931,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       });
 
       if (!resolvedIntent?.accepted) {
-        setMutationMessage(
+        pushAlertNotice(
           resolvedIntent?.message || invalidMessage || '操作を実行できませんでした。状態を確認してください。'
         );
         return;
@@ -693,14 +946,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           expectedRevision: Number.isFinite(sessionDoc?.revision) ? sessionDoc.revision : 0,
           intent: resolvedIntent,
         });
-        setMutationMessage(successMessage || '');
+        if (successMessage) {
+          pushSuccessNotice(successMessage);
+        } else {
+          clearMutationNotice();
+        }
       } catch (error) {
         if (isGameStateError(error, ERROR_CODES.REVISION_CONFLICT)) {
-          setMutationMessage('他端末の更新と競合しました。最新状態で再実行してください。');
+          pushAlertNotice('他端末の更新と競合しました。最新状態で再実行してください。');
         } else if (isGameStateError(error, ERROR_CODES.PERMISSION_DENIED)) {
-          setMutationMessage('操作権限がありません。セッション参加状態を確認してください。');
+          pushAlertNotice('操作権限がありません。セッション参加状態を確認してください。');
         } else {
-          setMutationMessage('操作の確定に失敗しました。再試行してください。');
+          pushAlertNotice('操作の確定に失敗しました。再試行してください。');
         }
       } finally {
         setIsQuickActionSubmitting(false);
@@ -712,6 +969,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       isQuickActionSubmitting,
       ownerPlayerId,
       privateStateDoc,
+      clearMutationNotice,
+      pushAlertNotice,
+      pushSuccessNotice,
       sessionDoc,
       sessionId,
     ]
@@ -747,6 +1007,32 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, [executeQuickOperation]);
 
+  const handleToggleOpponentHandMenu = useCallback(() => {
+    if (isUiInteractionBlocked || isMutating || isQuickActionSubmitting || isCoinSubmitting) {
+      return;
+    }
+    setIsOpponentHandMenuOpen((prev) => !prev);
+  }, [isCoinSubmitting, isMutating, isQuickActionSubmitting, isUiInteractionBlocked]);
+
+  const handleRequestOpponentHandReveal = useCallback(() => {
+    setIsOpponentHandMenuOpen(false);
+    void executeQuickOperation({
+      opId: OPERATION_IDS.OP_A03,
+      payload: {
+        targetPlayerId: opponentPlayerId,
+      },
+      invalidMessage: '手札公開リクエストを送信できませんでした。状態を確認してください。',
+      successMessage: '手札公開リクエストを送信しました。',
+    });
+  }, [executeQuickOperation, opponentPlayerId]);
+
+  const handleCloseOpponentHandReveal = useCallback(() => {
+    setOpponentHandRevealState({
+      requestId: '',
+      cardIds: [],
+    });
+  }, []);
+
   const handleApproveBlockingRequest = useCallback(() => {
     if (!blockingRequest?.requestId) {
       return;
@@ -778,7 +1064,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [blockingRequest, executeQuickOperation]);
 
   const isQuickActionLocked =
-    isMutating || isCoinSubmitting || isQuickActionSubmitting || hasBlockingRequest;
+    isMutating || isCoinSubmitting || isQuickActionSubmitting || isUiInteractionBlocked;
   const canDrawFromDeck = playerDeckCount > 0 && !isQuickActionLocked;
   const canShuffleDeck = playerDeckCount > 1 && !isQuickActionLocked;
   const canTakePrize = playerPrizeCount > 0 && !isQuickActionLocked;
@@ -798,42 +1084,45 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           状態: {sessionDoc?.status || 'waiting'} / Rev: {sessionDoc?.revision ?? 0}
           {isMutating ? ' / 更新中...' : ''}
         </div>
-        {mutationMessage && <div className={styles.mutationBanner}>{mutationMessage}</div>}
-        <div className={styles.turnInfoPanel} data-zone="turn-info-panel">
-          <p className={styles.turnInfoTitle}>ターン情報</p>
-          <div className={styles.turnInfoList}>
-            <span>ターン: {turnNumber ?? '-'}</span>
-            <span>現在手番: {currentTurnOwnerLabel}</span>
-            <span>サポート使用: {supportUsed ? '済み' : '未使用'}</span>
-            <span>グッズ使用回数: {goodsUsedCount}</span>
-            {lastRandomSelection ? (
-              <span>
-                直近ランダム選択: {formatZoneLabel(lastRandomSelection?.zone)} から{' '}
-                {randomSelectionCardCount} 枚
-              </span>
+        {mutationNotice.text ? (
+          <div
+            className={joinClassNames(
+              styles.mutationBanner,
+              mutationNotice.tone === MUTATION_NOTICE_TONE.ALERT
+                ? styles.mutationBannerAlert
+                : styles.mutationBannerSuccess
+            )}
+          >
+            {mutationNotice.text}
+          </div>
+        ) : null}
+        <div className={styles.opponentHandCountFixed} data-zone="opponent-hand-count-fixed">
+          <div className={styles.opponentHandControl}>
+            <button
+              type="button"
+              className={styles.handCountPill}
+              data-zone="opponent-hand-count-pill"
+              aria-label={`相手手札（${opponentHandCount}枚）`}
+              aria-haspopup="menu"
+              aria-expanded={isOpponentHandMenuOpen}
+              onClick={handleToggleOpponentHandMenu}
+              disabled={isQuickActionLocked}
+            >
+              相手手札（{opponentHandCount}枚）
+            </button>
+            {isOpponentHandMenuOpen ? (
+              <div className={styles.opponentHandMenu} role="menu" aria-label="相手手札アクション">
+                <button
+                  type="button"
+                  className={styles.opponentHandMenuButton}
+                  onClick={handleRequestOpponentHandReveal}
+                  disabled={isQuickActionLocked}
+                >
+                  手札の公開を要求
+                </button>
+              </div>
             ) : null}
           </div>
-          <p className={styles.turnInfoTitle}>継続効果メモ（自分）</p>
-          {playerMarkers.length > 0 ? (
-            <ul className={styles.turnInfoMarkers}>
-              {playerMarkers.map((marker, index) => (
-                <li key={marker?.markerId || marker?.createdAt || `marker-${index + 1}`}>
-                  {marker?.label || 'メモ'}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.turnInfoEmpty}>なし</p>
-          )}
-        </div>
-        <div className={styles.opponentHandCountFixed} data-zone="opponent-hand-count-fixed">
-          <span
-            className={styles.handCountPill}
-            data-zone="opponent-hand-count-pill"
-            aria-label={`相手手札（${opponentHandCount}枚）`}
-          >
-            相手手札（{opponentHandCount}枚）
-          </span>
         </div>
 
         <section className={styles.opponentArea} data-zone="opponent-area" data-drop-group="area">
@@ -1156,9 +1445,98 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           playerId={ownerPlayerId}
           sessionDoc={sessionDoc}
           privateStateDoc={privateStateDoc}
-          onMutationMessage={setMutationMessage}
+          onMutationMessage={handleExternalMutationMessage}
         />
       </div>
+      {!hasBlockingRequest && isOpponentHandRevealOpen ? (
+        <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">
+          <div
+            className={styles.opponentRevealCard}
+            style={{ '--opponent-reveal-columns': String(opponentRevealColumnCount) }}
+          >
+            <p className={styles.requestBlockingTitle}>
+              相手の手札（{opponentHandRevealCards.length}枚）
+            </p>
+            <div className={styles.opponentRevealCards}>
+              {opponentHandRevealCards.length > 0 ? (
+                opponentHandRevealCards.map((card, index) => {
+                  const isActive = opponentRevealActiveIndex === index;
+
+                  if (card.imageUrl) {
+                    return (
+                      <div
+                        key={`${opponentHandRevealState.requestId}-${card.cardId}-${index}`}
+                        className={joinClassNames(
+                          styles.popupCardItem,
+                          isActive ? styles.popupCardItemActive : ''
+                        )}
+                      >
+                        <button
+                          ref={(node) => {
+                            if (node) {
+                              opponentRevealButtonRefs.current[index] = node;
+                            } else {
+                              delete opponentRevealButtonRefs.current[index];
+                            }
+                          }}
+                          type="button"
+                          className={joinClassNames(
+                            styles.popupCardButton,
+                            isActive ? styles.popupCardButtonActive : ''
+                          )}
+                          style={
+                            isActive
+                              ? {
+                                  '--popup-card-shift-x': `${opponentRevealActiveShift.x}px`,
+                                  '--popup-card-shift-y': `${opponentRevealActiveShift.y}px`,
+                                  '--popup-card-scale': String(POPUP_CARD_HOVER_SCALE),
+                                }
+                              : undefined
+                          }
+                          aria-label={`公開手札 ${index + 1} を拡大表示`}
+                          onMouseEnter={() => setOpponentRevealActiveIndex(index)}
+                          onMouseLeave={() => setOpponentRevealActiveIndex(null)}
+                          onFocus={() => setOpponentRevealActiveIndex(index)}
+                          onBlur={() => setOpponentRevealActiveIndex(null)}
+                        >
+                          <img
+                            src={card.imageUrl}
+                            alt={`公開手札 ${index + 1}`}
+                            className={joinClassNames(
+                              styles.opponentRevealCardImage,
+                              styles.popupCardImage
+                            )}
+                          />
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={`${opponentHandRevealState.requestId}-${card.cardId}-${index}`}
+                      className={styles.opponentRevealCardFallback}
+                    >
+                      {card.cardId}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className={styles.requestBlockingMeta}>公開カードはありません。</p>
+              )}
+            </div>
+            <div className={styles.requestBlockingActions}>
+              <button
+                type="button"
+                className={styles.requestApproveButton}
+                onClick={handleCloseOpponentHandReveal}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {hasBlockingRequest ? (
         <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">
           <div className={styles.requestBlockingCard}>

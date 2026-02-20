@@ -243,7 +243,9 @@ const OperationPanel = ({
     const payloadOverride = {
       ...payloadState,
       targetPlayerId:
-        selectedOpId === OPERATION_IDS.OP_B11 || selectedOpId === OPERATION_IDS.OP_B12
+        selectedOpId === OPERATION_IDS.OP_A03 ||
+        selectedOpId === OPERATION_IDS.OP_B11 ||
+        selectedOpId === OPERATION_IDS.OP_B12
           ? opponentPlayerId
           : payloadState.targetPlayerId,
     };

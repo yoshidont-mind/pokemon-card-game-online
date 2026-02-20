@@ -145,6 +145,27 @@ describe('resolveOperationIntent', () => {
     expect(result.action.payload.targetPlayerId).toBe('player2');
   });
 
+  test('accepts OP-A03 reveal request when target is opponent', () => {
+    const intent = buildOperationIntent({
+      opId: OPERATION_IDS.OP_A03,
+      actorPlayerId: 'player1',
+      payload: {
+        targetPlayerId: 'player2',
+      },
+    });
+
+    const result = resolveOperationIntent({
+      intent,
+      sessionDoc: createSessionDoc(),
+      privateStateDoc: createPrivateStateDoc(),
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.mode).toBe('request');
+    expect(result.action.payload.targetPlayerId).toBe('player2');
+  });
+
   test('accepts request resolution intent with requestId and action', () => {
     const intent = buildOperationIntent({
       opId: INTERNAL_OPERATION_IDS.REQUEST_APPROVE,

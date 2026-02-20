@@ -486,17 +486,6 @@ function runDirectOperation({
     return;
   }
 
-  if (opId === OPERATION_IDS.OP_A03) {
-    const hand = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.HAND);
-    const targetCardId = payload.cardId || asArray(payload.cardIds)[0];
-    const targetRef = hand.find((ref) => ref?.cardId === targetCardId);
-    if (targetRef) {
-      targetRef.visibility = 'temporarilyRevealed';
-      targetRef.isFaceDown = false;
-    }
-    return;
-  }
-
   if (opId === OPERATION_IDS.OP_A05) {
     const sourceZone = payload.sourceZone || 'hand';
     const candidateCardIds = listCardIdsFromSourceZone({
@@ -1081,7 +1070,7 @@ export async function applyOperationMutation({
     const requestType =
       action.opId === OPERATION_IDS.OP_B11
         ? 'opponent-discard-random-hand'
-        : action.opId === OPERATION_IDS.OP_B12
+        : action.opId === OPERATION_IDS.OP_A03 || action.opId === OPERATION_IDS.OP_B12
           ? 'opponent-reveal-hand'
           : null;
 

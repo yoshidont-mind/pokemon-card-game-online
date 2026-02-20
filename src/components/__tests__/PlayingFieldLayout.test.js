@@ -267,6 +267,160 @@ test('shows opponent hand count pill and removes dedicated player hand count zon
   expect(screen.queryByText('手札枚数')).not.toBeInTheDocument();
 });
 
+test('opens opponent hand action menu from fixed button', async () => {
+  renderPlayingField();
+
+  fireEvent.click(screen.getByRole('button', { name: '相手手札（6枚）' }));
+
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: '手札の公開を要求' })).toBeInTheDocument();
+  });
+});
+
+test('shows opponent hand reveal modal when a new reveal request is approved', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          publicCardCatalog: {
+            c_player2_hand_001: 'https://example.com/p2_hand_001.jpg',
+            c_player2_hand_002: 'https://example.com/p2_hand_002.jpg',
+          },
+          operationRequests: [
+            {
+              requestId: 'req_reveal_001',
+              opId: 'OP-A03',
+              requestType: 'opponent-reveal-hand',
+              status: 'completed',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 1 },
+              result: {
+                revealedCardIds: ['c_player2_hand_001', 'c_player2_hand_002'],
+              },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手の手札（2枚）')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '公開手札 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '閉じる' })).toBeInTheDocument();
+  });
+});
+
+test('opponent hand reveal modal caps columns at 10 and wraps beyond 10 cards', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const revealCardIds = Array.from({ length: 12 }, (_, index) =>
+    `c_player2_hand_${String(index + 1).padStart(3, '0')}`
+  );
+  const publicCardCatalog = revealCardIds.reduce((acc, cardId) => {
+    acc[cardId] = `https://example.com/${cardId}.jpg`;
+    return acc;
+  }, {});
+
+  const { rerender, container } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          publicCardCatalog,
+          operationRequests: [
+            {
+              requestId: 'req_reveal_010',
+              opId: 'OP-A03',
+              requestType: 'opponent-reveal-hand',
+              status: 'completed',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 1 },
+              result: {
+                revealedCardIds: revealCardIds,
+              },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手の手札（12枚）')).toBeInTheDocument();
+  });
+
+  const revealModal = container.querySelector('[class*="opponentRevealCard"]');
+  expect(revealModal).toBeInTheDocument();
+  expect(revealModal.style.getPropertyValue('--opponent-reveal-columns')).toBe('10');
+  expect(screen.getByRole('button', { name: '公開手札 1 を拡大表示' })).toBeInTheDocument();
+});
+
+test('shows rejection banner when opponent rejects reveal request', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          operationRequests: [
+            {
+              requestId: 'req_reveal_002',
+              opId: 'OP-A03',
+              requestType: 'opponent-reveal-hand',
+              status: 'rejected',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 1 },
+              result: { reason: 'rejected-by-target-player' },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手が手札公開リクエストを拒否しました。')).toBeInTheDocument();
+  });
+});
+
 test('opponent side column is ordered lost -> discard -> deck for point symmetry', () => {
   const { container } = renderPlayingField();
   const opponentArea = container.querySelector('[data-zone="opponent-area"]');
@@ -309,7 +463,7 @@ test('shows blocking request modal when pending approval exists for current play
   expect(screen.getByRole('button', { name: /^拒否$/i })).toBeInTheDocument();
 });
 
-test('shows turn info and marker notes from turnContext and player markers', () => {
+test('does not render turn info panel', () => {
   renderPlayingField({
     sessionOverrides: {
       publicState: {
@@ -318,34 +472,13 @@ test('shows turn info and marker notes from turnContext and player markers', () 
           currentPlayer: 'player2',
           supportUsed: true,
           goodsUsedCount: 2,
-          lastRandomSelection: {
-            zone: 'hand',
-            cardIds: ['c_player1_001', 'c_player1_002'],
-          },
-        },
-        players: {
-          player1: {
-            board: {
-              markers: [
-                {
-                  markerId: 'm_001',
-                  label: 'OP-G03: ワザロック',
-                },
-              ],
-            },
-          },
         },
       },
     },
   });
 
-  expect(screen.getByText('ターン情報')).toBeInTheDocument();
-  expect(screen.getByText('ターン: 5')).toBeInTheDocument();
-  expect(screen.getByText('現在手番: 相手')).toBeInTheDocument();
-  expect(screen.getByText('サポート使用: 済み')).toBeInTheDocument();
-  expect(screen.getByText('グッズ使用回数: 2')).toBeInTheDocument();
-  expect(screen.getByText('直近ランダム選択: 手札 から 2 枚')).toBeInTheDocument();
-  expect(screen.getByText('OP-G03: ワザロック')).toBeInTheDocument();
+  expect(screen.queryByText('ターン情報')).not.toBeInTheDocument();
+  expect(screen.queryByText('ターン: 5')).not.toBeInTheDocument();
 });
 
 test('renders active/bench/discard/lost as face-up on both sides when card images are resolvable', () => {

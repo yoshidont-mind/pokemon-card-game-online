@@ -130,7 +130,7 @@ function validateCorePayload(opId, payload, privateStateDoc) {
     }
   }
 
-  if (opId === 'OP-B11' || opId === 'OP-B12') {
+  if (opId === 'OP-A03' || opId === 'OP-B11' || opId === 'OP-B12') {
     if (!payload.targetPlayerId || !isValidPlayerId(payload.targetPlayerId)) {
       return 'targetPlayerId is required for request operation.';
     }
