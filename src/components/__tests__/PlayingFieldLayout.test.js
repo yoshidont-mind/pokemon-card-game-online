@@ -1026,3 +1026,62 @@ test('renders active/bench/discard/lost as face-up on both sides when card image
   expect(screen.getByRole('img', { name: 'トラッシュ（自分）上のカード' })).toBeInTheDocument();
   expect(screen.getByRole('img', { name: 'ロスト（自分）上のカード' })).toBeInTheDocument();
 });
+
+test('opens stack expansion modal for multi-card active stack and shows cards in top-first order', async () => {
+  const { container } = renderPlayingField({
+    sessionOverrides: {
+      publicState: {
+        players: {
+          player1: {
+            board: {
+              active: {
+                stackId: 's_player1_active',
+                cardIds: ['c_player1_001', 'c_player1_002'],
+                damage: 0,
+                specialConditions: {
+                  poisoned: false,
+                  burned: false,
+                  asleep: false,
+                  paralyzed: false,
+                  confused: false,
+                },
+                orientation: 'vertical',
+                isFaceDown: false,
+              },
+            },
+          },
+        },
+      },
+    },
+    privateStateOverrides: {
+      cardCatalog: {
+        c_player1_001: {
+          cardId: 'c_player1_001',
+          imageUrl: 'https://example.com/p1_active_base.jpg',
+          ownerPlayerId: 'player1',
+        },
+        c_player1_002: {
+          cardId: 'c_player1_002',
+          imageUrl: 'https://example.com/p1_active_energy.jpg',
+          ownerPlayerId: 'player1',
+        },
+      },
+    },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: '自分バトル場を展開' }));
+
+  const modal = await screen.findByLabelText('スタック展開モーダル');
+  expect(within(modal).getByText('バトル場（自分）を展開（2枚）')).toBeInTheDocument();
+  expect(within(modal).getByRole('img', { name: '展開カード 1' })).toBeInTheDocument();
+  expect(within(modal).getByRole('img', { name: '展開カード 2' })).toBeInTheDocument();
+
+  const cardImages = within(modal).getAllByRole('img', { name: /展開カード/i });
+  expect(cardImages[0].getAttribute('src')).toContain('p1_active_energy.jpg');
+  expect(cardImages[1].getAttribute('src')).toContain('p1_active_base.jpg');
+
+  fireEvent.click(within(modal).getByRole('button', { name: '閉じる' }));
+  await waitFor(() => {
+    expect(container.querySelector('[data-zone="stack-cards-root"]')).not.toBeInTheDocument();
+  });
+});

@@ -5,14 +5,34 @@ function asBenchIndex(value) {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
-export function buildCardDragPayload({ cardId, sourceZone = 'player-hand' }) {
+export function buildCardDragPayload({
+  cardId,
+  sourceZone = 'player-hand',
+  sourceStackKind = null,
+  sourceBenchIndex = null,
+}) {
   if (!cardId || typeof cardId !== 'string') {
     return null;
   }
+
+  const normalizedSourceStackKind =
+    sourceZone === 'player-stack'
+      ? sourceStackKind === STACK_KINDS.BENCH
+        ? STACK_KINDS.BENCH
+        : STACK_KINDS.ACTIVE
+      : null;
+
+  const normalizedSourceBenchIndex =
+    sourceZone === 'player-stack' && normalizedSourceStackKind === STACK_KINDS.BENCH
+      ? asBenchIndex(sourceBenchIndex)
+      : null;
+
   return {
     dragType: DRAG_TYPES.CARD,
     cardId,
     sourceZone,
+    sourceStackKind: normalizedSourceStackKind,
+    sourceBenchIndex: normalizedSourceBenchIndex,
   };
 }
 

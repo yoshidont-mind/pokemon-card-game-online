@@ -12,8 +12,20 @@
 
 .pokemon-image {
     position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+    --pokemon-image-shift-x: 0px;
+    --pokemon-image-shift-y: 0px;
+    --pokemon-image-hover-lift: 0px;
+    --pokemon-image-scale: 1;
+    transform: translate(
+      var(--pokemon-image-shift-x),
+      calc(var(--pokemon-image-shift-y) + var(--pokemon-image-hover-lift))
+    ) scale(var(--pokemon-image-scale));
     width: var(--card-w, 88px);
     height: auto;
+    border-radius: var(--radius-sm, 8px);
 }
 
 .damage-badge {

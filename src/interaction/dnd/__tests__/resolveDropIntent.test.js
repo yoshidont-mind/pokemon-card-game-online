@@ -346,4 +346,112 @@ describe('resolveDropIntent', () => {
     expect(result.action.sourceZone).toBe('player-deck-peek');
     expect(result.action.targetDeckEdge).toBe('top');
   });
+
+  test('accepts moving a card to top edge of occupied active stack', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010'] },
+      })
+    );
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-active-insert-top',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.ACTIVE,
+      edge: 'top',
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-card-to-stack-edge');
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.ACTIVE);
+    expect(result.action.targetStackEdge).toBe('top');
+  });
+
+  test('accepts moving a card to bottom edge of occupied bench stack', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerBench: [
+          { stackId: 's_player1_bench_1', cardIds: ['c_player1_020'] },
+        ],
+      })
+    );
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-bench-1-insert-bottom',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.BENCH,
+      benchIndex: 0,
+      edge: 'bottom',
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-card-to-stack-edge');
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.BENCH);
+    expect(result.action.targetBenchIndex).toBe(0);
+    expect(result.action.targetStackEdge).toBe('bottom');
+  });
+
+  test('rejects stack-edge drop when target bench stack does not exist', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-bench-1-insert-top',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.BENCH,
+      benchIndex: 0,
+      edge: 'top',
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toBe(REJECT_REASONS.TARGET_NOT_FOUND);
+  });
+
+  test('accepts moving a card from player stack source zone to hand', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({
+      cardId: 'c_player1_020',
+      sourceZone: 'player-stack',
+      sourceStackKind: STACK_KINDS.BENCH,
+      sourceBenchIndex: 0,
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-hand',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.HAND,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-card-from-hand-to-zone');
+    expect(result.action.sourceZone).toBe('player-stack');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.BENCH);
+    expect(result.action.sourceBenchIndex).toBe(0);
+  });
 });

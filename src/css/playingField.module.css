@@ -562,6 +562,11 @@
   z-index: 1;
 }
 
+.battleLineActive:hover,
+.battleLineActive:focus-within {
+  z-index: calc(var(--z-overlay) + 2);
+}
+
 .battleLineRevealOpponent {
   position: absolute;
   top: 0;
@@ -634,9 +639,16 @@
 }
 
 .benchSlot {
+  position: relative;
+  z-index: 1;
   min-height: clamp(84px, 11vw, 132px);
   display: grid;
   place-items: center;
+}
+
+.benchSlot:hover,
+.benchSlot:focus-within {
+  z-index: calc(var(--z-overlay) + 1);
 }
 
 .benchPlaceholder {
@@ -1385,10 +1397,132 @@
 }
 
 .stackDropSurface {
+  position: relative;
+  overflow: visible;
   width: 100%;
   height: 100%;
   display: grid;
   place-items: center;
+}
+
+.stackDropSurfaceInner {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  z-index: 1;
+}
+
+.stackDropSurfaceHoverable {
+  z-index: 1;
+}
+
+.stackDropSurfaceHoverable:hover {
+  z-index: 40;
+}
+
+.stackDropSurfaceHoverable :global(.pokemon-image:last-child) {
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  transform-origin: center bottom;
+}
+
+.stackDropSurfaceHoverable:hover :global(.pokemon-image:last-child),
+.stackDropSurfaceHoverable:focus-within :global(.pokemon-image:last-child) {
+  position: relative;
+  z-index: calc(var(--z-overlay) + 6);
+  --pokemon-image-hover-lift: -40px;
+  --pokemon-image-scale: 5;
+  box-shadow: 0 24px 38px rgba(0, 0, 0, 0.42);
+}
+
+.stackSingleCardDraggable {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  cursor: grab;
+}
+
+.stackSingleCardDraggable:active {
+  cursor: grabbing;
+}
+
+.stackSingleCardButton {
+  display: inline-block;
+  width: fit-content;
+  background: transparent;
+  padding: 0;
+  line-height: 0;
+  transition: outline-color 120ms ease;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.stackSingleCardDraggable:hover .stackSingleCardButton,
+.stackSingleCardDraggable:focus-within .stackSingleCardButton {
+  outline-color: #5f8d3d;
+  position: relative;
+  z-index: 41;
+}
+
+.stackInsertTargets {
+  position: absolute;
+  inset-block: 2px;
+  inset-inline: -22px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 3px;
+  z-index: 4;
+}
+
+.stackInsertTarget {
+  border: 2px dashed transparent;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+}
+
+.stackInsertTargetBottom {
+  border-color: rgba(68, 114, 201, 0.6);
+  background: rgba(114, 159, 240, 0.18);
+}
+
+.stackInsertTargetBottomActive {
+  border-color: #2f5cc2;
+  background: rgba(95, 142, 232, 0.35);
+  box-shadow: 0 0 0 2px rgba(47, 92, 194, 0.18);
+}
+
+.stackInsertTargetTop {
+  border-color: rgba(203, 84, 84, 0.68);
+  background: rgba(241, 117, 117, 0.18);
+}
+
+.stackInsertTargetTopActive {
+  border-color: #cb4343;
+  background: rgba(241, 93, 93, 0.34);
+  box-shadow: 0 0 0 2px rgba(203, 67, 67, 0.2);
+}
+
+.stackExpandButton {
+  border: 1px solid #6f8659;
+  border-radius: 999px;
+  background: rgba(244, 250, 239, 0.96);
+  color: #1f2b16;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px 9px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  position: relative;
+  z-index: 5;
+}
+
+.stackExpandButton:hover {
+  background: rgba(235, 246, 225, 0.98);
 }
 
 .dropZoneActive {

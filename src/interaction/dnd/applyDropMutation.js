@@ -114,6 +114,8 @@ function takeCardRefFromSource({
   playerId,
   sourceZone,
   cardId,
+  sourceStackKind = null,
+  sourceBenchIndex = null,
 }) {
   const publicBoard = resolvePlayerBoard(sessionDoc, playerId);
   const playerCounters = resolvePlayerCounters(sessionDoc, playerId);
@@ -175,6 +177,61 @@ function takeCardRefFromSource({
     return sourceCardRef;
   }
 
+  if (sourceZone === 'player-stack') {
+    const normalizedStackKind =
+      sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+
+    let stack = null;
+    let bench = null;
+    let benchIndex = null;
+
+    if (normalizedStackKind === STACK_KINDS.ACTIVE) {
+      stack = publicBoard.active || null;
+    } else {
+      benchIndex = Number(sourceBenchIndex);
+      if (!Number.isInteger(benchIndex) || benchIndex < 0 || benchIndex >= BENCH_SLOT_COUNT) {
+        throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Invalid source bench index.');
+      }
+      bench = normalizeBenchSlots(publicBoard.bench);
+      stack = bench[benchIndex] || null;
+    }
+
+    if (!stack || !Array.isArray(stack.cardIds)) {
+      throw new GameStateError(ERROR_CODES.INVARIANT_VIOLATION, 'Source stack is missing.');
+    }
+
+    const cardIndex = stack.cardIds.findIndex((entryCardId) => entryCardId === cardId);
+    if (cardIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in source stack.`
+      );
+    }
+
+    stack.cardIds.splice(cardIndex, 1);
+
+    if (stack.cardIds.length <= 0) {
+      if (normalizedStackKind === STACK_KINDS.ACTIVE) {
+        publicBoard.active = null;
+      } else {
+        bench[benchIndex] = null;
+        publicBoard.bench = bench;
+      }
+    } else if (normalizedStackKind === STACK_KINDS.BENCH) {
+      bench[benchIndex] = stack;
+      publicBoard.bench = bench;
+    } else {
+      publicBoard.active = stack;
+    }
+
+    return createCardRef({
+      cardId,
+      orientation: stack?.orientation || ORIENTATION.VERTICAL,
+      isFaceDown: false,
+      visibility: VISIBILITY.OWNER_ONLY,
+    });
+  }
+
   throw new GameStateError(
     ERROR_CODES.INVALID_STATE,
     `Unsupported source zone: ${String(sourceZone)}`
@@ -196,6 +253,8 @@ function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, actio
     playerId,
     sourceZone,
     cardId,
+    sourceStackKind: action?.sourceStackKind || null,
+    sourceBenchIndex: action?.sourceBenchIndex ?? null,
   });
 
   const sourceImageUrl = sourceCardRef?.imageUrl || resolveImageUrlFromPrivateState(privateStateDoc, cardId);
@@ -305,6 +364,8 @@ function moveCardToDeckEdge({ sessionDoc, privateStateDoc, playerId, action }) {
     playerId,
     sourceZone,
     cardId,
+    sourceStackKind: action?.sourceStackKind || null,
+    sourceBenchIndex: action?.sourceBenchIndex ?? null,
   });
 
   const deck = asArray(privateStateDoc?.zones?.deck);
@@ -330,6 +391,72 @@ function moveCardToDeckEdge({ sessionDoc, privateStateDoc, playerId, action }) {
     position: targetDeckEdge,
     at: new Date().toISOString(),
   };
+
+  if (sourceZone === 'player-deck-peek') {
+    consumeDeckPeekCount(sessionDoc, playerId, 1);
+  }
+
+  if (
+    sessionDoc.status === SESSION_STATUS.WAITING ||
+    sessionDoc.status === SESSION_STATUS.READY
+  ) {
+    sessionDoc.status = SESSION_STATUS.PLAYING;
+  }
+
+  return {
+    sessionDoc,
+    privateStateDoc,
+  };
+}
+
+function moveCardToStackEdge({ sessionDoc, privateStateDoc, playerId, action }) {
+  const cardId = action?.cardId;
+  const targetZoneKind = action?.targetZoneKind;
+  const targetStackEdge = action?.targetStackEdge;
+
+  if (!cardId) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'cardId is required.');
+  }
+  if (targetZoneKind !== ZONE_KINDS.ACTIVE && targetZoneKind !== ZONE_KINDS.BENCH) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'targetZoneKind must be active or bench.');
+  }
+  if (targetStackEdge !== 'top' && targetStackEdge !== 'bottom') {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'targetStackEdge must be top or bottom.');
+  }
+
+  const sourceZone = action?.sourceZone || 'player-hand';
+  takeCardRefFromSource({
+    sessionDoc,
+    privateStateDoc,
+    playerId,
+    sourceZone,
+    cardId,
+    sourceStackKind: action?.sourceStackKind || null,
+    sourceBenchIndex: action?.sourceBenchIndex ?? null,
+  });
+  const board = resolvePlayerBoard(sessionDoc, playerId);
+
+  let targetStack = null;
+  if (targetZoneKind === ZONE_KINDS.ACTIVE) {
+    targetStack = board.active || null;
+  } else {
+    const benchIndex = Number(action?.targetBenchIndex);
+    if (!Number.isInteger(benchIndex) || benchIndex < 0 || benchIndex >= BENCH_SLOT_COUNT) {
+      throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Invalid target bench index.');
+    }
+    const bench = normalizeBenchSlots(board.bench);
+    targetStack = bench[benchIndex] || null;
+  }
+
+  if (!targetStack || !Array.isArray(targetStack.cardIds)) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Target stack does not exist.');
+  }
+
+  if (targetStackEdge === 'top') {
+    targetStack.cardIds.push(cardId);
+  } else {
+    targetStack.cardIds.unshift(cardId);
+  }
 
   if (sourceZone === 'player-deck-peek') {
     consumeDeckPeekCount(sessionDoc, playerId, 1);
@@ -515,6 +642,15 @@ export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId,
 
   if (intent.action.kind === INTENT_ACTIONS.MOVE_CARD_TO_DECK_EDGE) {
     return moveCardToDeckEdge({
+      sessionDoc,
+      privateStateDoc,
+      playerId,
+      action: intent.action,
+    });
+  }
+
+  if (intent.action.kind === INTENT_ACTIONS.MOVE_CARD_TO_STACK_EDGE) {
+    return moveCardToStackEdge({
       sessionDoc,
       privateStateDoc,
       playerId,
