@@ -55,6 +55,7 @@ const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できませ�
 const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
+const EMPTY_OBJECT = Object.freeze({});
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -130,6 +131,35 @@ function toRevealRequestCards(cardIds, cardCatalog = {}) {
       imageUrl: cardCatalog?.[cardId]?.imageUrl || null,
     }))
     .filter((entry) => Boolean(entry.cardId));
+}
+
+function toStackCards(stack, cardCatalog = {}) {
+  const cardIds = asArray(stack?.cardIds).filter(Boolean);
+  return [...cardIds]
+    .reverse()
+    .map((cardId) => ({
+      cardId,
+      imageUrl: cardCatalog?.[cardId]?.imageUrl || null,
+    }));
+}
+
+function resolveStackFromBoard(board, stackKind, benchIndex = null) {
+  if (stackKind === STACK_KINDS.ACTIVE) {
+    return board?.active || null;
+  }
+  if (stackKind === STACK_KINDS.BENCH) {
+    const slots = asArray(board?.bench);
+    return slots[benchIndex] || null;
+  }
+  return null;
+}
+
+function formatStackModalTitle({ ownerLabel, stackKind, benchIndex, cardCount }) {
+  const locationLabel =
+    stackKind === STACK_KINDS.ACTIVE
+      ? `バトル場（${ownerLabel}）`
+      : `ベンチ${Number(benchIndex) + 1}（${ownerLabel}）`;
+  return `${locationLabel}を展開（${cardCount}枚）`;
 }
 
 function buildRenderCardCatalog(privateCardCatalog = {}, publicCardCatalog = {}) {
@@ -461,8 +491,10 @@ function BenchRow({
   bench,
   cardCatalog,
   allowCardDrop,
+  isDraggingCard,
   isZoneHighlighted,
   isStackHighlighted,
+  onOpenStackCards,
 }) {
   const slots = Array.from({ length: BENCH_SLOTS }, (_, index) => bench[index] || null);
 
@@ -471,7 +503,7 @@ function BenchRow({
       {slots.map((stack, index) => {
         const zoneId = `${owner}-bench-${index + 1}`;
         const stackId = resolveStackId(stack, `s_${ownerPlayerId}_bench_${index + 1}`);
-        const zoneDropPayload = allowCardDrop
+        const zoneDropPayload = allowCardDrop && !stack
           ? buildZoneDropPayload({
               zoneId,
               targetPlayerId: ownerPlayerId,
@@ -486,6 +518,32 @@ function BenchRow({
           stackKind: STACK_KINDS.BENCH,
           benchIndex: index,
         });
+        const stackInsertBottomZoneId = `${zoneId}-insert-bottom`;
+        const stackInsertTopZoneId = `${zoneId}-insert-top`;
+        const stackInsertBottomDropPayload = allowCardDrop
+          ? buildZoneDropPayload({
+              zoneId: stackInsertBottomZoneId,
+              targetPlayerId: ownerPlayerId,
+              zoneKind: ZONE_KINDS.BENCH,
+              benchIndex: index,
+              edge: 'bottom',
+            })
+          : null;
+        const stackInsertTopDropPayload = allowCardDrop
+          ? buildZoneDropPayload({
+              zoneId: stackInsertTopZoneId,
+              targetPlayerId: ownerPlayerId,
+              zoneKind: ZONE_KINDS.BENCH,
+              benchIndex: index,
+              edge: 'top',
+            })
+          : null;
+        const cardCount = asArray(stack?.cardIds).length;
+        const canExpandStack = cardCount > 1;
+        const hoverableClassName = cardCount === 1 ? styles.stackDropSurfaceHoverable : '';
+        const ownerLabel = owner === 'player' ? '自分' : '相手';
+        const canDragSingleCard = allowCardDrop && cardCount === 1;
+        const singleCardId = canDragSingleCard ? asArray(stack?.cardIds)[0] : null;
 
         return (
           <DroppableZone
@@ -508,10 +566,76 @@ function BenchRow({
                 data-zone={`${zoneId}-stack`}
                 data-drop-group="stack"
               >
-                <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                <div className={joinClassNames(styles.stackDropSurfaceInner, hoverableClassName)}>
+                  {allowCardDrop && isDraggingCard ? (
+                    <div className={styles.stackInsertTargets}>
+                      <DroppableZone
+                        dropId={`zone-${stackInsertBottomZoneId}`}
+                        dropPayload={stackInsertBottomDropPayload}
+                        className={joinClassNames(
+                          styles.stackInsertTarget,
+                          styles.stackInsertTargetBottom
+                        )}
+                        activeClassName={styles.stackInsertTargetBottomActive}
+                        isHighlighted={isZoneHighlighted(stackInsertBottomZoneId)}
+                      >
+                        <span className={styles.deckInsertLabel}>下に重ねる</span>
+                      </DroppableZone>
+                      <DroppableZone
+                        dropId={`zone-${stackInsertTopZoneId}`}
+                        dropPayload={stackInsertTopDropPayload}
+                        className={joinClassNames(
+                          styles.stackInsertTarget,
+                          styles.stackInsertTargetTop
+                        )}
+                        activeClassName={styles.stackInsertTargetTopActive}
+                        isHighlighted={isZoneHighlighted(stackInsertTopZoneId)}
+                      >
+                        <span className={styles.deckInsertLabel}>上に重ねる</span>
+                      </DroppableZone>
+                    </div>
+                  ) : null}
+                  {canDragSingleCard && singleCardId ? (
+                    <DraggableCard
+                      dragId={`stack-single-${stackId}-${singleCardId}`}
+                      dragPayload={buildCardDragPayload({
+                        cardId: singleCardId,
+                        sourceZone: 'player-stack',
+                        sourceStackKind: STACK_KINDS.BENCH,
+                        sourceBenchIndex: index,
+                      })}
+                      className={joinClassNames(styles.stackSingleCardDraggable, hoverableClassName)}
+                      draggingClassName={styles.draggingSource}
+                    >
+                      <div className={styles.stackSingleCardButton}>
+                        <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                      </div>
+                    </DraggableCard>
+                  ) : (
+                    <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                  )}
+                  {canExpandStack ? (
+                    <button
+                      type="button"
+                      className={styles.stackExpandButton}
+                      onClick={() =>
+                        onOpenStackCards({
+                          ownerPlayerId,
+                          ownerLabel,
+                          stackKind: STACK_KINDS.BENCH,
+                          benchIndex: index,
+                          sourceZoneId: `${zoneId}-stack`,
+                        })
+                      }
+                      aria-label={`${ownerLabel}ベンチ${index + 1}を展開`}
+                    >
+                      展開
+                    </button>
+                  ) : null}
+                </div>
               </DroppableStack>
             ) : (
-              <span className={styles.benchPlaceholder}>ベンチ</span>
+              <span className={styles.benchPlaceholder}>ベンチ{index + 1}</span>
             )}
           </DroppableZone>
         );
@@ -828,6 +952,386 @@ function DeckPeekModal({
   );
 }
 
+function StackCardsModal({
+  title,
+  cards,
+  onClose,
+  allowCardDrag = false,
+  sourceStackKind = STACK_KINDS.ACTIVE,
+  sourceBenchIndex = null,
+  initialAnchorRect = null,
+}) {
+  const normalizedCards = asArray(cards).filter((entry) => Boolean(entry?.cardId));
+  const columnCount = Math.max(1, Math.min(10, normalizedCards.length || 1));
+  const [activeIndex, setActiveIndex] = useState(null);
+  const [activeShift, setActiveShift] = useState(() => ({ ...POPUP_CARD_BASE_SHIFT }));
+  const [modalPosition, setModalPosition] = useState(null);
+  const [isModalDragging, setIsModalDragging] = useState(false);
+  const cardButtonRefs = useRef({});
+  const modalRootRef = useRef(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const dragSizeRef = useRef({ width: 0, height: 0 });
+  const hasManuallyMovedRef = useRef(false);
+
+  useEffect(() => {
+    if (!normalizedCards[activeIndex]) {
+      setActiveIndex(null);
+    }
+  }, [activeIndex, normalizedCards]);
+
+  const recalcActiveCardShift = useCallback(() => {
+    if (activeIndex === null || typeof window === 'undefined') {
+      setActiveShift((previous) => {
+        if (
+          previous.x === POPUP_CARD_BASE_SHIFT.x &&
+          previous.y === POPUP_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...POPUP_CARD_BASE_SHIFT };
+      });
+      return;
+    }
+
+    const buttonNode = cardButtonRefs.current[activeIndex];
+    if (!buttonNode) {
+      return;
+    }
+
+    const next = resolvePopupCardHoverShift({
+      cardRect: buttonNode.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      scale: POPUP_CARD_HOVER_SCALE,
+    });
+
+    setActiveShift((previous) => {
+      if (previous.x === next.x && previous.y === next.y) {
+        return previous;
+      }
+      return next;
+    });
+  }, [activeIndex]);
+
+  useEffect(() => {
+    recalcActiveCardShift();
+  }, [recalcActiveCardShift, normalizedCards, modalPosition]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      recalcActiveCardShift();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [recalcActiveCardShift]);
+
+  const resolveAnchoredPosition = useCallback(() => {
+    if (!initialAnchorRect || typeof window === 'undefined') {
+      return null;
+    }
+    const rootNode = modalRootRef.current;
+    if (!rootNode) {
+      return null;
+    }
+    const rect = rootNode.getBoundingClientRect();
+    const overlapOffset = clampValue(initialAnchorRect.height * 0.55, 42, 108);
+    const desired = {
+      x: initialAnchorRect.left + (initialAnchorRect.width - rect.width) / 2,
+      y: initialAnchorRect.top - rect.height + overlapOffset,
+    };
+    return clampFloatingPanelPosition({
+      x: desired.x,
+      y: desired.y,
+      width: rect.width,
+      height: rect.height,
+    });
+  }, [initialAnchorRect]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || hasManuallyMovedRef.current) {
+      return undefined;
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      const anchoredPosition = resolveAnchoredPosition();
+      if (!anchoredPosition) {
+        return;
+      }
+      setModalPosition((previous) => {
+        if (previous && previous.x === anchoredPosition.x && previous.y === anchoredPosition.y) {
+          return previous;
+        }
+        return anchoredPosition;
+      });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [normalizedCards.length, resolveAnchoredPosition]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const rootNode = modalRootRef.current;
+      if (!rootNode) {
+        return;
+      }
+      if (!hasManuallyMovedRef.current) {
+        const anchoredPosition = resolveAnchoredPosition();
+        if (anchoredPosition) {
+          setModalPosition((previous) => {
+            if (previous && previous.x === anchoredPosition.x && previous.y === anchoredPosition.y) {
+              return previous;
+            }
+            return anchoredPosition;
+          });
+          return;
+        }
+      }
+      if (!modalPosition) {
+        return;
+      }
+      const rect = rootNode.getBoundingClientRect();
+      const next = clampFloatingPanelPosition({
+        x: modalPosition.x,
+        y: modalPosition.y,
+        width: rect.width,
+        height: rect.height,
+      });
+      if (next.x !== modalPosition.x || next.y !== modalPosition.y) {
+        setModalPosition(next);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [modalPosition, resolveAnchoredPosition]);
+
+  useEffect(() => {
+    if (!isModalDragging || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handlePointerMove = (event) => {
+      const next = clampFloatingPanelPosition({
+        x: event.clientX - dragOffsetRef.current.x,
+        y: event.clientY - dragOffsetRef.current.y,
+        width: dragSizeRef.current.width,
+        height: dragSizeRef.current.height,
+      });
+      setModalPosition((previous) => {
+        if (previous && previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    const stopDragging = () => {
+      setIsModalDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', stopDragging);
+    window.addEventListener('pointercancel', stopDragging);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', stopDragging);
+      window.removeEventListener('pointercancel', stopDragging);
+    };
+  }, [isModalDragging]);
+
+  function handleModalDragStart(event) {
+    if (event.button !== 0 || event.isPrimary === false) {
+      return;
+    }
+    const rootNode = modalRootRef.current;
+    if (!rootNode) {
+      return;
+    }
+
+    const rect = rootNode.getBoundingClientRect();
+    dragOffsetRef.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+    dragSizeRef.current = {
+      width: rect.width,
+      height: rect.height,
+    };
+
+    const initialPosition = {
+      x: rect.left,
+      y: rect.top,
+    };
+    hasManuallyMovedRef.current = true;
+    setModalPosition((previous) => previous || initialPosition);
+    setIsModalDragging(true);
+    event.preventDefault();
+  }
+
+  function handleModalPositionReset() {
+    setIsModalDragging(false);
+    hasManuallyMovedRef.current = false;
+    const anchoredPosition = resolveAnchoredPosition();
+    if (anchoredPosition) {
+      setModalPosition(anchoredPosition);
+      return;
+    }
+    setModalPosition(null);
+  }
+
+  const modalRootStyle = useMemo(() => {
+    if (!modalPosition) {
+      return undefined;
+    }
+    return {
+      left: `${modalPosition.x}px`,
+      top: `${modalPosition.y}px`,
+      bottom: 'auto',
+      transform: 'none',
+    };
+  }, [modalPosition]);
+
+  return (
+    <aside
+      ref={modalRootRef}
+      className={styles.deckPeekRoot}
+      data-zone="stack-cards-root"
+      aria-label="スタック展開モーダル"
+      style={modalRootStyle}
+    >
+      <div className={styles.deckPeekToolbar}>
+        <button
+          type="button"
+          className={joinClassNames(
+            styles.deckPeekToolbarButton,
+            styles.deckPeekHandle,
+            isModalDragging ? styles.deckPeekHandleActive : ''
+          )}
+          onPointerDown={handleModalDragStart}
+          aria-label="スタック展開モーダルをドラッグして移動"
+          title="スタック展開モーダルを移動"
+        >
+          <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+        </button>
+        {modalPosition ? (
+          <button
+            type="button"
+            className={styles.deckPeekToolbarButton}
+            onClick={handleModalPositionReset}
+          >
+            位置をリセット
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={styles.deckPeekToolbarButton}
+          onClick={onClose}
+        >
+          閉じる
+        </button>
+      </div>
+      <div
+        className={styles.deckPeekCard}
+        style={{ '--deck-peek-columns': String(columnCount) }}
+      >
+        <p className={styles.requestBlockingTitle}>{title}</p>
+        <div className={styles.deckPeekCards} data-zone="stack-cards-grid">
+          {normalizedCards.length > 0 ? (
+            normalizedCards.map((card, index) => {
+              const isActive = activeIndex === index;
+              const cardButton = (
+                <button
+                  ref={(node) => {
+                    if (node) {
+                      cardButtonRefs.current[index] = node;
+                    } else {
+                      delete cardButtonRefs.current[index];
+                    }
+                  }}
+                  type="button"
+                  className={joinClassNames(
+                    styles.popupCardButton,
+                    isActive ? styles.popupCardButtonActive : ''
+                  )}
+                  style={
+                    isActive
+                      ? {
+                          '--popup-card-shift-x': `${activeShift.x}px`,
+                          '--popup-card-shift-y': `${activeShift.y}px`,
+                          '--popup-card-scale': String(POPUP_CARD_HOVER_SCALE),
+                        }
+                      : undefined
+                  }
+                  aria-label={`展開カード ${index + 1} を拡大表示`}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseLeave={() => setActiveIndex(null)}
+                  onFocus={() => setActiveIndex(index)}
+                  onBlur={() => setActiveIndex(null)}
+                >
+                  {card.imageUrl ? (
+                    <img
+                      src={card.imageUrl}
+                      alt={`展開カード ${index + 1}`}
+                      className={joinClassNames(styles.revealCardImage, styles.popupCardImage)}
+                    />
+                  ) : (
+                    <div className={styles.opponentRevealCardFallback}>{card.cardId}</div>
+                  )}
+                </button>
+              );
+
+              if (!allowCardDrag) {
+                return (
+                  <div
+                    key={`stack-card-${card.cardId}-${index}`}
+                    className={joinClassNames(
+                      styles.revealCardDraggable,
+                      styles.popupCardItem,
+                      isActive ? styles.popupCardItemActive : ''
+                    )}
+                  >
+                    {cardButton}
+                  </div>
+                );
+              }
+
+              return (
+                <DraggableCard
+                  key={`stack-card-${card.cardId}-${index}`}
+                  dragId={`stack-card-${card.cardId}-${index}`}
+                  dragPayload={buildCardDragPayload({
+                    cardId: card.cardId,
+                    sourceZone: 'player-stack',
+                    sourceStackKind,
+                    sourceBenchIndex: sourceStackKind === STACK_KINDS.BENCH ? sourceBenchIndex : null,
+                  })}
+                  className={joinClassNames(
+                    styles.revealCardDraggable,
+                    styles.popupCardItem,
+                    isActive ? styles.popupCardItemActive : ''
+                  )}
+                  draggingClassName={styles.draggingSource}
+                >
+                  {cardButton}
+                </DraggableCard>
+              );
+            })
+          ) : (
+            <p className={styles.requestBlockingMeta}>展開中のカードはありません。</p>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const ownerPlayerId = toPlayerKey(playerId);
   const opponentPlayerId = ownerPlayerId === 'player1' ? 'player2' : 'player1';
@@ -863,6 +1367,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [opponentRevealActiveShift, setOpponentRevealActiveShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
+  const [stackModalState, setStackModalState] = useState({
+    ownerPlayerId: '',
+    ownerLabel: '',
+    stackKind: STACK_KINDS.ACTIVE,
+    benchIndex: null,
+    anchorRect: null,
+    isOpen: false,
+  });
   const handledRevealRequestIdsRef = useRef(new Set());
   const hasInitializedHandledRevealRef = useRef(false);
   const handledRandomDiscardRequestIdsRef = useRef(new Set());
@@ -1010,10 +1522,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   const publicPlayers = sessionDoc?.publicState?.players || {};
   const turnContext = sessionDoc?.publicState?.turnContext || {};
-  const playerBoard = publicPlayers?.[ownerPlayerId]?.board || {};
-  const opponentBoard = publicPlayers?.[opponentPlayerId]?.board || {};
-  const playerCounters = publicPlayers?.[ownerPlayerId]?.counters || {};
-  const opponentCounters = publicPlayers?.[opponentPlayerId]?.counters || {};
+  const playerBoard = publicPlayers?.[ownerPlayerId]?.board || EMPTY_OBJECT;
+  const opponentBoard = publicPlayers?.[opponentPlayerId]?.board || EMPTY_OBJECT;
+  const playerCounters = publicPlayers?.[ownerPlayerId]?.counters || EMPTY_OBJECT;
+  const opponentCounters = publicPlayers?.[opponentPlayerId]?.counters || EMPTY_OBJECT;
 
   const playerDeckRefs = asArray(privateStateDoc?.zones?.deck);
   const playerDeckPeekRefs = asArray(privateStateDoc?.zones?.deckPeek);
@@ -1217,6 +1729,104 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       })
       .filter(Boolean);
   }, [normalizedPlayerCatalog, playerDeckPeekRefs, renderCardCatalog]);
+
+  const handleOpenStackCards = useCallback(
+    ({
+      ownerPlayerId: targetOwnerPlayerId,
+      ownerLabel,
+      stackKind,
+      benchIndex = null,
+      sourceZoneId = '',
+    }) => {
+      let anchorRect = null;
+      if (typeof document !== 'undefined' && sourceZoneId) {
+        const anchorNode = document.querySelector(`[data-zone="${sourceZoneId}"]`);
+        if (anchorNode && typeof anchorNode.getBoundingClientRect === 'function') {
+          const rect = anchorNode.getBoundingClientRect();
+          anchorRect = {
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          };
+        }
+      }
+      setStackModalState({
+        ownerPlayerId: targetOwnerPlayerId,
+        ownerLabel: ownerLabel || '',
+        stackKind: stackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE,
+        benchIndex:
+          stackKind === STACK_KINDS.BENCH ? Number(benchIndex) : null,
+        anchorRect,
+        isOpen: true,
+      });
+    },
+    []
+  );
+
+  const handleCloseStackCards = useCallback(() => {
+    setStackModalState((previous) => ({
+      ...previous,
+      isOpen: false,
+    }));
+  }, []);
+
+  const stackModalBoard = useMemo(() => {
+    if (stackModalState.ownerPlayerId === ownerPlayerId) {
+      return playerBoard;
+    }
+    if (stackModalState.ownerPlayerId === opponentPlayerId) {
+      return opponentBoard;
+    }
+    return null;
+  }, [opponentBoard, opponentPlayerId, ownerPlayerId, playerBoard, stackModalState.ownerPlayerId]);
+
+  const stackModalStack = useMemo(
+    () =>
+      resolveStackFromBoard(
+        stackModalBoard,
+        stackModalState.stackKind,
+        stackModalState.stackKind === STACK_KINDS.BENCH ? stackModalState.benchIndex : null
+      ),
+    [stackModalBoard, stackModalState.benchIndex, stackModalState.stackKind]
+  );
+
+  const stackModalCards = useMemo(
+    () => toStackCards(stackModalStack, renderCardCatalog),
+    [renderCardCatalog, stackModalStack]
+  );
+
+  const isStackModalOpen =
+    stackModalState.isOpen &&
+    Boolean(stackModalStack) &&
+    stackModalCards.length > 0;
+
+  const stackModalAllowsDrag = stackModalState.ownerPlayerId === ownerPlayerId;
+
+  const stackModalTitle = useMemo(
+    () =>
+      formatStackModalTitle({
+        ownerLabel: stackModalState.ownerLabel || '不明',
+        stackKind: stackModalState.stackKind,
+        benchIndex: stackModalState.benchIndex,
+        cardCount: stackModalCards.length,
+      }),
+    [
+      stackModalCards.length,
+      stackModalState.benchIndex,
+      stackModalState.ownerLabel,
+      stackModalState.stackKind,
+    ]
+  );
+
+  useEffect(() => {
+    if (stackModalState.isOpen && (!stackModalStack || stackModalCards.length <= 0)) {
+      setStackModalState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
+    }
+  }, [stackModalCards.length, stackModalStack, stackModalState.isOpen]);
 
   useEffect(() => {
     if (!lastCoinAt) {
@@ -2317,8 +2927,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               bench={opponentBench}
               cardCatalog={renderCardCatalog}
               allowCardDrop={false}
+              isDraggingCard={isDraggingCard}
               isZoneHighlighted={isZoneHighlighted}
               isStackHighlighted={isStackHighlighted}
+              onOpenStackCards={handleOpenStackCards}
             />
             <div className={`${styles.activeRow} ${styles.battleLineRow}`.trim()}>
               <div className={styles.battleLineRevealOpponent}>
@@ -2363,7 +2975,31 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                     data-zone={`${opponentActiveZoneId}-stack`}
                     data-drop-group="stack"
                   >
-                    <Pokemon {...toPokemonProps(opponentActive, renderCardCatalog)} />
+                    <div
+                      className={joinClassNames(
+                        styles.stackDropSurfaceInner,
+                        asArray(opponentActive?.cardIds).length === 1 ? styles.stackDropSurfaceHoverable : ''
+                      )}
+                    >
+                      <Pokemon {...toPokemonProps(opponentActive, renderCardCatalog)} />
+                      {asArray(opponentActive?.cardIds).length > 1 ? (
+                        <button
+                          type="button"
+                          className={styles.stackExpandButton}
+                          onClick={() =>
+                            handleOpenStackCards({
+                              ownerPlayerId: opponentPlayerId,
+                              ownerLabel: '相手',
+                              stackKind: STACK_KINDS.ACTIVE,
+                              sourceZoneId: `${opponentActiveZoneId}-stack`,
+                            })
+                          }
+                          aria-label="相手バトル場を展開"
+                        >
+                          展開
+                        </button>
+                      ) : null}
+                    </div>
                   </DroppableStack>
                 ) : (
                   <span className={styles.activePlaceholder}>バトルポケモン（相手）</span>
@@ -2460,7 +3096,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             <div className={`${styles.activeRow} ${styles.battleLineRow}`.trim()}>
               <DroppableZone
                 dropId={`zone-${playerActiveZoneId}`}
-                dropPayload={playerActiveDropPayload}
+                dropPayload={playerActive ? null : playerActiveDropPayload}
                 className={`${styles.activeZone} ${styles.battleLineActive}`.trim()}
                 activeClassName={styles.dropZoneActive}
                 isHighlighted={isZoneHighlighted(playerActiveZoneId)}
@@ -2477,7 +3113,89 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                     data-zone={`${playerActiveZoneId}-stack`}
                     data-drop-group="stack"
                   >
-                    <Pokemon {...toPokemonProps(playerActive, normalizedPlayerCatalog)} />
+                    <div
+                      className={joinClassNames(
+                        styles.stackDropSurfaceInner,
+                        asArray(playerActive?.cardIds).length === 1 ? styles.stackDropSurfaceHoverable : ''
+                      )}
+                    >
+                      {isDraggingCard ? (
+                        <div className={styles.stackInsertTargets}>
+                          <DroppableZone
+                            dropId="zone-player-active-insert-bottom"
+                            dropPayload={buildZoneDropPayload({
+                              zoneId: 'player-active-insert-bottom',
+                              targetPlayerId: ownerPlayerId,
+                              zoneKind: ZONE_KINDS.ACTIVE,
+                              edge: 'bottom',
+                            })}
+                            className={joinClassNames(
+                              styles.stackInsertTarget,
+                              styles.stackInsertTargetBottom
+                            )}
+                            activeClassName={styles.stackInsertTargetBottomActive}
+                            isHighlighted={isZoneHighlighted('player-active-insert-bottom')}
+                          >
+                            <span className={styles.deckInsertLabel}>下に重ねる</span>
+                          </DroppableZone>
+                          <DroppableZone
+                            dropId="zone-player-active-insert-top"
+                            dropPayload={buildZoneDropPayload({
+                              zoneId: 'player-active-insert-top',
+                              targetPlayerId: ownerPlayerId,
+                              zoneKind: ZONE_KINDS.ACTIVE,
+                              edge: 'top',
+                            })}
+                            className={joinClassNames(
+                              styles.stackInsertTarget,
+                              styles.stackInsertTargetTop
+                            )}
+                            activeClassName={styles.stackInsertTargetTopActive}
+                            isHighlighted={isZoneHighlighted('player-active-insert-top')}
+                          >
+                            <span className={styles.deckInsertLabel}>上に重ねる</span>
+                          </DroppableZone>
+                        </div>
+                      ) : null}
+                      {asArray(playerActive?.cardIds).length === 1 ? (
+                        <DraggableCard
+                          dragId={`stack-single-player-active-${asArray(playerActive?.cardIds)[0]}`}
+                          dragPayload={buildCardDragPayload({
+                            cardId: asArray(playerActive?.cardIds)[0],
+                            sourceZone: 'player-stack',
+                            sourceStackKind: STACK_KINDS.ACTIVE,
+                          })}
+                          className={joinClassNames(
+                            styles.stackSingleCardDraggable,
+                            styles.stackDropSurfaceHoverable
+                          )}
+                          draggingClassName={styles.draggingSource}
+                        >
+                          <div className={styles.stackSingleCardButton}>
+                            <Pokemon {...toPokemonProps(playerActive, normalizedPlayerCatalog)} />
+                          </div>
+                        </DraggableCard>
+                      ) : (
+                        <Pokemon {...toPokemonProps(playerActive, normalizedPlayerCatalog)} />
+                      )}
+                      {asArray(playerActive?.cardIds).length > 1 ? (
+                        <button
+                          type="button"
+                          className={styles.stackExpandButton}
+                          onClick={() =>
+                            handleOpenStackCards({
+                              ownerPlayerId,
+                              ownerLabel: '自分',
+                              stackKind: STACK_KINDS.ACTIVE,
+                              sourceZoneId: `${playerActiveZoneId}-stack`,
+                            })
+                          }
+                          aria-label="自分バトル場を展開"
+                        >
+                          展開
+                        </button>
+                      ) : null}
+                    </div>
                   </DroppableStack>
                 ) : (
                   <span className={styles.activePlaceholder}>バトルポケモン（自分）</span>
@@ -2525,8 +3243,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               bench={playerBench}
               cardCatalog={renderCardCatalog}
               allowCardDrop
+              isDraggingCard={isDraggingCard}
               isZoneHighlighted={isZoneHighlighted}
               isStackHighlighted={isStackHighlighted}
+              onOpenStackCards={handleOpenStackCards}
             />
           </div>
 
@@ -2755,6 +3475,17 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           onClose={handleCloseDeckPeekModal}
           onRevealOneMore={handleRevealOneMoreDeckCard}
           canRevealOneMore={canRevealOneMoreDeckCard}
+        />
+      ) : null}
+      {isStackModalOpen ? (
+        <StackCardsModal
+          title={stackModalTitle}
+          cards={stackModalCards}
+          onClose={handleCloseStackCards}
+          allowCardDrag={stackModalAllowsDrag}
+          sourceStackKind={stackModalState.stackKind}
+          sourceBenchIndex={stackModalState.benchIndex}
+          initialAnchorRect={stackModalState.anchorRect}
         />
       ) : null}
       {!hasBlockingRequest && isOpponentHandRevealOpen ? (

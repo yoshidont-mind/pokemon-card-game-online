@@ -67,7 +67,8 @@ function isSupportedCardSourceZone(sourceZone) {
     sourceZone === 'player-hand' ||
     sourceZone === 'player-reveal' ||
     sourceZone === 'player-deck' ||
-    sourceZone === 'player-deck-peek'
+    sourceZone === 'player-deck-peek' ||
+    sourceZone === 'player-stack'
   );
 }
 
@@ -165,10 +166,54 @@ export function resolveDropIntent({
           kind: INTENT_ACTIONS.MOVE_CARD_TO_DECK_EDGE,
           cardId: dragPayload.cardId,
           sourceZone: dragPayload.sourceZone,
+          sourceStackKind: dragPayload.sourceStackKind || null,
+          sourceBenchIndex:
+            dragPayload.sourceStackKind === STACK_KINDS.BENCH
+              ? dragPayload.sourceBenchIndex
+              : null,
           targetPlayerId: actorPlayerId,
           targetZoneKind: ZONE_KINDS.DECK,
           targetZoneId: dropPayload.zoneId,
           targetDeckEdge: edge,
+        },
+        highlightTarget: {
+          type: DROP_TYPES.ZONE,
+          zoneId: dropPayload.zoneId,
+        },
+      });
+    }
+
+    if (
+      (dropPayload.zoneKind === ZONE_KINDS.ACTIVE || dropPayload.zoneKind === ZONE_KINDS.BENCH) &&
+      (dropPayload.edge === 'bottom' || dropPayload.edge === 'top')
+    ) {
+      const edge = dropPayload.edge === 'bottom' ? 'bottom' : 'top';
+      if (
+        dropPayload.zoneKind === ZONE_KINDS.BENCH &&
+        !isBenchIndexValid(dropPayload.benchIndex)
+      ) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+      if (!isZoneOccupied(boardSnapshot, actorPlayerId, dropPayload.zoneKind, dropPayload.benchIndex)) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      return accept({
+        action: {
+          kind: INTENT_ACTIONS.MOVE_CARD_TO_STACK_EDGE,
+          cardId: dragPayload.cardId,
+          sourceZone: dragPayload.sourceZone,
+          sourceStackKind: dragPayload.sourceStackKind || null,
+          sourceBenchIndex:
+            dragPayload.sourceStackKind === STACK_KINDS.BENCH
+              ? dragPayload.sourceBenchIndex
+              : null,
+          targetPlayerId: actorPlayerId,
+          targetZoneKind: dropPayload.zoneKind,
+          targetZoneId: dropPayload.zoneId,
+          targetBenchIndex:
+            dropPayload.zoneKind === ZONE_KINDS.BENCH ? dropPayload.benchIndex : null,
+          targetStackEdge: edge,
         },
         highlightTarget: {
           type: DROP_TYPES.ZONE,
@@ -217,6 +262,11 @@ export function resolveDropIntent({
         kind: INTENT_ACTIONS.MOVE_CARD_FROM_HAND_TO_ZONE,
         cardId: dragPayload.cardId,
         sourceZone: dragPayload.sourceZone,
+        sourceStackKind: dragPayload.sourceStackKind || null,
+        sourceBenchIndex:
+          dragPayload.sourceStackKind === STACK_KINDS.BENCH
+            ? dragPayload.sourceBenchIndex
+            : null,
         targetPlayerId: dropPayload.targetPlayerId,
         targetZoneKind: dropPayload.zoneKind,
         targetZoneId: dropPayload.zoneId,
