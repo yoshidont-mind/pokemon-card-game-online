@@ -11,6 +11,7 @@ import {
   isValidPlayerId,
   isValidVisibility,
 } from './schemaV2';
+import { INITIAL_PRIZE_COUNT_DEFAULT } from './setupUtils';
 
 function nowIso() {
   return new Date().toISOString();
@@ -36,6 +37,7 @@ export function createEmptyBoard() {
   return {
     active: null,
     bench: [],
+    reveal: [],
     discard: [],
     lostZone: [],
     prize: [],
@@ -57,10 +59,14 @@ export function createEmptySessionV2({ createdBy = 'system', now = nowIso() } = 
       player2: createParticipant(),
     },
     publicState: {
+      setup: {
+        initialPrizeCount: INITIAL_PRIZE_COUNT_DEFAULT,
+      },
       turnContext: {
         turnNumber: null,
         currentPlayer: null,
       },
+      publicCardCatalog: {},
       players: {
         player1: {
           board: createEmptyBoard(),

@@ -26,10 +26,16 @@
 
 ### 現在できること（実装済み）
 - Firestore 上に対戦セッションを作成し、参加できる
+- `/home` で初期サイド枚数（3〜6、既定6）を指定してセッション開始できる
 - デッキコードを入力し、`https://www.pokemon-card.com/deck/confirm.html/deckID/[deckCode]` からカード画像URLを抽出できる
 - 抽出したカードをデッキとして保存し、盤面画面へ遷移できる
+- デッキ保存時、セッション設定の初期サイド枚数ぶんを裏向きサイドとして自動配布できる
 - 盤面情報を Firestore の `onSnapshot` でリアルタイム同期できる
+- 盤面に公開エリア（自分/相手）を持ち、カードを一時公開して相手に確認してもらえる
 - テスト用画面で `public/sample_gamedata.json` をセッションに反映できる
+- 手札カード / ダメカン / 状態異常の DnD 操作（Phase 04）を実行できる
+- Operation Panel から Wave1 操作 intent を実行できる（Phase 05 進行中）
+- 相手秘匿領域に作用する操作（`OP-B11`, `OP-B12`）を相手承認リクエスト経由で扱える
 
 ### 盤面UI（Phase 03 時点）
 - 盤面レイアウトを「上: 相手領域 / 中央: スタジアム / 下: 自分領域」の紙プレイ寄せ構成に更新
@@ -37,6 +43,21 @@
 - 手札エリアを浮遊トレイ化し、トグルで最小化/展開できる
 - 小道具BOX（ダメカン/状態異常）を右下ドッキングの折りたたみUIで追加
 - 裏向きカード画像は `card-back.jpg` に統一
+
+### 操作基盤（Phase 05 進行中）
+- `src/components/operation/OperationPanel.js` を追加し、Wave1 操作をUIから実行可能にした
+- `src/operations/wave1/*` で intent 生成・検証・mutation の共通基盤を追加
+- `publicState.operationRequests` を導入し、相手承認フロー（approve/reject）を実装
+- 相手承認リクエストの「解決済み結果（公開/破棄カード）」を OperationPanel で確認可能
+- DnD の受け入れ先を `prize` / `stadium` に拡張
+- コイントスUIは `public/coin-front.png`（表）/ `public/coin-back.png`（裏）を利用
+- 完了判定用の手動検証シナリオを整備
+  - `references/implementation_plans/260219_phase05_manual_validation_scenarios.md`
+  - `references/implementation_logs/260219_phase05_manual_validation_scenarios_log.md`
+- 今後のUI方針:
+  - 直感GUI（DnD / 盤面クリック / モーダル）を第一優先
+  - **現行/今後実装するすべての操作で「紙版ポケカに慣れた人が直感的に使えること」を最優先する**
+  - OperationPanel は補助導線へ縮退（cardId手入力をプレイヤー必須操作にしない）
 
 ### これから実現したいこと（要件）
 - ポケカ対戦に必要な手動操作を画面上で再現する
@@ -113,7 +134,7 @@ Browser (React)
 
 | URL | 実装 | 用途 |
 |---|---|---|
-| `/home` | `src/components/Home.js` | セッション作成・参加導線 |
+| `/home` | `src/components/Home.js` | セッション作成・参加導線（初期サイド枚数の設定を含む） |
 | `/join` | `src/components/Join.js` | セッションID入力で参加 |
 | `/session?id=...&playerId=...` | `src/components/Session.js` | デッキコード入力・取り込み・保存・盤面遷移 |
 | `/test/pokemon` | `src/components/PokemonTest.js` | ポケモン表示コンポーネントの見た目確認 |
@@ -209,7 +230,8 @@ Browser (React)
         }
       }
     },
-    "stadium": null
+    "stadium": null,
+    "operationRequests": []
   }
 }
 ```
@@ -227,7 +249,11 @@ Browser (React)
     "hand": []
   },
   "cardCatalog": {},
-  "initialDeckCardIds": []
+  "initialDeckCardIds": [],
+  "uiPrefs": {
+    "handTrayOpen": false,
+    "toolboxOpen": false
+  }
 }
 ```
 

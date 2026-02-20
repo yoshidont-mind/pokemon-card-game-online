@@ -282,6 +282,7 @@ function migrateLegacyPlayer(legacyPlayer, ownerPlayerId, now) {
     board: {
       active,
       bench,
+      reveal: [],
       discard,
       lostZone,
       prize,
@@ -301,6 +302,7 @@ function hasBoardActivity(board) {
   return Boolean(
     board.active ||
       asArray(board.bench).length > 0 ||
+      asArray(board.reveal).length > 0 ||
       asArray(board.discard).length > 0 ||
       asArray(board.lostZone).length > 0 ||
       asArray(board.prize).length > 0
@@ -334,6 +336,20 @@ export function migrateSessionV1ToV2(v1SessionDoc, options = {}) {
     };
     privateStatesByPlayer[playerId] = playerMigration.privateState;
   });
+
+  const publicCardCatalog = {};
+  ['player1', 'player2'].forEach((playerId) => {
+    const cardCatalog = privateStatesByPlayer?.[playerId]?.cardCatalog || {};
+    Object.values(cardCatalog).forEach((cardEntity) => {
+      const cardId = cardEntity?.cardId;
+      const imageUrl =
+        typeof cardEntity?.imageUrl === 'string' ? cardEntity.imageUrl.trim() : '';
+      if (cardId && imageUrl) {
+        publicCardCatalog[cardId] = imageUrl;
+      }
+    });
+  });
+  migrated.publicState.publicCardCatalog = publicCardCatalog;
 
   const player1HasCards = Object.keys(privateStatesByPlayer.player1.cardCatalog).length > 0;
   const player2HasCards = Object.keys(privateStatesByPlayer.player2.cardCatalog).length > 0;

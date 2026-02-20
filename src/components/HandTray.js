@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { useDroppable } from '@dnd-kit/core';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowsUpDownLeftRight } from '@fortawesome/free-solid-svg-icons';
 import styles from '../css/playingField.module.css';
@@ -75,7 +76,13 @@ function clearStoredTrayPosition() {
   }
 }
 
-const HandTray = ({ cards = [], isOpen = false, onToggle = () => {} }) => {
+const HandTray = ({
+  cards = [],
+  isOpen = false,
+  onToggle = () => {},
+  dropPayload = null,
+  isDropHighlighted = false,
+}) => {
   const normalizedCards = useMemo(
     () =>
       cards
@@ -101,6 +108,7 @@ const HandTray = ({ cards = [], isOpen = false, onToggle = () => {} }) => {
   );
 
   const cardCount = normalizedCards.length;
+  const handColumnCount = Math.max(1, Math.min(10, cardCount));
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [pinnedIndex, setPinnedIndex] = useState(null);
   const [previewCenterX, setPreviewCenterX] = useState(null);
@@ -110,6 +118,23 @@ const HandTray = ({ cards = [], isOpen = false, onToggle = () => {} }) => {
   const cardButtonRefs = useRef({});
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const dragSizeRef = useRef({ width: 0, height: 0 });
+  const { setNodeRef: setHandDropRef } = useDroppable({
+    id: 'zone-player-hand',
+    data: {
+      dropPayload,
+    },
+    disabled: !dropPayload,
+  });
+
+  const setTrayNodeRef = useCallback(
+    (node) => {
+      trayRootRef.current = node;
+      if (dropPayload) {
+        setHandDropRef(node);
+      }
+    },
+    [dropPayload, setHandDropRef]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -264,11 +289,19 @@ const HandTray = ({ cards = [], isOpen = false, onToggle = () => {} }) => {
     };
   }, [trayPosition]);
 
+  const handCardsStyle = useMemo(
+    () => ({
+      '--hand-columns': String(handColumnCount),
+    }),
+    [handColumnCount]
+  );
+
   return (
     <aside
-      ref={trayRootRef}
-      className={styles.handTrayRoot}
-      data-zone="player-hand-tray"
+      ref={setTrayNodeRef}
+      className={`${styles.handTrayRoot} ${isDropHighlighted ? styles.handTrayDropActive : ''}`.trim()}
+      data-zone="player-hand"
+      data-drop-group="hand"
       style={trayRootStyle}
     >
       <div className={styles.handTrayToolbar}>
@@ -305,7 +338,11 @@ const HandTray = ({ cards = [], isOpen = false, onToggle = () => {} }) => {
         <div id={HAND_TRAY_PANEL_ID} className={styles.handTrayPanel}>
           {normalizedCards.length > 0 ? (
             <div className={styles.handCardsScroller}>
-              <div className={styles.handCards}>
+              <div
+                className={styles.handCards}
+                style={handCardsStyle}
+                data-zone="player-hand-cards-grid"
+              >
                 {normalizedCards.map((card, index) => (
                   <DraggableCard
                     key={`${card.cardId}-${index}`}
@@ -375,6 +412,11 @@ HandTray.propTypes = {
   ),
   isOpen: PropTypes.bool,
   onToggle: PropTypes.func,
+  dropPayload: PropTypes.shape({
+    dropType: PropTypes.string,
+    zoneId: PropTypes.string,
+  }),
+  isDropHighlighted: PropTypes.bool,
 };
 
 export default HandTray;

@@ -20,7 +20,12 @@
 }
 
 .mutationBanner {
-  margin-bottom: 10px;
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  right: 12px;
+  z-index: calc(var(--z-overlay) + 12);
+  max-width: min(92vw, 420px);
+  margin: 0;
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid #e6a7a7;
@@ -28,12 +33,134 @@
   color: #872e2e;
   font-size: 0.82rem;
   font-weight: 700;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.turnInfoPanel {
+  margin: 0 0 10px;
+  border: 1px solid #d6dfcb;
+  border-radius: 12px;
+  background: rgba(248, 252, 243, 0.95);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.turnInfoTitle {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #1f2b16;
+}
+
+.turnInfoList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 4px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #324329;
+}
+
+.turnInfoMarkers {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+  font-size: 0.73rem;
+  color: #2d3f23;
+}
+
+.turnInfoEmpty {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #607152;
+}
+
+.requestBlockingOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-overlay) + 8);
+  background: rgba(22, 30, 16, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.requestBlockingCard {
+  width: min(460px, calc(100vw - 32px));
+  border: 1px solid #d4deca;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.requestBlockingTitle {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: #1f2b16;
+}
+
+.requestBlockingMeta {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #607152;
+}
+
+.requestBlockingText {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #2a3820;
+}
+
+.requestBlockingActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.requestApproveButton,
+.requestRejectButton {
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.requestApproveButton {
+  background: #e8f3df;
+  border-color: #6f8659;
+  color: #1f2b16;
+}
+
+.requestRejectButton {
+  background: #ffecec;
+  border-color: #c98787;
+  color: #7a2424;
+}
+
+.requestApproveButton:disabled,
+.requestRejectButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 .opponentArea,
 .playerArea {
+  --side-column-size: clamp(150px, 14vw, 180px);
   display: grid;
-  grid-template-columns: minmax(150px, 180px) 1fr minmax(150px, 180px);
+  grid-template-columns: var(--side-column-size) 1fr var(--side-column-size);
   gap: var(--card-gap);
   align-items: stretch;
 }
@@ -42,6 +169,13 @@
   margin: clamp(8px, 1.6vw, 18px) 0;
   display: flex;
   justify-content: center;
+}
+
+.centerAreaInner {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
 }
 
 .sideColumn {
@@ -55,6 +189,31 @@
   gap: var(--card-gap);
 }
 
+.opponentHandCountFixed {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: calc(var(--z-overlay) + 4);
+  pointer-events: none;
+}
+
+.handCountPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #6f8659;
+  background: #f4faef;
+  color: #1f2b16;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.84rem;
+  line-height: 1.1;
+  padding: 7px 14px;
+  min-height: 34px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
 .benchRow {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -64,6 +223,42 @@
 .activeRow {
   display: flex;
   justify-content: center;
+}
+
+.battleLineRow {
+  position: relative;
+  width: 100%;
+  display: flex;
+  --reveal-line-width: var(--side-column-size);
+  --active-zone-width: min(320px, 100%);
+  min-height: clamp(112px, 16vw, 170px);
+  justify-content: center;
+  align-items: start;
+}
+
+.battleLineActive {
+  position: relative;
+  z-index: 1;
+}
+
+.battleLineRevealOpponent {
+  position: absolute;
+  top: 0;
+  width: var(--reveal-line-width);
+  left: calc(
+    25% - (var(--card-gap) / 2) - (var(--active-zone-width) / 4) - (var(--reveal-line-width) / 2)
+  );
+  z-index: 2;
+}
+
+.battleLineRevealPlayer {
+  position: absolute;
+  top: 0;
+  width: var(--reveal-line-width);
+  left: calc(
+    75% + (var(--card-gap) / 2) + (var(--active-zone-width) / 4) - (var(--reveal-line-width) / 2)
+  );
+  z-index: 2;
 }
 
 .zoneTile,
@@ -105,7 +300,7 @@
 }
 
 .activeZone {
-  width: min(320px, 100%);
+  width: var(--active-zone-width);
   min-height: clamp(112px, 16vw, 170px);
   display: grid;
   place-items: center;
@@ -136,11 +331,247 @@
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
 }
 
+.deckPile {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.deckPileCount {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #36472b;
+  text-align: center;
+}
+
+.publicPilePreview {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  gap: 4px;
+}
+
+.publicPileTopCard {
+  width: var(--card-w);
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+}
+
+.publicPileCount {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #36472b;
+  text-align: center;
+}
+
+.zoneWithActions {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.zoneQuickActions {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.zoneQuickActionButton {
+  border: 1px solid #6f8659;
+  border-radius: 999px;
+  background: #f4faef;
+  color: #1f2b16;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.zoneQuickActionButton:hover {
+  background: #e8f3df;
+  border-color: #5f7a4d;
+}
+
+.zoneQuickActionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pileCardDraggable {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pileCardDraggable:active {
+  cursor: grabbing;
+}
+
+.revealZoneTile {
+  width: var(--reveal-line-width);
+  min-height: clamp(84px, 10vw, 118px);
+  background: #fff;
+}
+
+.revealZoneValue {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.revealCards {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-start;
+}
+
+.revealCardDraggable {
+  flex: 0 0 auto;
+}
+
+.revealCardImage {
+  width: var(--card-w);
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+}
+
 .centerZone {
   width: min(360px, 100%);
   min-height: clamp(66px, 8.5vw, 92px);
   display: grid;
   place-items: center;
+  text-align: center;
+}
+
+.coinWidget {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  border: 1px solid #d6dfcb;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  padding: 8px 10px;
+}
+
+.coinWidgetTitle {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334228;
+}
+
+.coinButton {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  width: 78px;
+  height: 78px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.coinButton:hover {
+  filter: brightness(0.99);
+}
+
+.coinButton:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.coinButton:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 2px;
+}
+
+.coinButtonImage {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+}
+
+.coinButtonImageFront {
+  transform: scale(1.04);
+}
+
+.coinButtonImageBack {
+  transform: scale(1.7);
+}
+
+.coinButtonAnimating {
+  animation: coinFlipY 700ms ease-in-out;
+}
+
+.coinWidgetResult {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #3d4d2f;
+}
+
+.prizeZoneTile {
+  min-height: clamp(186px, 22vw, 280px);
+}
+
+.prizeZoneValue {
+  justify-content: stretch;
+}
+
+.prizeFan {
+  width: 100%;
+  display: grid;
+  align-items: start;
+  gap: 4px;
+}
+
+.prizeFanRows {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.prizeFanRow {
+  position: relative;
+  width: calc(var(--card-w) + (var(--card-w) * 0.34));
+  height: calc(var(--card-w) * 1.4);
+}
+
+.prizeFanCard {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--card-w);
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
+}
+
+.prizeFanCardShifted {
+  left: calc(var(--card-w) * 0.34);
+}
+
+.prizeFanCount {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #36472b;
   text-align: center;
 }
 
@@ -173,10 +604,14 @@
   transform: translateX(-50%);
   z-index: var(--z-hand);
   width: fit-content;
-  max-width: 92vw;
+  max-width: none;
   display: grid;
   justify-items: center;
   gap: 6px;
+}
+
+.handTrayDropActive {
+  filter: drop-shadow(0 0 0.32rem rgba(207, 84, 84, 0.56));
 }
 
 .handTrayToolbar {
@@ -232,8 +667,8 @@
 
 .handTrayPanel {
   width: fit-content;
-  max-width: min(92vw, 760px);
-  max-height: min(30vh, 220px);
+  max-width: none;
+  max-height: none;
   overflow: visible;
   border: 1px solid #d6dfcb;
   border-radius: 14px;
@@ -244,30 +679,20 @@
 
 .handCardsScroller {
   width: fit-content;
-  max-width: min(92vw, 740px);
-  overflow-x: auto;
-  overflow-y: visible;
+  max-width: none;
+  overflow: visible;
   padding: 2px 2px 6px;
 }
 
 .handCards {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(var(--hand-columns, 1), var(--card-w));
   align-items: flex-end;
-  flex-wrap: nowrap;
-  gap: 6px;
+  gap: 10px 6px;
   width: max-content;
   min-width: 0;
   padding: 8px 2px 4px;
   position: relative;
-}
-
-.handCardsScroller::-webkit-scrollbar {
-  height: 7px;
-}
-
-.handCardsScroller::-webkit-scrollbar-thumb {
-  background: rgba(74, 96, 58, 0.35);
-  border-radius: 10px;
 }
 
 .handCardImage {
@@ -473,6 +898,24 @@
   box-shadow: 0 14px 24px rgba(0, 0, 0, 0.28);
 }
 
+.dragOverlayPileCard {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.dragOverlayPileLabel {
+  border: 1px solid #c56a6a;
+  border-radius: 999px;
+  background: #ffe2e2;
+  color: #6d1f1f;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+  padding: 5px 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
 .dragOverlayTool {
   min-width: 90px;
   min-height: 36px;
@@ -488,12 +931,134 @@
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 
+.operationPanelRoot {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: calc(var(--z-toolbox) + 2);
+  width: min(380px, 92vw);
+  display: grid;
+  gap: 8px;
+}
+
+.operationPanelBody {
+  border: 1px solid #d6dfcb;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  max-height: min(74vh, 760px);
+  overflow: auto;
+}
+
+.operationFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.operationFieldRow {
+  display: grid;
+  gap: 3px;
+}
+
+.operationFieldRow label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #3b4a2f;
+}
+
+.operationInput {
+  border: 1px solid #c7d2bc;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  line-height: 1.1;
+  background: #fff;
+  color: #203014;
+}
+
+.operationInput:focus-visible {
+  outline: 2px solid #2b5bd8;
+  outline-offset: 1px;
+}
+
+.operationExecuteButton {
+  border: 1px solid #628546;
+  border-radius: 10px;
+  background: #e7f4dc;
+  color: #1d2d13;
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.operationExecuteButton:hover {
+  filter: brightness(0.97);
+}
+
+.operationExecuteButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.operationPendingBox {
+  border-top: 1px dashed #b7c8a6;
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.operationPendingItem {
+  border: 1px solid #d2dcc7;
+  border-radius: 10px;
+  padding: 7px;
+  background: #f8fbf5;
+  display: grid;
+  gap: 6px;
+}
+
+.operationPendingText {
+  display: grid;
+  gap: 2px;
+  font-size: 0.72rem;
+  color: #36472b;
+}
+
+.operationPendingActions {
+  display: flex;
+  gap: 6px;
+}
+
+.operationMiniButton {
+  border: 1px solid #6f8659;
+  border-radius: 999px;
+  background: #f4faef;
+  color: #1f2b16;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+
+.operationMiniDanger {
+  border-color: #bb5f5f;
+  background: #ffeaea;
+  color: #7f2323;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panelToggle,
   .toolboxItem,
   .handCardImage,
-  .dragOverlayCard {
+  .dragOverlayCard,
+  .coinButton,
+  .coinButtonImage {
     transition: none;
+    animation: none;
   }
 }
 
@@ -508,7 +1073,6 @@
   }
 
   .handTrayRoot {
-    max-width: 94vw;
     bottom: 8px;
   }
 
@@ -516,5 +1080,39 @@
     right: 8px;
     bottom: 70px;
     width: min(90vw, 300px);
+  }
+
+  .operationPanelRoot {
+    left: 8px;
+    top: 8px;
+    width: min(95vw, 380px);
+  }
+
+  .opponentHandCountFixed {
+    top: calc(env(safe-area-inset-top, 0px) + 6px);
+  }
+
+  .operationFieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .centerAreaInner {
+    flex-direction: column;
+    width: min(96vw, 420px);
+  }
+}
+
+@keyframes coinFlipY {
+  0% {
+    transform: rotateY(0deg);
+  }
+  40% {
+    transform: rotateY(360deg);
+  }
+  70% {
+    transform: rotateY(640deg);
+  }
+  100% {
+    transform: rotateY(720deg);
   }
 }

@@ -32,6 +32,7 @@ function collectBoardCardIds(board) {
   ids.push(...collectIdsFromCardRefs(board.discard));
   ids.push(...collectIdsFromCardRefs(board.lostZone));
   ids.push(...collectIdsFromCardRefs(board.prize));
+  ids.push(...collectIdsFromCardRefs(board.reveal));
 
   return ids;
 }
@@ -84,6 +85,7 @@ export function assertOrientation(sessionDoc, privateStatesByPlayer = {}) {
       ...asArray(board.discard),
       ...asArray(board.lostZone),
       ...asArray(board.prize),
+      ...asArray(board.reveal),
     ];
 
     refs.forEach((ref, idx) => {

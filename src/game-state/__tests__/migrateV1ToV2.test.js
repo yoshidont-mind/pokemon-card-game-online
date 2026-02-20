@@ -17,6 +17,7 @@ describe('migrateSessionV1ToV2', () => {
     expect(Array.isArray(privateStatesByPlayer.player1.zones.deck)).toBe(true);
     expect(Array.isArray(privateStatesByPlayer.player1.zones.hand)).toBe(true);
     expect(Object.keys(privateStatesByPlayer.player1.cardCatalog).length).toBeGreaterThan(0);
+    expect(Object.keys(session.publicState.publicCardCatalog || {}).length).toBeGreaterThan(0);
 
     expect(() => validateSessionInvariants(session, privateStatesByPlayer)).not.toThrow();
   });

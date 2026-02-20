@@ -3,11 +3,16 @@ import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { getCurrentUid } from '../../auth/authClient';
 import { ERROR_CODES, isGameStateError } from '../../game-state/errors';
 import { applyDropMutation } from './applyDropMutation';
+import { DRAG_TYPES } from './constants';
 import { isDragBlockedBySelectors } from './dropGuards';
 import { createBoardSnapshot, resolveDropIntent } from './resolveDropIntent';
 
 function noop() {}
 const HAND_TRAY_BLOCKED_SELECTORS = ['#hand-tray-panel'];
+
+function shouldApplyHandTrayBlock(dragPayload) {
+  return dragPayload?.dragType === DRAG_TYPES.CARD;
+}
 
 function getDragPayload(event) {
   return event?.active?.data?.current?.dragPayload || null;
@@ -21,6 +26,7 @@ export function useBoardDnd({
   sessionId,
   playerId,
   sessionDoc,
+  isInteractionLocked = false,
   onMutationMessage = noop,
 }) {
   const [activeDragPayload, setActiveDragPayload] = useState(null);
@@ -72,6 +78,11 @@ export function useBoardDnd({
   );
 
   const handleDragStart = useCallback((event) => {
+    if (isInteractionLocked) {
+      setActiveDragPayload(null);
+      resetHighlights();
+      return;
+    }
     const dragPayload = getDragPayload(event);
     if (
       Number.isFinite(event?.activatorEvent?.clientX) &&
@@ -86,20 +97,26 @@ export function useBoardDnd({
     }
     onMutationMessage('');
     setActiveDragPayload(dragPayload);
-  }, [onMutationMessage]);
+  }, [isInteractionLocked, onMutationMessage, resetHighlights]);
 
   const handleDragOver = useCallback(
     (event) => {
+      if (isInteractionLocked) {
+        resetHighlights();
+        return;
+      }
       if (!activeDragPayload) {
         resetHighlights();
         return;
       }
 
-      const isBlockedByHandTray = isDragBlockedBySelectors(
-        event,
-        HAND_TRAY_BLOCKED_SELECTORS,
-        dragStartPointRef.current
-      );
+      const isBlockedByHandTray =
+        shouldApplyHandTrayBlock(activeDragPayload) &&
+        isDragBlockedBySelectors(
+          event,
+          HAND_TRAY_BLOCKED_SELECTORS,
+          dragStartPointRef.current
+        );
       if (isBlockedByHandTray) {
         resetHighlights();
         return;
@@ -108,21 +125,27 @@ export function useBoardDnd({
       const dropPayload = getDropPayload(event);
       resolveAndHighlight(activeDragPayload, dropPayload);
     },
-    [activeDragPayload, resetHighlights, resolveAndHighlight]
+    [activeDragPayload, isInteractionLocked, resetHighlights, resolveAndHighlight]
   );
 
   const handleDragMove = useCallback(
     (event) => {
+      if (isInteractionLocked) {
+        resetHighlights();
+        return;
+      }
       if (!activeDragPayload) {
         resetHighlights();
         return;
       }
 
-      const isBlockedByHandTray = isDragBlockedBySelectors(
-        event,
-        HAND_TRAY_BLOCKED_SELECTORS,
-        dragStartPointRef.current
-      );
+      const isBlockedByHandTray =
+        shouldApplyHandTrayBlock(activeDragPayload) &&
+        isDragBlockedBySelectors(
+          event,
+          HAND_TRAY_BLOCKED_SELECTORS,
+          dragStartPointRef.current
+        );
       if (isBlockedByHandTray) {
         resetHighlights();
         return;
@@ -131,7 +154,7 @@ export function useBoardDnd({
       const dropPayload = getDropPayload(event);
       resolveAndHighlight(activeDragPayload, dropPayload);
     },
-    [activeDragPayload, resetHighlights, resolveAndHighlight]
+    [activeDragPayload, isInteractionLocked, resetHighlights, resolveAndHighlight]
   );
 
   const handleDragCancel = useCallback(() => {
@@ -142,13 +165,21 @@ export function useBoardDnd({
 
   const handleDragEnd = useCallback(
     async (event) => {
+      if (isInteractionLocked) {
+        dragStartPointRef.current = null;
+        setActiveDragPayload(null);
+        resetHighlights();
+        return;
+      }
       const dragPayload = activeDragPayload || getDragPayload(event);
       const dropPayload = getDropPayload(event);
-      const isBlockedByHandTray = isDragBlockedBySelectors(
-        event,
-        HAND_TRAY_BLOCKED_SELECTORS,
-        dragStartPointRef.current
-      );
+      const isBlockedByHandTray =
+        shouldApplyHandTrayBlock(dragPayload) &&
+        isDragBlockedBySelectors(
+          event,
+          HAND_TRAY_BLOCKED_SELECTORS,
+          dragStartPointRef.current
+        );
 
       if (isBlockedByHandTray) {
         dragStartPointRef.current = null;
@@ -204,6 +235,7 @@ export function useBoardDnd({
     [
       activeDragPayload,
       isMutating,
+      isInteractionLocked,
       onMutationMessage,
       playerId,
       resetHighlights,

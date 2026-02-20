@@ -2,6 +2,7 @@ export const BENCH_SLOT_COUNT = 5;
 
 export const DRAG_TYPES = Object.freeze({
   CARD: 'card',
+  PILE_CARD: 'pile-card',
   DAMAGE_COUNTER: 'damage-counter',
   STATUS_BADGE: 'status-badge',
 });
@@ -12,10 +13,14 @@ export const DROP_TYPES = Object.freeze({
 });
 
 export const ZONE_KINDS = Object.freeze({
+  HAND: 'hand',
   ACTIVE: 'active',
   BENCH: 'bench',
+  REVEAL: 'reveal',
   DISCARD: 'discard',
   LOST: 'lost',
+  PRIZE: 'prize',
+  STADIUM: 'stadium',
 });
 
 export const STACK_KINDS = Object.freeze({
@@ -25,6 +30,7 @@ export const STACK_KINDS = Object.freeze({
 
 export const INTENT_ACTIONS = Object.freeze({
   MOVE_CARD_FROM_HAND_TO_ZONE: 'move-card-from-hand-to-zone',
+  MOVE_TOP_CARD_FROM_SOURCE_TO_HAND: 'move-top-card-from-source-to-hand',
   APPLY_TOOL_TO_STACK: 'apply-tool-to-stack',
 });
 
