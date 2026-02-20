@@ -186,6 +186,15 @@ function clampValue(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function clampPositiveInt(value, max) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 1;
+  }
+  const boundedMax = Math.max(1, Number(max) || 1);
+  return clampValue(Math.round(numeric), 1, boundedMax);
+}
+
 function normalizeMutationNoticeText(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -427,6 +436,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [isQuickActionSubmitting, setIsQuickActionSubmitting] = useState(false);
   const [isCoinAnimating, setIsCoinAnimating] = useState(false);
   const [isOpponentHandMenuOpen, setIsOpponentHandMenuOpen] = useState(false);
+  const [isRandomDiscardConfigOpen, setIsRandomDiscardConfigOpen] = useState(false);
+  const [randomDiscardCount, setRandomDiscardCount] = useState(1);
   const [opponentHandRevealState, setOpponentHandRevealState] = useState({
     requestId: '',
     cardIds: [],
@@ -438,6 +449,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }));
   const handledRevealRequestIdsRef = useRef(new Set());
   const hasInitializedHandledRevealRef = useRef(false);
+  const handledRandomDiscardRequestIdsRef = useRef(new Set());
+  const hasInitializedHandledRandomDiscardRef = useRef(false);
   const handledSelectedDiscardRequestIdsRef = useRef(new Set());
   const hasInitializedHandledSelectedDiscardRef = useRef(false);
   const opponentRevealButtonRefs = useRef({});
@@ -630,7 +643,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   );
   const hasBlockingRequest = Boolean(blockingRequest);
   const isOpponentHandRevealOpen = Boolean(opponentHandRevealState.requestId);
-  const isUiInteractionBlocked = hasBlockingRequest || isOpponentHandRevealOpen;
+  const isUiInteractionBlocked =
+    hasBlockingRequest || isOpponentHandRevealOpen || isRandomDiscardConfigOpen;
 
   const playerActive = playerBoard?.active;
   const opponentActive = opponentBoard?.active;
@@ -752,14 +766,29 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [isUiInteractionBlocked]);
 
   useEffect(() => {
+    if (hasBlockingRequest && isRandomDiscardConfigOpen) {
+      setIsRandomDiscardConfigOpen(false);
+    }
+  }, [hasBlockingRequest, isRandomDiscardConfigOpen]);
+
+  useEffect(() => {
+    const maxCount = Math.max(1, opponentHandCount || 1);
+    setRandomDiscardCount((previous) => clampPositiveInt(previous, maxCount));
+  }, [opponentHandCount]);
+
+  useEffect(() => {
     handledRevealRequestIdsRef.current = new Set();
     hasInitializedHandledRevealRef.current = false;
+    handledRandomDiscardRequestIdsRef.current = new Set();
+    hasInitializedHandledRandomDiscardRef.current = false;
     handledSelectedDiscardRequestIdsRef.current = new Set();
     hasInitializedHandledSelectedDiscardRef.current = false;
     setOpponentHandRevealState({
       requestId: '',
       cardIds: [],
     });
+    setIsRandomDiscardConfigOpen(false);
+    setRandomDiscardCount(1);
     setOpponentRevealSelectedCardIds([]);
   }, [ownerPlayerId]);
 
@@ -888,6 +917,51 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       clearMutationNotice();
     });
   }, [clearMutationNotice, operationRequests, ownerPlayerId, pushAlertNotice]);
+
+  useEffect(() => {
+    const randomDiscardRequestsForActor = operationRequests.filter(
+      (request) =>
+        request?.requestType === 'opponent-discard-random-hand' &&
+        request?.actorPlayerId === ownerPlayerId
+    );
+
+    if (!hasInitializedHandledRandomDiscardRef.current) {
+      randomDiscardRequestsForActor
+        .filter((request) => request?.status && request.status !== 'pending')
+        .forEach((request) => {
+          if (request?.requestId) {
+            handledRandomDiscardRequestIdsRef.current.add(request.requestId);
+          }
+        });
+      hasInitializedHandledRandomDiscardRef.current = true;
+      return;
+    }
+
+    randomDiscardRequestsForActor.forEach((request) => {
+      if (!request?.requestId || request.status === 'pending') {
+        return;
+      }
+      if (handledRandomDiscardRequestIdsRef.current.has(request.requestId)) {
+        return;
+      }
+      handledRandomDiscardRequestIdsRef.current.add(request.requestId);
+
+      if (request.status === 'rejected') {
+        pushAlertNotice('相手が手札ランダム破壊リクエストを拒否しました。');
+        return;
+      }
+
+      const discardedCount = Math.max(
+        Number(request?.result?.discardedCount || 0),
+        asArray(request?.result?.discardedCardIds).filter(Boolean).length
+      );
+      if (discardedCount > 1) {
+        pushSuccessNotice(`相手手札からランダムに${discardedCount}枚トラッシュしました。`);
+      } else {
+        pushSuccessNotice('相手手札からランダムに1枚トラッシュしました。');
+      }
+    });
+  }, [operationRequests, ownerPlayerId, pushAlertNotice, pushSuccessNotice]);
 
   useEffect(() => {
     const selectedDiscardRequestsForActor = operationRequests.filter(
@@ -1126,6 +1200,48 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, [executeQuickOperation, opponentPlayerId]);
 
+  const handleOpenRandomDiscardConfig = useCallback(() => {
+    setIsOpponentHandMenuOpen(false);
+    setRandomDiscardCount(clampPositiveInt(1, Math.max(1, opponentHandCount || 1)));
+    setIsRandomDiscardConfigOpen(true);
+  }, [opponentHandCount]);
+
+  const handleCloseRandomDiscardConfig = useCallback(() => {
+    setIsRandomDiscardConfigOpen(false);
+  }, []);
+
+  const handleDecrementRandomDiscardCount = useCallback(() => {
+    setRandomDiscardCount((previous) =>
+      clampPositiveInt(previous - 1, Math.max(1, opponentHandCount || 1))
+    );
+  }, [opponentHandCount]);
+
+  const handleIncrementRandomDiscardCount = useCallback(() => {
+    setRandomDiscardCount((previous) =>
+      clampPositiveInt(previous + 1, Math.max(1, opponentHandCount || 1))
+    );
+  }, [opponentHandCount]);
+
+  const handleConfirmRandomDiscardRequest = useCallback(async () => {
+    const clampedCount = clampPositiveInt(randomDiscardCount, Math.max(1, opponentHandCount || 1));
+    const succeeded = await executeQuickOperation({
+      opId: OPERATION_IDS.OP_B11,
+      payload: {
+        targetPlayerId: opponentPlayerId,
+        count: clampedCount,
+      },
+      invalidMessage: '手札ランダム破壊リクエストを送信できませんでした。状態を確認してください。',
+      successMessage:
+        clampedCount > 1
+          ? `手札ランダム破壊リクエスト（${clampedCount}枚）を送信しました。`
+          : '手札ランダム破壊リクエスト（1枚）を送信しました。',
+    });
+    if (!succeeded) {
+      return;
+    }
+    setIsRandomDiscardConfigOpen(false);
+  }, [executeQuickOperation, opponentHandCount, opponentPlayerId, randomDiscardCount]);
+
   const handleCloseOpponentHandReveal = useCallback(() => {
     setOpponentHandRevealState({
       requestId: '',
@@ -1168,6 +1284,24 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     if (!blockingRequest?.requestId) {
       return;
     }
+    const randomDiscardCountFromRequest = clampPositiveInt(
+      blockingRequest?.payload?.count,
+      Math.max(1, opponentHandCount || 1)
+    );
+    const selectedDiscardCount = Math.max(
+      asArray(blockingRequest?.payload?.cardIds).filter(Boolean).length,
+      blockingRequest?.payload?.cardId ? 1 : 0
+    );
+    const successMessage =
+      blockingRequest?.requestType === 'opponent-discard-random-hand'
+        ? randomDiscardCountFromRequest > 1
+          ? `自分の手札からランダムに${randomDiscardCountFromRequest}枚トラッシュしました。`
+          : '自分の手札からランダムに1枚トラッシュしました。'
+        : blockingRequest?.requestType === 'opponent-discard-selected-hand'
+          ? selectedDiscardCount > 1
+            ? `自分の手札から指定された${selectedDiscardCount}枚をトラッシュしました。`
+            : '自分の手札から指定された1枚をトラッシュしました。'
+          : 'リクエストを承認して実行しました。';
     void executeQuickOperation({
       opId: INTERNAL_OPERATION_IDS.REQUEST_APPROVE,
       payload: {
@@ -1175,9 +1309,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         action: 'approve',
       },
       invalidMessage: '承認処理を実行できませんでした。状態を確認してください。',
-      successMessage: 'リクエストを承認して実行しました。',
+      successMessage,
     });
-  }, [blockingRequest, executeQuickOperation]);
+  }, [blockingRequest, executeQuickOperation, opponentHandCount]);
 
   const handleRejectBlockingRequest = useCallback(() => {
     if (!blockingRequest?.requestId) {
@@ -1196,6 +1330,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   const isQuickActionLocked =
     isMutating || isCoinSubmitting || isQuickActionSubmitting || isUiInteractionBlocked;
+  const isRandomDiscardAdjustDisabled =
+    isQuickActionSubmitting || isMutating || isCoinSubmitting || opponentHandCount <= 1;
+  const isRandomDiscardSubmitDisabled =
+    isQuickActionSubmitting || isMutating || isCoinSubmitting || opponentHandCount <= 0;
+  const randomDiscardMaxCount = Math.max(1, opponentHandCount || 1);
+  const displayRandomDiscardCount = clampPositiveInt(randomDiscardCount, randomDiscardMaxCount);
   const canDrawFromDeck = playerDeckCount > 0 && !isQuickActionLocked;
   const canShuffleDeck = playerDeckCount > 1 && !isQuickActionLocked;
   const canTakePrize = playerPrizeCount > 0 && !isQuickActionLocked;
@@ -1250,6 +1390,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   disabled={isQuickActionLocked}
                 >
                   手札の公開を要求
+                </button>
+                <button
+                  type="button"
+                  className={styles.opponentHandMenuButton}
+                  onClick={handleOpenRandomDiscardConfig}
+                  disabled={isQuickActionLocked}
+                >
+                  手札のランダム破壊を要求
                 </button>
               </div>
             ) : null}
@@ -1693,6 +1841,60 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 onClick={handleCloseOpponentHandReveal}
               >
                 閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {!hasBlockingRequest && isRandomDiscardConfigOpen ? (
+        <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">
+          <div className={styles.randomDiscardConfigCard}>
+            <p className={styles.requestBlockingTitle}>手札のランダム破壊を要求</p>
+            <p className={styles.requestBlockingMeta}>
+              枚数を選択してください（相手手札: {opponentHandCount}枚）
+            </p>
+            <div className={styles.randomDiscardCountRow}>
+              <button
+                type="button"
+                className={styles.randomDiscardStepButton}
+                onClick={handleDecrementRandomDiscardCount}
+                disabled={isRandomDiscardAdjustDisabled || displayRandomDiscardCount <= 1}
+                aria-label="要求枚数を1枚減らす"
+              >
+                -
+              </button>
+              <span className={styles.randomDiscardCountValue}>{displayRandomDiscardCount} 枚</span>
+              <button
+                type="button"
+                className={styles.randomDiscardStepButton}
+                onClick={handleIncrementRandomDiscardCount}
+                disabled={
+                  isRandomDiscardAdjustDisabled || displayRandomDiscardCount >= randomDiscardMaxCount
+                }
+                aria-label="要求枚数を1枚増やす"
+              >
+                +
+              </button>
+            </div>
+            <p className={styles.randomDiscardHint}>
+              {opponentHandCount <= 0 ? '相手手札が0枚のため要求できません。' : '相手の承認後に実行されます。'}
+            </p>
+            <div className={styles.requestBlockingActions}>
+              <button
+                type="button"
+                className={styles.requestApproveButton}
+                onClick={handleConfirmRandomDiscardRequest}
+                disabled={isRandomDiscardSubmitDisabled}
+              >
+                枚数を確定
+              </button>
+              <button
+                type="button"
+                className={styles.requestRejectButton}
+                onClick={handleCloseRandomDiscardConfig}
+                disabled={isQuickActionSubmitting || isMutating || isCoinSubmitting}
+              >
+                キャンセル
               </button>
             </div>
           </div>
