@@ -180,6 +180,7 @@ export function createEmptyPrivateStateV2({ ownerPlayerId, updatedBy = 'system',
     zones: {
       deck: [],
       hand: [],
+      deckPeek: [],
     },
     cardCatalog: {},
     uiPrefs: {

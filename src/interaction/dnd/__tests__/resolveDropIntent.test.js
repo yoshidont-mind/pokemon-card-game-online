@@ -1,4 +1,10 @@
-import { buildCardDragPayload, buildDamageCounterDragPayload, buildStackDropPayload, buildZoneDropPayload } from '../buildDragPayload';
+import {
+  buildCardDragPayload,
+  buildDamageCounterDragPayload,
+  buildPileCardDragPayload,
+  buildStackDropPayload,
+  buildZoneDropPayload,
+} from '../buildDragPayload';
 import { REJECT_REASONS, STACK_KINDS, ZONE_KINDS } from '../constants';
 import { createBoardSnapshot, resolveDropIntent } from '../resolveDropIntent';
 
@@ -268,5 +274,76 @@ describe('resolveDropIntent', () => {
     expect(result.accepted).toBe(true);
     expect(result.action.sourceZone).toBe('player-deck');
     expect(result.action.targetZoneKind).toBe(ZONE_KINDS.REVEAL);
+  });
+
+  test('accepts moving top card from deck pile to discard zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildPileCardDragPayload({
+      sourceZone: 'player-deck',
+      availableCount: 3,
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-discard',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DISCARD,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-top-card-from-source-to-hand');
+    expect(result.action.sourceZone).toBe('player-deck');
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.DISCARD);
+  });
+
+  test('rejects moving top card from prize pile to discard zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildPileCardDragPayload({
+      sourceZone: 'player-prize',
+      availableCount: 3,
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-discard',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DISCARD,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toBe(REJECT_REASONS.UNSUPPORTED_TARGET);
+  });
+
+  test('accepts moving a deck peek card to deck-top edge drop zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_099', sourceZone: 'player-deck-peek' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-deck-insert-top',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DECK,
+      edge: 'top',
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-card-to-deck-edge');
+    expect(result.action.sourceZone).toBe('player-deck-peek');
+    expect(result.action.targetDeckEdge).toBe('top');
   });
 });

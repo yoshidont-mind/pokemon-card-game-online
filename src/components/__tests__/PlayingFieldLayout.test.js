@@ -274,6 +274,19 @@ test('opens deck peek count config modal from deck quick action', async () => {
     expect(within(modal).getByText('2 枚')).toBeInTheDocument();
   });
 
+  const selectAllCheckbox = within(modal).getByRole('checkbox', { name: '閲覧枚数を全て選択' });
+  fireEvent.click(selectAllCheckbox);
+  await waitFor(() => {
+    expect(within(modal).getByText('53 枚')).toBeInTheDocument();
+    expect(within(modal).getByRole('button', { name: '閲覧枚数を1枚減らす' })).toBeDisabled();
+    expect(within(modal).getByRole('button', { name: '閲覧枚数を1枚増やす' })).toBeDisabled();
+  });
+
+  fireEvent.click(selectAllCheckbox);
+  await waitFor(() => {
+    expect(within(modal).getByRole('button', { name: '閲覧枚数を1枚減らす' })).not.toBeDisabled();
+  });
+
   fireEvent.click(within(modal).getByRole('button', { name: 'キャンセル' }));
   await waitFor(() => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

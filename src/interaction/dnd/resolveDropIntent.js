@@ -66,7 +66,8 @@ function isSupportedCardSourceZone(sourceZone) {
   return (
     sourceZone === 'player-hand' ||
     sourceZone === 'player-reveal' ||
-    sourceZone === 'player-deck'
+    sourceZone === 'player-deck' ||
+    sourceZone === 'player-deck-peek'
   );
 }
 
@@ -111,7 +112,17 @@ export function resolveDropIntent({
       if (dropPayload.targetPlayerId !== actorPlayerId) {
         return reject(REJECT_REASONS.PERMISSION_DENIED);
       }
-      if (dropPayload.zoneKind !== ZONE_KINDS.HAND) {
+      if (
+        dragPayload.sourceZone === 'player-prize' &&
+        dropPayload.zoneKind !== ZONE_KINDS.HAND
+      ) {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+      }
+      if (
+        dragPayload.sourceZone === 'player-deck' &&
+        dropPayload.zoneKind !== ZONE_KINDS.HAND &&
+        dropPayload.zoneKind !== ZONE_KINDS.DISCARD
+      ) {
         return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
       }
       if (!Number.isFinite(dragPayload.availableCount) || Number(dragPayload.availableCount) <= 0) {
@@ -123,7 +134,7 @@ export function resolveDropIntent({
           kind: INTENT_ACTIONS.MOVE_TOP_CARD_FROM_SOURCE_TO_HAND,
           sourceZone: dragPayload.sourceZone,
           targetPlayerId: actorPlayerId,
-          targetZoneKind: ZONE_KINDS.HAND,
+          targetZoneKind: dropPayload.zoneKind,
           targetZoneId: dropPayload.zoneId,
         },
         highlightTarget: {

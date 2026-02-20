@@ -539,16 +539,26 @@ function runDirectOperation({
       })
     );
     if (opId === OPERATION_IDS.OP_A04) {
-      const count = normalizeCount(payload.count, 1);
+      const deck = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.DECK);
+      const deckPeek = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.DECK_PEEK);
+      if (deckPeek.length > 0) {
+        deck.unshift(...deckPeek.map((ref) => createDeckCardRef(ref.cardId)));
+        deckPeek.splice(0, deckPeek.length);
+      }
+
+      const count = Math.max(0, Math.min(normalizeCount(payload.count, 1), deck.length));
+      const peeked = takeTopCardRefs(deck, count).map((ref) => createOwnerVisibleCardRef(ref.cardId));
+      deckPeek.push(...peeked);
+
       turnContext.lastDeckPeekEvent = {
         byPlayerId: playerId,
-        count,
+        count: peeked.length,
         at: now,
       };
       turnContext.deckPeekState = {
         byPlayerId: playerId,
-        isOpen: true,
-        count,
+        isOpen: peeked.length > 0,
+        count: peeked.length,
         updatedAt: now,
       };
     }

@@ -719,8 +719,8 @@ describe('mutateDocsForOperationIntent wave1 direct operations', () => {
     expect(markers[0].label).toContain(opId);
   });
 
-  test('OP-A04 records deck peek event in turnContext', () => {
-    const { sessionDoc } = executeRichOperation({
+  test('OP-A04 records deck peek event and moves cards from deck to deckPeek zone', () => {
+    const { sessionDoc, privateStateDoc } = executeRichOperation({
       opId: OPERATION_IDS.OP_A04,
       payload: {
         count: 3,
@@ -733,6 +733,14 @@ describe('mutateDocsForOperationIntent wave1 direct operations', () => {
         count: 3,
       })
     );
+    expect(privateStateDoc.zones.deck).toHaveLength(2);
+    expect(privateStateDoc.zones.deckPeek).toHaveLength(3);
+    expect(privateStateDoc.zones.deckPeek.map((ref) => ref.cardId)).toEqual([
+      'p1_deck_001',
+      'p1_deck_002',
+      'p1_deck_003',
+    ]);
+    expect(sessionDoc.publicState.players.player1.counters.deckCount).toBe(2);
   });
 
   test('OP-A05 records random selection without mutating source zone', () => {

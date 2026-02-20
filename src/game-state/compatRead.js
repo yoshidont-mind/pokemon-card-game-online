@@ -30,6 +30,7 @@ function normalizePrivateState(privateStateDoc, ownerPlayerId) {
     zones: {
       deck: asArray(privateStateDoc?.zones?.deck),
       hand: asArray(privateStateDoc?.zones?.hand),
+      deckPeek: asArray(privateStateDoc?.zones?.deckPeek),
     },
     cardCatalog:
       privateStateDoc?.cardCatalog && typeof privateStateDoc.cardCatalog === 'object'
