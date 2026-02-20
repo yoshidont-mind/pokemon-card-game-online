@@ -45,6 +45,23 @@
   color: #872e2e;
 }
 
+.deckPeekLiveBanner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 48px);
+  right: 12px;
+  z-index: calc(var(--z-overlay) + 11);
+  max-width: min(92vw, 420px);
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #8ac790;
+  background: rgba(230, 255, 232, 0.96);
+  color: #1f6d2a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
 .requestBlockingOverlay {
   position: fixed;
   inset: 0;
@@ -411,6 +428,92 @@
   color: #607152;
 }
 
+.deckPeekRoot {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(190px, 30vh, 300px);
+  transform: translateX(-50%);
+  z-index: calc(var(--z-hand) + 4);
+  width: fit-content;
+  max-width: calc(100vw - 24px);
+}
+
+.deckPeekToolbar {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.deckPeekToolbarButton {
+  border: 1px solid #6f8659;
+  border-radius: 999px;
+  background: rgba(244, 250, 239, 0.96);
+  color: #1f2b16;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.1;
+  padding: 6px 11px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.deckPeekToolbarButton:hover {
+  background: rgba(235, 246, 225, 0.98);
+}
+
+.deckPeekToolbarButton:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.deckPeekHandle {
+  touch-action: none;
+  user-select: none;
+  min-width: 36px;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+
+.deckPeekHandle svg {
+  font-size: 0.9rem;
+}
+
+.deckPeekHandleActive {
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px rgba(43, 91, 216, 0.22);
+}
+
+.deckPeekCard {
+  --deck-peek-columns: 1;
+  width: fit-content;
+  max-width: calc(100vw - 24px);
+  border: 1px solid #d4deca;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.deckPeekCards {
+  max-height: none;
+  overflow: visible;
+  padding: 4px 2px;
+  display: grid;
+  grid-template-columns: repeat(var(--deck-peek-columns, 1), var(--card-w));
+  gap: 10px 6px;
+  width: max-content;
+  max-width: 100%;
+  justify-content: start;
+}
+
 .benchRow {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -569,6 +672,70 @@
   display: grid;
   justify-items: center;
   gap: 4px;
+}
+
+.deckZoneBody {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.deckPileTarget {
+  position: relative;
+  width: 100%;
+  display: grid;
+  justify-items: center;
+}
+
+.deckInsertTargets {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 3px;
+}
+
+.deckInsertTarget {
+  border: 2px dashed transparent;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+}
+
+.deckInsertTargetBottom {
+  border-color: rgba(68, 114, 201, 0.6);
+  background: rgba(114, 159, 240, 0.18);
+}
+
+.deckInsertTargetBottomActive {
+  border-color: #2f5cc2;
+  background: rgba(95, 142, 232, 0.35);
+  box-shadow: 0 0 0 2px rgba(47, 92, 194, 0.18);
+}
+
+.deckInsertTargetTop {
+  border-color: rgba(203, 84, 84, 0.68);
+  background: rgba(241, 117, 117, 0.18);
+}
+
+.deckInsertTargetTopActive {
+  border-color: #cb4343;
+  background: rgba(241, 93, 93, 0.34);
+  box-shadow: 0 0 0 2px rgba(203, 67, 67, 0.2);
+}
+
+.deckInsertLabel {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #24321b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 8px;
+  letter-spacing: 0.01em;
 }
 
 .zoneQuickActions {
@@ -972,6 +1139,143 @@
   gap: 8px;
 }
 
+.sharedNotesRoot {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: calc(var(--z-toolbox) + 1);
+  width: min(88vw, 320px);
+  display: grid;
+  gap: 8px;
+}
+
+.sharedNotesList {
+  display: grid;
+  gap: 6px;
+  max-height: min(34vh, 260px);
+  overflow: auto;
+}
+
+.sharedNoteItem {
+  border: 1px solid #d6dfcb;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.sharedNoteText {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #223017;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sharedNoteMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sharedNoteMeta {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #5b6d4d;
+}
+
+.sharedNoteIconActions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sharedNoteIconButton {
+  border: 1px solid #8ca17a;
+  border-radius: 999px;
+  background: #f4faef;
+  color: #203014;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+
+.sharedNoteIconButton:hover {
+  background: #e8f3df;
+}
+
+.sharedNoteIconButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sharedNotesComposer {
+  border: 1px solid #d6dfcb;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.sharedNoteTextarea {
+  width: 100%;
+  border: 1px solid #c7d2bc;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: #1d2d13;
+  background: #fff;
+  resize: vertical;
+}
+
+.sharedNoteTextarea:focus-visible {
+  outline: 2px solid #2b5bd8;
+  outline-offset: 1px;
+}
+
+.sharedNoteShareButton,
+.sharedNoteActionButton {
+  border: 1px solid #6f8659;
+  border-radius: 999px;
+  background: #f4faef;
+  color: #1f2b16;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.sharedNoteShareButton:hover,
+.sharedNoteActionButton:hover {
+  background: #e8f3df;
+}
+
+.sharedNoteShareButton:disabled,
+.sharedNoteActionButton:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.sharedNoteEditor {
+  display: grid;
+  gap: 6px;
+}
+
+.sharedNoteActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .toolboxGrid {
   display: flex;
   flex-wrap: wrap;
@@ -1268,6 +1572,16 @@
     right: 8px;
     bottom: 70px;
     width: min(90vw, 300px);
+  }
+
+  .sharedNotesRoot {
+    left: 8px;
+    bottom: 8px;
+    width: min(92vw, 320px);
+  }
+
+  .deckPeekRoot {
+    bottom: clamp(160px, 26vh, 260px);
   }
 
   .operationPanelRoot {

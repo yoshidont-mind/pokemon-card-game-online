@@ -13,6 +13,7 @@ export const DROP_TYPES = Object.freeze({
 });
 
 export const ZONE_KINDS = Object.freeze({
+  DECK: 'deck',
   HAND: 'hand',
   ACTIVE: 'active',
   BENCH: 'bench',
@@ -30,6 +31,7 @@ export const STACK_KINDS = Object.freeze({
 
 export const INTENT_ACTIONS = Object.freeze({
   MOVE_CARD_FROM_HAND_TO_ZONE: 'move-card-from-hand-to-zone',
+  MOVE_CARD_TO_DECK_EDGE: 'move-card-to-deck-edge',
   MOVE_TOP_CARD_FROM_SOURCE_TO_HAND: 'move-top-card-from-source-to-hand',
   APPLY_TOOL_TO_STACK: 'apply-tool-to-stack',
 });

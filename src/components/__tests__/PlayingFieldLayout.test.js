@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PlayingField from '../PlayingField';
 
 function createSessionDoc(overrides = {}) {
@@ -257,7 +257,51 @@ test('shows quick action buttons for deck draw, shuffle, and prize take', () => 
 
   expect(screen.getByRole('button', { name: /山札から1枚引く/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /山札をシャッフルする/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /山札を閲覧する/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /サイドから1枚取る/i })).toBeInTheDocument();
+});
+
+test('opens deck peek count config modal from deck quick action', async () => {
+  renderPlayingField();
+
+  fireEvent.click(screen.getByRole('button', { name: '山札を閲覧する' }));
+  const modal = await screen.findByRole('dialog');
+  expect(within(modal).getByText('山札を閲覧')).toBeInTheDocument();
+  expect(within(modal).getByText('1 枚')).toBeInTheDocument();
+
+  fireEvent.click(within(modal).getByRole('button', { name: '閲覧枚数を1枚増やす' }));
+  await waitFor(() => {
+    expect(within(modal).getByText('2 枚')).toBeInTheDocument();
+  });
+
+  fireEvent.click(within(modal).getByRole('button', { name: 'キャンセル' }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('renders shared notes panel with existing shared notes', () => {
+  renderPlayingField({
+    sessionOverrides: {
+      publicState: {
+        sharedNotes: [
+          {
+            noteId: 'note_001',
+            text: '次のターンはコイン判定をメモする',
+            createdBy: 'player1',
+            createdAt: '2026-02-20T00:00:00.000Z',
+            updatedBy: 'player1',
+            updatedAt: '2026-02-20T00:00:00.000Z',
+          },
+        ],
+      },
+    },
+  });
+
+  expect(screen.getByLabelText('共有ノート入力')).toBeInTheDocument();
+  expect(screen.getByText('次のターンはコイン判定をメモする')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'ノートを編集' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'ノートを削除' })).toBeInTheDocument();
 });
 
 test('shows opponent hand count pill and removes dedicated player hand count zone', () => {
@@ -500,6 +544,144 @@ test('shows rejection banner when opponent rejects reveal request', async () => 
 
   await waitFor(() => {
     expect(screen.getByText('相手が手札公開リクエストを拒否しました。')).toBeInTheDocument();
+  });
+});
+
+test('shows opponent shuffle notice when lastDeckShuffleEvent is updated', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          turnContext: {
+            lastDeckShuffleEvent: {
+              byPlayerId: 'player2',
+              at: '2026-02-20T10:00:00.000Z',
+            },
+          },
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手プレイヤーの山札がシャッフルされました。')).toBeInTheDocument();
+  });
+});
+
+test('shuffle notice auto clears within 10 seconds', async () => {
+  jest.useFakeTimers();
+
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          turnContext: {
+            lastDeckShuffleEvent: {
+              byPlayerId: 'player2',
+              at: '2026-02-20T10:00:00.000Z',
+            },
+          },
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  expect(await screen.findByText('相手プレイヤーの山札がシャッフルされました。')).toBeInTheDocument();
+
+  act(() => {
+    jest.advanceTimersByTime(10001);
+  });
+
+  await waitFor(() => {
+    expect(screen.queryByText('相手プレイヤーの山札がシャッフルされました。')).not.toBeInTheDocument();
+  });
+
+  jest.useRealTimers();
+});
+
+test('shows opponent deck peek live banner while opponent is viewing deck', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          turnContext: {
+            deckPeekState: {
+              byPlayerId: 'player2',
+              count: 4,
+              isOpen: true,
+              updatedAt: '2026-02-20T10:00:01.000Z',
+            },
+          },
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手が山札を閲覧中（4枚）')).toBeInTheDocument();
+  });
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          turnContext: {
+            deckPeekState: {
+              byPlayerId: 'player2',
+              count: 2,
+              isOpen: true,
+              updatedAt: '2026-02-20T10:00:02.000Z',
+            },
+          },
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手が山札を閲覧中（2枚）')).toBeInTheDocument();
   });
 });
 

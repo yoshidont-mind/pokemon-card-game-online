@@ -77,8 +77,94 @@ function ensureRevealZone(board) {
   return board.reveal;
 }
 
+function ensureTurnContext(sessionDoc) {
+  if (!sessionDoc?.publicState || typeof sessionDoc.publicState !== 'object') {
+    sessionDoc.publicState = {};
+  }
+  if (!sessionDoc.publicState.turnContext || typeof sessionDoc.publicState.turnContext !== 'object') {
+    sessionDoc.publicState.turnContext = {};
+  }
+  return sessionDoc.publicState.turnContext;
+}
+
+function consumeDeckPeekCount(sessionDoc, playerId, consumedCount = 1) {
+  const turnContext = ensureTurnContext(sessionDoc);
+  const state = turnContext?.deckPeekState;
+  if (!state || state.byPlayerId !== playerId || state.isOpen !== true) {
+    return;
+  }
+  const safeConsumed = Math.max(0, Number(consumedCount) || 0);
+  const currentCount = Math.max(0, Number(state.count) || 0);
+  const nextCount = Math.max(0, currentCount - safeConsumed);
+  turnContext.deckPeekState = {
+    ...state,
+    isOpen: nextCount > 0,
+    count: nextCount,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function resolveImageUrlFromPrivateState(privateStateDoc, cardId) {
   return privateStateDoc?.cardCatalog?.[cardId]?.imageUrl || null;
+}
+
+function takeCardRefFromSource({
+  sessionDoc,
+  privateStateDoc,
+  playerId,
+  sourceZone,
+  cardId,
+}) {
+  const publicBoard = resolvePlayerBoard(sessionDoc, playerId);
+  const playerCounters = resolvePlayerCounters(sessionDoc, playerId);
+
+  if (sourceZone === 'player-hand') {
+    const hand = asArray(privateStateDoc?.zones?.hand);
+    const handIndex = hand.findIndex((ref) => ref?.cardId === cardId);
+    if (handIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in hand.`
+      );
+    }
+    const [sourceCardRef] = hand.splice(handIndex, 1);
+    privateStateDoc.zones.hand = hand;
+    playerCounters.handCount = hand.length;
+    return sourceCardRef;
+  }
+
+  if (sourceZone === 'player-reveal') {
+    const reveal = ensureRevealZone(publicBoard);
+    const revealIndex = reveal.findIndex((ref) => ref?.cardId === cardId);
+    if (revealIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in reveal zone.`
+      );
+    }
+    const [sourceCardRef] = reveal.splice(revealIndex, 1);
+    return sourceCardRef;
+  }
+
+  if (sourceZone === 'player-deck') {
+    const deck = asArray(privateStateDoc?.zones?.deck);
+    const deckIndex = deck.findIndex((ref) => ref?.cardId === cardId);
+    if (deckIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in deck.`
+      );
+    }
+    const [sourceCardRef] = deck.splice(deckIndex, 1);
+    privateStateDoc.zones.deck = deck;
+    playerCounters.deckCount = deck.length;
+    return sourceCardRef;
+  }
+
+  throw new GameStateError(
+    ERROR_CODES.INVALID_STATE,
+    `Unsupported source zone: ${String(sourceZone)}`
+  );
 }
 
 function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, action }) {
@@ -90,39 +176,17 @@ function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, actio
   const sourceZone = action?.sourceZone || 'player-hand';
   const publicBoard = resolvePlayerBoard(sessionDoc, playerId);
   const playerCounters = resolvePlayerCounters(sessionDoc, playerId);
-  let sourceCardRef = null;
-
-  if (sourceZone === 'player-hand') {
-    const hand = asArray(privateStateDoc?.zones?.hand);
-    const handIndex = hand.findIndex((ref) => ref?.cardId === cardId);
-    if (handIndex < 0) {
-      throw new GameStateError(
-        ERROR_CODES.INVARIANT_VIOLATION,
-        `Card ${cardId} is not in hand.`
-      );
-    }
-    [sourceCardRef] = hand.splice(handIndex, 1);
-    privateStateDoc.zones.hand = hand;
-    playerCounters.handCount = hand.length;
-  } else if (sourceZone === 'player-reveal') {
-    const reveal = ensureRevealZone(publicBoard);
-    const revealIndex = reveal.findIndex((ref) => ref?.cardId === cardId);
-    if (revealIndex < 0) {
-      throw new GameStateError(
-        ERROR_CODES.INVARIANT_VIOLATION,
-        `Card ${cardId} is not in reveal zone.`
-      );
-    }
-    [sourceCardRef] = reveal.splice(revealIndex, 1);
-  } else {
-    throw new GameStateError(
-      ERROR_CODES.INVALID_STATE,
-      `Unsupported source zone: ${String(sourceZone)}`
-    );
-  }
+  const sourceCardRef = takeCardRefFromSource({
+    sessionDoc,
+    privateStateDoc,
+    playerId,
+    sourceZone,
+    cardId,
+  });
 
   const sourceImageUrl = sourceCardRef?.imageUrl || resolveImageUrlFromPrivateState(privateStateDoc, cardId);
   const targetZoneKind = action.targetZoneKind;
+  const consumesDeckPeekCard = sourceZone === 'player-deck' && targetZoneKind !== ZONE_KINDS.DECK;
 
   if (targetZoneKind === ZONE_KINDS.ACTIVE) {
     if (publicBoard.active) {
@@ -200,6 +264,66 @@ function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, actio
     sessionDoc.status = SESSION_STATUS.PLAYING;
   }
 
+  if (consumesDeckPeekCard) {
+    consumeDeckPeekCount(sessionDoc, playerId, 1);
+  }
+
+  return {
+    sessionDoc,
+    privateStateDoc,
+  };
+}
+
+function moveCardToDeckEdge({ sessionDoc, privateStateDoc, playerId, action }) {
+  const cardId = action?.cardId;
+  const targetDeckEdge = action?.targetDeckEdge;
+  if (!cardId) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'cardId is required.');
+  }
+  if (targetDeckEdge !== 'top' && targetDeckEdge !== 'bottom') {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'targetDeckEdge must be top or bottom.');
+  }
+
+  const sourceZone = action?.sourceZone || 'player-hand';
+  const sourceCardRef = takeCardRefFromSource({
+    sessionDoc,
+    privateStateDoc,
+    playerId,
+    sourceZone,
+    cardId,
+  });
+
+  const deck = asArray(privateStateDoc?.zones?.deck);
+  const counters = resolvePlayerCounters(sessionDoc, playerId);
+  const cardRefForDeck = createCardRef({
+    cardId,
+    orientation: sourceCardRef?.orientation || ORIENTATION.VERTICAL,
+    isFaceDown: true,
+    visibility: VISIBILITY.OWNER_ONLY,
+  });
+
+  if (targetDeckEdge === 'top') {
+    deck.unshift(cardRefForDeck);
+  } else {
+    deck.push(cardRefForDeck);
+  }
+  privateStateDoc.zones.deck = deck;
+  counters.deckCount = deck.length;
+
+  const turnContext = ensureTurnContext(sessionDoc);
+  turnContext.lastDeckInsertEvent = {
+    byPlayerId: playerId,
+    position: targetDeckEdge,
+    at: new Date().toISOString(),
+  };
+
+  if (
+    sessionDoc.status === SESSION_STATUS.WAITING ||
+    sessionDoc.status === SESSION_STATUS.READY
+  ) {
+    sessionDoc.status = SESSION_STATUS.PLAYING;
+  }
+
   return {
     sessionDoc,
     privateStateDoc,
@@ -238,6 +362,7 @@ function moveTopCardFromSourceToHand({
     privateStateDoc.zones.deck = deck;
     movingCardId = topCardRef?.cardId || null;
     counters.deckCount = deck.length;
+    consumeDeckPeekCount(sessionDoc, playerId, movingCardId ? 1 : 0);
   } else if (sourceZone === 'player-prize') {
     const prize = asArray(board.prize);
     if (prize.length > 0) {
@@ -342,6 +467,15 @@ export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId,
 
   if (intent.action.kind === INTENT_ACTIONS.MOVE_TOP_CARD_FROM_SOURCE_TO_HAND) {
     return moveTopCardFromSourceToHand({
+      sessionDoc,
+      privateStateDoc,
+      playerId,
+      action: intent.action,
+    });
+  }
+
+  if (intent.action.kind === INTENT_ACTIONS.MOVE_CARD_TO_DECK_EDGE) {
+    return moveCardToDeckEdge({
       sessionDoc,
       privateStateDoc,
       playerId,

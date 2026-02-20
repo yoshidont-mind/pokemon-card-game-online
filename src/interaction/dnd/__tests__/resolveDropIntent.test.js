@@ -226,4 +226,47 @@ describe('resolveDropIntent', () => {
     expect(result.action.sourceZone).toBe('player-reveal');
     expect(result.action.targetZoneKind).toBe(ZONE_KINDS.DISCARD);
   });
+
+  test('accepts moving a hand card to deck-bottom edge drop zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-deck-insert-bottom',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DECK,
+      edge: 'bottom',
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-card-to-deck-edge');
+    expect(result.action.targetDeckEdge).toBe('bottom');
+  });
+
+  test('accepts moving a deck card to reveal zone', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_099', sourceZone: 'player-deck' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-reveal',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.REVEAL,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.sourceZone).toBe('player-deck');
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.REVEAL);
+  });
 });

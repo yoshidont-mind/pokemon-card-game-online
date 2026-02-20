@@ -719,6 +719,22 @@ describe('mutateDocsForOperationIntent wave1 direct operations', () => {
     expect(markers[0].label).toContain(opId);
   });
 
+  test('OP-A04 records deck peek event in turnContext', () => {
+    const { sessionDoc } = executeRichOperation({
+      opId: OPERATION_IDS.OP_A04,
+      payload: {
+        count: 3,
+        note: 'peek',
+      },
+    });
+    expect(sessionDoc.publicState.turnContext.lastDeckPeekEvent).toEqual(
+      expect.objectContaining({
+        byPlayerId: 'player1',
+        count: 3,
+      })
+    );
+  });
+
   test('OP-A05 records random selection without mutating source zone', () => {
     const sessionDoc = createRichSessionDoc();
     const privateStateDoc = createRichPrivateStateDoc();
@@ -757,11 +773,16 @@ describe('mutateDocsForOperationIntent wave1 direct operations', () => {
   });
 
   test('OP-B01 shuffles deck while preserving members', () => {
-    const { privateStateDoc } = executeRichOperation({
+    const { privateStateDoc, sessionDoc } = executeRichOperation({
       opId: OPERATION_IDS.OP_B01,
     });
     const ids = privateStateDoc.zones.deck.map((ref) => ref.cardId).sort();
     expect(ids).toEqual(['p1_deck_001', 'p1_deck_002', 'p1_deck_003', 'p1_deck_004', 'p1_deck_005']);
+    expect(sessionDoc.publicState.turnContext.lastDeckShuffleEvent).toEqual(
+      expect.objectContaining({
+        byPlayerId: 'player1',
+      })
+    );
   });
 
   test.each([
