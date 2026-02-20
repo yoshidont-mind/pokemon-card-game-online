@@ -608,18 +608,6 @@ describe('mutateDocsForOperationIntent wave1 direct operations', () => {
     expect(markers[0].label).toContain(opId);
   });
 
-  test('OP-A03 reveals specified hand card', () => {
-    const { privateStateDoc } = executeRichOperation({
-      opId: OPERATION_IDS.OP_A03,
-      payload: {
-        cardId: 'p1_hand_001',
-      },
-    });
-    const card = privateStateDoc.zones.hand.find((ref) => ref.cardId === 'p1_hand_001');
-    expect(card.visibility).toBe('temporarilyRevealed');
-    expect(card.isFaceDown).toBe(false);
-  });
-
   test('OP-A05 records random selection without mutating source zone', () => {
     const sessionDoc = createRichSessionDoc();
     const privateStateDoc = createRichPrivateStateDoc();

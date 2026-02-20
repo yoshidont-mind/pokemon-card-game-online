@@ -3,7 +3,12 @@ import { INTERNAL_OPERATION_IDS, OPERATION_IDS, WAVE1_OPERATION_IDS } from './op
 const CATALOG = Object.freeze({
   [OPERATION_IDS.OP_A01]: { group: 'A', label: 'コイン判定', mode: 'direct' },
   [OPERATION_IDS.OP_A02]: { group: 'A', label: '対象選択', mode: 'direct' },
-  [OPERATION_IDS.OP_A03]: { group: 'A', label: '公開', mode: 'direct' },
+  [OPERATION_IDS.OP_A03]: {
+    group: 'A',
+    label: '相手手札公開（相手承認）',
+    mode: 'request',
+    requestType: 'opponent-reveal-hand',
+  },
   [OPERATION_IDS.OP_A04]: { group: 'A', label: '閲覧', mode: 'direct' },
   [OPERATION_IDS.OP_A05]: { group: 'A', label: 'ランダム選択', mode: 'direct' },
   [OPERATION_IDS.OP_A06]: { group: 'A', label: '順序選択', mode: 'direct' },

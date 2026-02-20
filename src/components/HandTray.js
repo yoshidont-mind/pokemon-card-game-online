@@ -10,6 +10,12 @@ import { buildCardDragPayload } from '../interaction/dnd/buildDragPayload';
 const HAND_TRAY_PANEL_ID = 'hand-tray-panel';
 const HAND_TRAY_POSITION_STORAGE_KEY = 'pcgo:hand-tray-position:v1';
 const VIEWPORT_MARGIN_PX = 8;
+const HAND_CARD_HOVER_SCALE = 5;
+const HAND_CARD_BASE_SHIFT = Object.freeze({
+  x: 0,
+  y: -40,
+});
+const HAND_CARD_VIEWPORT_MARGIN_PX = 6;
 
 function asFiniteNumber(value) {
   return Number.isFinite(value) ? value : null;
@@ -76,6 +82,39 @@ function clearStoredTrayPosition() {
   }
 }
 
+function resolveHandCardHoverShift({ buttonRect, viewportWidth, viewportHeight }) {
+  if (!buttonRect || !Number.isFinite(viewportWidth) || !Number.isFinite(viewportHeight)) {
+    return { ...HAND_CARD_BASE_SHIFT };
+  }
+
+  const originX = buttonRect.left + buttonRect.width / 2;
+  const originY = buttonRect.bottom;
+
+  const scaledLeft = originX + (buttonRect.left - originX) * HAND_CARD_HOVER_SCALE;
+  const scaledRight = originX + (buttonRect.right - originX) * HAND_CARD_HOVER_SCALE;
+  const scaledTop = originY + (buttonRect.top - originY) * HAND_CARD_HOVER_SCALE;
+  const scaledBottom = originY + (buttonRect.bottom - originY) * HAND_CARD_HOVER_SCALE;
+
+  const minShiftX = HAND_CARD_VIEWPORT_MARGIN_PX - scaledLeft;
+  const maxShiftX = viewportWidth - HAND_CARD_VIEWPORT_MARGIN_PX - scaledRight;
+  const minShiftY = HAND_CARD_VIEWPORT_MARGIN_PX - scaledTop;
+  const maxShiftY = viewportHeight - HAND_CARD_VIEWPORT_MARGIN_PX - scaledBottom;
+
+  const resolvedX =
+    minShiftX <= maxShiftX
+      ? clampValue(HAND_CARD_BASE_SHIFT.x, minShiftX, maxShiftX)
+      : (minShiftX + maxShiftX) / 2;
+  const resolvedY =
+    minShiftY <= maxShiftY
+      ? clampValue(HAND_CARD_BASE_SHIFT.y, minShiftY, maxShiftY)
+      : (minShiftY + maxShiftY) / 2;
+
+  return {
+    x: Math.round(resolvedX),
+    y: Math.round(resolvedY),
+  };
+}
+
 const HandTray = ({
   cards = [],
   isOpen = false,
@@ -111,7 +150,7 @@ const HandTray = ({
   const handColumnCount = Math.max(1, Math.min(10, cardCount));
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [pinnedIndex, setPinnedIndex] = useState(null);
-  const [previewCenterX, setPreviewCenterX] = useState(null);
+  const [activeCardShift, setActiveCardShift] = useState(() => ({ ...HAND_CARD_BASE_SHIFT }));
   const [trayPosition, setTrayPosition] = useState(() => readStoredTrayPosition());
   const [isTrayDragging, setIsTrayDragging] = useState(false);
   const trayRootRef = useRef(null);
@@ -140,7 +179,6 @@ const HandTray = ({
     if (!isOpen) {
       setHoveredIndex(null);
       setPinnedIndex(null);
-      setPreviewCenterX(null);
     }
   }, [isOpen]);
 
@@ -154,22 +192,63 @@ const HandTray = ({
     return null;
   }, [normalizedCards, hoveredIndex, pinnedIndex]);
 
-  useEffect(() => {
-    if (activeIndex === null || !isOpen) {
-      setPreviewCenterX(null);
+  const recalcActiveCardShift = useCallback(() => {
+    if (!isOpen || activeIndex === null || typeof window === 'undefined') {
+      setActiveCardShift((previous) => {
+        if (
+          previous.x === HAND_CARD_BASE_SHIFT.x &&
+          previous.y === HAND_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...HAND_CARD_BASE_SHIFT };
+      });
       return;
     }
 
-    const trayRootNode = trayRootRef.current;
     const buttonNode = cardButtonRefs.current[activeIndex];
-    if (!trayRootNode || !buttonNode) {
+    if (!buttonNode) {
+      setActiveCardShift((previous) => {
+        if (
+          previous.x === HAND_CARD_BASE_SHIFT.x &&
+          previous.y === HAND_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...HAND_CARD_BASE_SHIFT };
+      });
       return;
     }
 
-    const trayRect = trayRootNode.getBoundingClientRect();
-    const buttonRect = buttonNode.getBoundingClientRect();
-    setPreviewCenterX(buttonRect.left + buttonRect.width / 2 - trayRect.left);
-  }, [activeIndex, isOpen, normalizedCards, trayPosition]);
+    const next = resolveHandCardHoverShift({
+      buttonRect: buttonNode.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    });
+
+    setActiveCardShift((previous) => {
+      if (previous.x === next.x && previous.y === next.y) {
+        return previous;
+      }
+      return next;
+    });
+  }, [activeIndex, isOpen]);
+
+  useEffect(() => {
+    recalcActiveCardShift();
+  }, [recalcActiveCardShift, trayPosition]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isOpen || activeIndex === null) {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      recalcActiveCardShift();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [activeIndex, isOpen, recalcActiveCardShift]);
 
   useEffect(() => {
     if (!trayPosition) {
@@ -351,7 +430,9 @@ const HandTray = ({
                       cardId: card.cardId,
                       sourceZone: 'player-hand',
                     })}
-                    className={styles.handCardDraggable}
+                    className={`${styles.handCardDraggable} ${
+                      activeIndex === index ? styles.handCardDraggableActive : ''
+                    }`.trim()}
                     draggingClassName={styles.draggingSource}
                   >
                     <button
@@ -366,6 +447,14 @@ const HandTray = ({
                       className={`${styles.handCardButton} ${
                         activeIndex === index ? styles.handCardButtonActive : ''
                       }`}
+                      style={
+                        activeIndex === index
+                          ? {
+                              '--hand-card-shift-x': `${activeCardShift.x}px`,
+                              '--hand-card-shift-y': `${activeCardShift.y}px`,
+                            }
+                          : undefined
+                      }
                       aria-label={`手札 ${index + 1} を拡大表示`}
                       aria-pressed={pinnedIndex === index}
                       onMouseEnter={() => setHoveredIndex(index)}
@@ -383,17 +472,6 @@ const HandTray = ({
           ) : (
             <div className={styles.panelEmptyText}>手札はありません</div>
           )}
-        </div>
-      )}
-
-      {isOpen && activeIndex !== null && normalizedCards[activeIndex] && previewCenterX !== null && (
-        <div className={styles.handHoverPreview} style={{ left: `${previewCenterX}px` }}>
-          <img
-            src={normalizedCards[activeIndex].imageUrl}
-            alt=""
-            aria-hidden="true"
-            className={styles.handHoverPreviewImage}
-          />
         </div>
       )}
     </aside>
