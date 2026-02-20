@@ -538,6 +538,20 @@ function runDirectOperation({
         now,
       })
     );
+    if (opId === OPERATION_IDS.OP_A04) {
+      const count = normalizeCount(payload.count, 1);
+      turnContext.lastDeckPeekEvent = {
+        byPlayerId: playerId,
+        count,
+        at: now,
+      };
+      turnContext.deckPeekState = {
+        byPlayerId: playerId,
+        isOpen: true,
+        count,
+        updatedAt: now,
+      };
+    }
     return;
   }
 
@@ -588,6 +602,10 @@ function runDirectOperation({
     const deck = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.DECK);
     const shuffled = shuffleArray(deck);
     deck.splice(0, deck.length, ...shuffled);
+    turnContext.lastDeckShuffleEvent = {
+      byPlayerId: playerId,
+      at: now,
+    };
     return;
   }
 

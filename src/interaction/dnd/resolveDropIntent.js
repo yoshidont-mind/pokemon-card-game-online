@@ -63,7 +63,11 @@ function isZoneOccupied(boardSnapshot, playerId, zoneKind, benchIndex) {
 }
 
 function isSupportedCardSourceZone(sourceZone) {
-  return sourceZone === 'player-hand' || sourceZone === 'player-reveal';
+  return (
+    sourceZone === 'player-hand' ||
+    sourceZone === 'player-reveal' ||
+    sourceZone === 'player-deck'
+  );
 }
 
 export function createBoardSnapshot(sessionDoc) {
@@ -137,6 +141,29 @@ export function resolveDropIntent({
     }
     if (dropPayload.targetPlayerId !== actorPlayerId) {
       return reject(REJECT_REASONS.PERMISSION_DENIED);
+    }
+
+    if (dropPayload.zoneKind === ZONE_KINDS.DECK) {
+      const edge = dropPayload.edge === 'bottom' ? 'bottom' : dropPayload.edge === 'top' ? 'top' : null;
+      if (!edge) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+
+      return accept({
+        action: {
+          kind: INTENT_ACTIONS.MOVE_CARD_TO_DECK_EDGE,
+          cardId: dragPayload.cardId,
+          sourceZone: dragPayload.sourceZone,
+          targetPlayerId: actorPlayerId,
+          targetZoneKind: ZONE_KINDS.DECK,
+          targetZoneId: dropPayload.zoneId,
+          targetDeckEdge: edge,
+        },
+        highlightTarget: {
+          type: DROP_TYPES.ZONE,
+          zoneId: dropPayload.zoneId,
+        },
+      });
     }
 
     if (

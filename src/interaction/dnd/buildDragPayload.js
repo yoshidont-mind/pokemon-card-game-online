@@ -57,6 +57,7 @@ export function buildZoneDropPayload({
   targetPlayerId,
   zoneKind,
   benchIndex = null,
+  edge = '',
 }) {
   if (!zoneId || !targetPlayerId || !zoneKind) {
     return null;
@@ -68,6 +69,7 @@ export function buildZoneDropPayload({
     targetPlayerId,
     zoneKind,
     benchIndex: zoneKind === ZONE_KINDS.BENCH ? asBenchIndex(benchIndex) : null,
+    edge: typeof edge === 'string' ? edge : '',
   };
 }
 
