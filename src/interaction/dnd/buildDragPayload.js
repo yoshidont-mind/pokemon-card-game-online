@@ -36,6 +36,34 @@ export function buildCardDragPayload({
   };
 }
 
+export function buildStackDragPayload({
+  sourceZone = 'player-stack',
+  sourceStackKind = STACK_KINDS.ACTIVE,
+  sourceBenchIndex = null,
+  previewCardId = '',
+  previewCardIds = [],
+}) {
+  if (sourceZone !== 'player-stack') {
+    return null;
+  }
+
+  const normalizedSourceStackKind =
+    sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+  const normalizedSourceBenchIndex =
+    normalizedSourceStackKind === STACK_KINDS.BENCH ? asBenchIndex(sourceBenchIndex) : null;
+
+  return {
+    dragType: DRAG_TYPES.STACK,
+    sourceZone,
+    sourceStackKind: normalizedSourceStackKind,
+    sourceBenchIndex: normalizedSourceBenchIndex,
+    previewCardId: typeof previewCardId === 'string' ? previewCardId : '',
+    previewCardIds: Array.isArray(previewCardIds)
+      ? previewCardIds.filter((cardId) => typeof cardId === 'string' && cardId.trim() !== '')
+      : [],
+  };
+}
+
 export function buildPileCardDragPayload({
   sourceZone,
   availableCount = 0,

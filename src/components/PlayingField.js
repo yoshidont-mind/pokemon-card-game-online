@@ -27,6 +27,7 @@ import { INTERNAL_OPERATION_IDS, OPERATION_IDS } from '../operations/wave1/opera
 import {
   buildCardDragPayload,
   buildPileCardDragPayload,
+  buildStackDragPayload,
   buildStackDropPayload,
   buildZoneDropPayload,
 } from '../interaction/dnd/buildDragPayload';
@@ -152,6 +153,11 @@ function resolveStackFromBoard(board, stackKind, benchIndex = null) {
     return slots[benchIndex] || null;
   }
   return null;
+}
+
+function countCardsInStack(board, stackKind, benchIndex = null) {
+  const stack = resolveStackFromBoard(board, stackKind, benchIndex);
+  return asArray(stack?.cardIds).length;
 }
 
 function formatStackModalTitle({ ownerLabel, stackKind, benchIndex, cardCount }) {
@@ -491,7 +497,8 @@ function BenchRow({
   bench,
   cardCatalog,
   allowCardDrop,
-  isDraggingCard,
+  shouldShowStackInsertTargets,
+  isDraggingStackSwapCandidate,
   isZoneHighlighted,
   isStackHighlighted,
   isStackModalForZone,
@@ -504,7 +511,7 @@ function BenchRow({
       {slots.map((stack, index) => {
         const zoneId = `${owner}-bench-${index + 1}`;
         const stackId = resolveStackId(stack, `s_${ownerPlayerId}_bench_${index + 1}`);
-        const zoneDropPayload = allowCardDrop && !stack
+        const zoneDropPayload = allowCardDrop && (!stack || isDraggingStackSwapCandidate)
           ? buildZoneDropPayload({
               zoneId,
               targetPlayerId: ownerPlayerId,
@@ -545,6 +552,17 @@ function BenchRow({
         const ownerLabel = owner === 'player' ? '自分' : '相手';
         const canDragSingleCard = allowCardDrop && cardCount === 1;
         const singleCardId = canDragSingleCard ? asArray(stack?.cardIds)[0] : null;
+        const canDragStackGroup = allowCardDrop && cardCount > 1;
+        const topCardId = cardCount > 0 ? asArray(stack?.cardIds)[cardCount - 1] : '';
+        const stackGroupDragPayload = canDragStackGroup
+          ? buildStackDragPayload({
+              sourceZone: 'player-stack',
+              sourceStackKind: STACK_KINDS.BENCH,
+              sourceBenchIndex: index,
+              previewCardId: topCardId,
+              previewCardIds: asArray(stack?.cardIds),
+            })
+          : null;
         const isStackExpanded = canExpandStack
           ? isStackModalForZone({
               ownerPlayerId,
@@ -575,7 +593,7 @@ function BenchRow({
                 data-drop-group="stack"
               >
                 <div className={joinClassNames(styles.stackDropSurfaceInner, hoverableClassName)}>
-                  {allowCardDrop && isDraggingCard ? (
+                  {allowCardDrop && shouldShowStackInsertTargets ? (
                     <div className={styles.stackInsertTargets}>
                       <DroppableZone
                         dropId={`zone-${stackInsertBottomZoneId}`}
@@ -618,6 +636,15 @@ function BenchRow({
                       <div className={styles.stackSingleCardButton}>
                         <Pokemon {...toPokemonProps(stack, cardCatalog)} />
                       </div>
+                    </DraggableCard>
+                  ) : canDragStackGroup && stackGroupDragPayload ? (
+                    <DraggableCard
+                      dragId={`stack-group-${stackId}`}
+                      dragPayload={stackGroupDragPayload}
+                      className={styles.stackGroupDraggable}
+                      draggingClassName={styles.draggingSource}
+                    >
+                      <Pokemon {...toPokemonProps(stack, cardCatalog)} />
                     </DraggableCard>
                   ) : (
                     <Pokemon {...toPokemonProps(stack, cardCatalog)} />
@@ -2880,6 +2907,34 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       ? Math.max(0, Number(opponentDeckPeekState.count) || 0)
       : 0;
   const isDraggingCard = activeDragPayload?.dragType === 'card';
+  const isDraggingStack = activeDragPayload?.dragType === 'stack';
+  const isDraggingCardFromPlayerStack =
+    isDraggingCard && activeDragPayload?.sourceZone === 'player-stack';
+  const draggingSourceStackKind =
+    activeDragPayload?.sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+  const draggingSourceBenchIndex =
+    draggingSourceStackKind === STACK_KINDS.BENCH
+      ? Number(activeDragPayload?.sourceBenchIndex)
+      : null;
+  const draggingSourceStackCardCount = isDraggingCardFromPlayerStack
+    ? countCardsInStack(playerBoard, draggingSourceStackKind, draggingSourceBenchIndex)
+    : 0;
+  const isDraggingSingleStackCardForSwap =
+    isDraggingCardFromPlayerStack && draggingSourceStackCardCount === 1;
+  const isDraggingStackSwapCandidate = isDraggingStack || isDraggingSingleStackCardForSwap;
+  const shouldShowStackInsertTargets = isDraggingCard && !isDraggingStackSwapCandidate;
+  const playerActiveCardIds = asArray(playerActive?.cardIds);
+  const playerActiveCardCount = playerActiveCardIds.length;
+  const canDragPlayerActiveSingleCard = playerActiveCardCount === 1;
+  const canDragPlayerActiveStackGroup = playerActiveCardCount > 1;
+  const playerActiveStackDragPayload = canDragPlayerActiveStackGroup
+    ? buildStackDragPayload({
+        sourceZone: 'player-stack',
+        sourceStackKind: STACK_KINDS.ACTIVE,
+        previewCardId: playerActiveCardIds[playerActiveCardCount - 1] || '',
+        previewCardIds: playerActiveCardIds,
+      })
+    : null;
   const isOpponentActiveStackExpanded = isStackModalForZone({
     ownerPlayerId: opponentPlayerId,
     stackKind: STACK_KINDS.ACTIVE,
@@ -2990,7 +3045,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               bench={opponentBench}
               cardCatalog={renderCardCatalog}
               allowCardDrop={false}
-              isDraggingCard={isDraggingCard}
+              shouldShowStackInsertTargets={shouldShowStackInsertTargets}
+              isDraggingStackSwapCandidate={isDraggingStackSwapCandidate}
               isZoneHighlighted={isZoneHighlighted}
               isStackHighlighted={isStackHighlighted}
               isStackModalForZone={isStackModalForZone}
@@ -3164,7 +3220,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             <div className={`${styles.activeRow} ${styles.battleLineRow}`.trim()}>
               <DroppableZone
                 dropId={`zone-${playerActiveZoneId}`}
-                dropPayload={playerActive ? null : playerActiveDropPayload}
+                dropPayload={
+                  playerActive
+                    ? isDraggingStackSwapCandidate
+                      ? playerActiveDropPayload
+                      : null
+                    : playerActiveDropPayload
+                }
                 className={`${styles.activeZone} ${styles.battleLineActive}`.trim()}
                 activeClassName={styles.dropZoneActive}
                 isHighlighted={isZoneHighlighted(playerActiveZoneId)}
@@ -3184,10 +3246,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                     <div
                       className={joinClassNames(
                         styles.stackDropSurfaceInner,
-                        asArray(playerActive?.cardIds).length === 1 ? styles.stackDropSurfaceHoverable : ''
+                        playerActiveCardCount === 1 ? styles.stackDropSurfaceHoverable : ''
                       )}
                     >
-                      {isDraggingCard ? (
+                      {shouldShowStackInsertTargets ? (
                         <div className={styles.stackInsertTargets}>
                           <DroppableZone
                             dropId="zone-player-active-insert-bottom"
@@ -3225,11 +3287,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                           </DroppableZone>
                         </div>
                       ) : null}
-                      {asArray(playerActive?.cardIds).length === 1 ? (
+                      {canDragPlayerActiveSingleCard ? (
                         <DraggableCard
-                          dragId={`stack-single-player-active-${asArray(playerActive?.cardIds)[0]}`}
+                          dragId={`stack-single-player-active-${playerActiveCardIds[0]}`}
                           dragPayload={buildCardDragPayload({
-                            cardId: asArray(playerActive?.cardIds)[0],
+                            cardId: playerActiveCardIds[0],
                             sourceZone: 'player-stack',
                             sourceStackKind: STACK_KINDS.ACTIVE,
                           })}
@@ -3243,10 +3305,19 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                             <Pokemon {...toPokemonProps(playerActive, normalizedPlayerCatalog)} />
                           </div>
                         </DraggableCard>
+                      ) : canDragPlayerActiveStackGroup && playerActiveStackDragPayload ? (
+                        <DraggableCard
+                          dragId={`stack-group-player-active-${resolveStackId(playerActive, `s_${ownerPlayerId}_active`)}`}
+                          dragPayload={playerActiveStackDragPayload}
+                          className={styles.stackGroupDraggable}
+                          draggingClassName={styles.draggingSource}
+                        >
+                          <Pokemon {...toPokemonProps(playerActive, normalizedPlayerCatalog)} />
+                        </DraggableCard>
                       ) : (
                         <Pokemon {...toPokemonProps(playerActive, normalizedPlayerCatalog)} />
                       )}
-                      {asArray(playerActive?.cardIds).length > 1 ? (
+                      {playerActiveCardCount > 1 ? (
                         <button
                           type="button"
                           className={styles.stackExpandButton}
@@ -3315,7 +3386,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               bench={playerBench}
               cardCatalog={renderCardCatalog}
               allowCardDrop
-              isDraggingCard={isDraggingCard}
+              shouldShowStackInsertTargets={shouldShowStackInsertTargets}
+              isDraggingStackSwapCandidate={isDraggingStackSwapCandidate}
               isZoneHighlighted={isZoneHighlighted}
               isStackHighlighted={isStackHighlighted}
               isStackModalForZone={isStackModalForZone}

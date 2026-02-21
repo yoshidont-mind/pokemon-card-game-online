@@ -2,6 +2,7 @@ import {
   buildCardDragPayload,
   buildDamageCounterDragPayload,
   buildPileCardDragPayload,
+  buildStackDragPayload,
   buildStackDropPayload,
   buildZoneDropPayload,
 } from '../buildDragPayload';
@@ -453,5 +454,165 @@ describe('resolveDropIntent', () => {
     expect(result.action.sourceZone).toBe('player-stack');
     expect(result.action.sourceStackKind).toBe(STACK_KINDS.BENCH);
     expect(result.action.sourceBenchIndex).toBe(0);
+  });
+
+  test('accepts swapping occupied stacks via stack drag payload', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010'] },
+        playerBench: [{ stackId: 's_player1_bench_1', cardIds: ['c_player1_020', 'c_player1_021'] }],
+      })
+    );
+    const dragPayload = buildStackDragPayload({
+      sourceStackKind: STACK_KINDS.BENCH,
+      sourceBenchIndex: 0,
+      previewCardId: 'c_player1_021',
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-active',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.ACTIVE,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('swap-stacks-between-zones');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.BENCH);
+    expect(result.action.sourceBenchIndex).toBe(0);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.ACTIVE);
+  });
+
+  test('accepts swapping occupied stacks via stack drop target payload', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010'] },
+        playerBench: [{ stackId: 's_player1_bench_1', cardIds: ['c_player1_020', 'c_player1_021'] }],
+      })
+    );
+    const dragPayload = buildStackDragPayload({
+      sourceStackKind: STACK_KINDS.BENCH,
+      sourceBenchIndex: 0,
+      previewCardId: 'c_player1_021',
+    });
+    const dropPayload = buildStackDropPayload({
+      zoneId: 'player-active',
+      targetPlayerId: 'player1',
+      stackKind: STACK_KINDS.ACTIVE,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('swap-stacks-between-zones');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.BENCH);
+    expect(result.action.sourceBenchIndex).toBe(0);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.ACTIVE);
+  });
+
+  test('accepts swapping occupied stacks when directly dragging a single-card stack', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010'] },
+        playerBench: [{ stackId: 's_player1_bench_1', cardIds: ['c_player1_020', 'c_player1_021'] }],
+      })
+    );
+    const dragPayload = buildCardDragPayload({
+      cardId: 'c_player1_010',
+      sourceZone: 'player-stack',
+      sourceStackKind: STACK_KINDS.ACTIVE,
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-bench-1',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.BENCH,
+      benchIndex: 0,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('swap-stacks-between-zones');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.ACTIVE);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.BENCH);
+    expect(result.action.targetBenchIndex).toBe(0);
+  });
+
+  test('accepts single-card stack swap via stack drop target payload', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010'] },
+        playerBench: [{ stackId: 's_player1_bench_1', cardIds: ['c_player1_020', 'c_player1_021'] }],
+      })
+    );
+    const dragPayload = buildCardDragPayload({
+      cardId: 'c_player1_010',
+      sourceZone: 'player-stack',
+      sourceStackKind: STACK_KINDS.ACTIVE,
+    });
+    const dropPayload = buildStackDropPayload({
+      zoneId: 'player-bench-1',
+      targetPlayerId: 'player1',
+      stackKind: STACK_KINDS.BENCH,
+      benchIndex: 0,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('swap-stacks-between-zones');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.ACTIVE);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.BENCH);
+    expect(result.action.targetBenchIndex).toBe(0);
+  });
+
+  test('keeps target-occupied rejection when source stack has multiple cards', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010', 'c_player1_011'] },
+        playerBench: [{ stackId: 's_player1_bench_1', cardIds: ['c_player1_020'] }],
+      })
+    );
+    const dragPayload = buildCardDragPayload({
+      cardId: 'c_player1_010',
+      sourceZone: 'player-stack',
+      sourceStackKind: STACK_KINDS.ACTIVE,
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-bench-1',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.BENCH,
+      benchIndex: 0,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toBe(REJECT_REASONS.TARGET_OCCUPIED);
   });
 });
