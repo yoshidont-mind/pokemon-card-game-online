@@ -3746,62 +3746,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
-        <section className={styles.centerArea}>
-          <div className={styles.centerAreaInner}>
-            <DroppableZone
-              dropId="zone-center-stadium"
-              dropPayload={playerStadiumDropPayload}
-              className={styles.centerZone}
-              activeClassName={styles.dropZoneActive}
-              isHighlighted={isZoneHighlighted('center-stadium')}
-              data-zone="center-stadium"
-              data-drop-group="stadium"
-            >
-              <p className={styles.zoneTitle}>スタジアム</p>
-              {stadiumCardId && stadiumCardImageUrl ? (
-                canDragStadiumCard ? (
-                  <DraggableCard
-                    dragId={`stadium-card-${stadiumCardId}`}
-                    dragPayload={stadiumCardDragPayload}
-                    className={styles.stadiumCardDraggable}
-                    draggingClassName={styles.draggingSource}
-                  >
-                    <img
-                      src={stadiumCardImageUrl}
-                      alt="場に出ているスタジアムカード"
-                      className={styles.stadiumCardImage}
-                    />
-                  </DraggableCard>
-                ) : (
-                  <img
-                    src={stadiumCardImageUrl}
-                    alt="場に出ているスタジアムカード"
-                    className={styles.stadiumCardImage}
-                  />
-                )
-              ) : (
-                <span className={styles.zoneValueMuted}>なし</span>
-              )}
-              {stadiumCardId && stadiumOwnerLabel ? (
-                <span className={styles.stadiumOwnerLabel}>{stadiumOwnerLabel}が配置</span>
-              ) : null}
-            </DroppableZone>
-            <div className={styles.coinWidget} data-zone="coin-widget">
-              <p className={styles.coinWidgetTitle}>コイン</p>
-              <button
-                type="button"
-                className={`${styles.coinButton} ${isCoinAnimating ? styles.coinButtonAnimating : ''}`.trim()}
-                onClick={handleCoinToss}
-                disabled={isCoinSubmitting || isMutating}
-                aria-label="コイントスを実行"
-              >
-                <img src={coinImageSrc} alt={`コイン(${coinResultLabel})`} className={coinImageClassName} />
-              </button>
-              <span className={styles.coinWidgetResult}>結果: {coinResultLabel}</span>
-            </div>
-          </div>
-        </section>
-
         <section className={styles.playerArea} data-zone="player-area" data-drop-group="area">
           <div className={styles.sideColumn}>
             <ZoneTile
@@ -3843,7 +3787,62 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
 
           <div className={styles.mainColumn}>
-            <div className={`${styles.activeRow} ${styles.battleLineRow}`.trim()}>
+            <div className={`${styles.activeRow} ${styles.battleLineRow} ${styles.battleLineRowWithAux}`.trim()}>
+              <div className={styles.playerBattleAux}>
+                <div className={styles.stadiumCoinRow}>
+                  <DroppableZone
+                    dropId="zone-center-stadium"
+                    dropPayload={playerStadiumDropPayload}
+                    className={joinClassNames(styles.centerZone, styles.inlineStadiumZone)}
+                    activeClassName={styles.dropZoneActive}
+                    isHighlighted={isZoneHighlighted('center-stadium')}
+                    data-zone="center-stadium"
+                    data-drop-group="stadium"
+                  >
+                    <p className={styles.zoneTitle}>スタジアム</p>
+                    {stadiumCardId && stadiumCardImageUrl ? (
+                      canDragStadiumCard ? (
+                        <DraggableCard
+                          dragId={`stadium-card-${stadiumCardId}`}
+                          dragPayload={stadiumCardDragPayload}
+                          className={styles.stadiumCardDraggable}
+                          draggingClassName={styles.draggingSource}
+                        >
+                          <img
+                            src={stadiumCardImageUrl}
+                            alt="場に出ているスタジアムカード"
+                            className={styles.stadiumCardImage}
+                          />
+                        </DraggableCard>
+                      ) : (
+                        <img
+                          src={stadiumCardImageUrl}
+                          alt="場に出ているスタジアムカード"
+                          className={styles.stadiumCardImage}
+                        />
+                      )
+                    ) : (
+                      <span className={styles.zoneValueMuted}>なし</span>
+                    )}
+                    {stadiumCardId && stadiumOwnerLabel ? (
+                      <span className={styles.stadiumOwnerLabel}>{stadiumOwnerLabel}が配置</span>
+                    ) : null}
+                  </DroppableZone>
+                  <div className={styles.coinWidget} data-zone="coin-widget">
+                    <p className={styles.coinWidgetTitle}>コイン</p>
+                    <button
+                      type="button"
+                      className={`${styles.coinButton} ${isCoinAnimating ? styles.coinButtonAnimating : ''}`.trim()}
+                      onClick={handleCoinToss}
+                      disabled={isCoinSubmitting || isMutating}
+                      aria-label="コイントスを実行"
+                    >
+                      <img src={coinImageSrc} alt={`コイン(${coinResultLabel})`} className={coinImageClassName} />
+                    </button>
+                    <span className={styles.coinWidgetResult}>結果: {coinResultLabel}</span>
+                  </div>
+                </div>
+              </div>
               <DroppableZone
                 dropId={`zone-${playerActiveZoneId}`}
                 dropPayload={

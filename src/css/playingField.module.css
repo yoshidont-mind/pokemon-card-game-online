@@ -144,21 +144,27 @@
 .playerArea {
   --side-column-size: clamp(150px, 14vw, 180px);
   display: grid;
-  grid-template-columns: var(--side-column-size) 1fr var(--side-column-size);
   gap: var(--card-gap);
   align-items: stretch;
 }
 
-.centerArea {
-  margin: clamp(8px, 1.6vw, 18px) 0;
+.opponentArea {
+  grid-template-columns: var(--side-column-size) 1fr var(--side-column-size);
+}
+
+.playerArea {
+  grid-template-columns: var(--side-column-size) 1fr var(--side-column-size);
+}
+
+.playerBattleAux {
   display: flex;
+  align-items: flex-start;
   justify-content: center;
 }
 
-.centerAreaInner {
+.stadiumCoinRow {
   display: flex;
-  align-items: stretch;
-  justify-content: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -557,6 +563,32 @@
   align-items: start;
 }
 
+.battleLineRowWithAux {
+  --player-line-base-gap: var(--card-gap);
+  --stadium-inline-width: clamp(122px, 11vw, 146px);
+  --coin-widget-width: clamp(88px, 8.4vw, 102px);
+  --stadium-coin-gap: 10px;
+  --aux-line-width: calc(var(--stadium-inline-width) + var(--stadium-coin-gap) + var(--coin-widget-width));
+  --player-line-inner-gap-raw: calc(
+    (100% - var(--aux-line-width) - var(--active-zone-width) - var(--reveal-line-width) + (2 * var(--player-line-base-gap)))
+      / 4
+  );
+  --player-line-inner-gap: max(var(--player-line-base-gap), var(--player-line-inner-gap-raw));
+  --player-line-outer-gap: max(0px, calc(var(--player-line-inner-gap) - var(--player-line-base-gap)));
+  display: grid;
+  grid-template-columns:
+    var(--player-line-outer-gap)
+    var(--aux-line-width)
+    var(--player-line-inner-gap)
+    var(--active-zone-width)
+    var(--player-line-inner-gap)
+    var(--reveal-line-width)
+    var(--player-line-outer-gap);
+  justify-content: stretch;
+  align-items: start;
+  column-gap: 0;
+}
+
 .battleLineActive {
   position: relative;
   z-index: 1;
@@ -585,6 +617,17 @@
     75% + (var(--card-gap) / 2) + (var(--active-zone-width) / 4) - (var(--reveal-line-width) / 2)
   );
   z-index: 2;
+}
+
+.battleLineRowWithAux .battleLineActive {
+  grid-column: 4;
+  justify-self: center;
+}
+
+.battleLineRowWithAux .battleLineRevealPlayer {
+  grid-column: 6;
+  position: static;
+  width: var(--reveal-line-width);
 }
 
 .zoneTile,
@@ -897,6 +940,11 @@
   text-align: center;
 }
 
+.inlineStadiumZone {
+  width: var(--stadium-inline-width, clamp(122px, 11vw, 146px));
+  min-height: clamp(104px, 11.5vw, 138px);
+}
+
 .stadiumCardDraggable {
   display: inline-flex;
   align-items: center;
@@ -1022,6 +1070,8 @@
 
 .coinWidget {
   display: grid;
+  width: var(--coin-widget-width, auto);
+  box-sizing: border-box;
   justify-items: center;
   gap: 2px;
   border: 1px solid #d6dfcb;
@@ -1029,6 +1079,12 @@
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
   padding: 8px 10px;
+}
+
+.battleLineRowWithAux .playerBattleAux {
+  grid-column: 2;
+  width: var(--aux-line-width);
+  justify-self: center;
 }
 
 .coinWidgetTitle {
@@ -1929,7 +1985,7 @@
     grid-template-columns: 1fr;
   }
 
-  .centerAreaInner {
+  .stadiumCoinRow {
     flex-direction: column;
     width: min(96vw, 420px);
   }

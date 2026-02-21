@@ -136,6 +136,56 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
   - Layout test: PASS (`30 passed, 30 total`)
   - DnD test: PASS (`2 passed, 2 total`)
 
+### 2026-02-21 18:10 JST (Stadium/Coin floating position fix)
+- Issue:
+  - `スタジアム+コイン` が意図しない左上位置へ飛ぶケースを確認。
+- Cause:
+  - `left` 計算式で参照していた `--active-zone-width` が `.opponentArea` 側では未定義で、`calc()` が崩れていた。
+- Fix (`src/css/playingField.module.css`):
+  - `.opponentArea` に `--active-zone-width: min(var(--side-column-size), 100%);` を追加。
+  - `.stadiumCoinFloating` の式をフォールバック付きに変更:
+    - `var(--active-zone-width, 180px)`
+
+### 2026-02-21 18:16 JST (Stadium/Coin placement model change)
+- User feedback:
+  - Stadium/Coin should not float above other zones.
+  - It must sit between **player-side Prize** and **player-side Active** at same plane (no overlay).
+- Fix strategy:
+  - Removed absolute/floating placement model.
+  - Moved Stadium/Coin into normal flow as a dedicated grid column inside `playerArea`.
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - Removed Stadium/Coin block from `opponentArea`.
+    - Inserted Stadium/Coin block between `playerArea` side column (prize) and main column (active/bench).
+  - `src/css/playingField.module.css`
+    - `playerArea` columns changed to: `var(--side-column-size) auto 1fr var(--side-column-size)`
+    - Replaced `.stadiumCoinFloating` with `.stadiumCoinColumn` (non-absolute, normal-flow grid).
+    - Kept `.stadiumCoinRow` gap (`10px`) unchanged.
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - Result: PASS (`32 passed, 32 total`)
+
+### 2026-02-21 18:26 JST (Player-side layout compression fix for Stadium/Coin)
+- User-observed issue:
+  - Player-side layout still collapsed horizontally.
+  - Root cause: adding a dedicated `auto` column in `playerArea` reduced width available to `mainColumn` (active/reveal/bench).
+- Fix strategy:
+  - Restore 3-column `playerArea` grid.
+  - Keep Stadium/Coin in player side, but place as an auxiliary block inside player `battleLineRow` (absolute within row), so it no longer consumes grid width.
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - Removed standalone `stadiumCoinColumn` block between side/main columns.
+    - Added Stadium/Coin block as `playerBattleAux` inside player active row.
+  - `src/css/playingField.module.css`
+    - `playerArea` grid restored to `var(--side-column-size) 1fr var(--side-column-size)`.
+    - Added `.playerBattleAux` absolute anchor:
+      - `left: calc(25% - (var(--active-zone-width) / 4));`
+      - `top: 0`, `transform: translateX(-50%)`.
+    - Tuned `.inlineStadiumZone` size smaller (width/min-height) to avoid occupying side-column-scale footprint.
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - Result: PASS (`32 passed, 32 total`)
+
 ### 2026-02-21 17:59 JST (Stack offset fine-tuning)
 - Requirement:
   - Adjust `STACK_CARD_OFFSET_PX` from `15` to `12`.
@@ -144,3 +194,55 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
     - `STACK_CARD_OFFSET_PX: 15 -> 12`
 - Notes:
   - No other stack-direction logic was changed.
+
+### 2026-02-21 18:30 JST (Stadium/Coin non-floating alignment fix)
+- User-observed issue:
+  - `スタジアム+コイン` が「浮いて見える」配置になり、プレイマット上の通常枠と同一平面に見えない。
+  - 自分側レイアウトが圧迫されて見える状態が発生。
+- Root cause:
+  - `playerBattleAux` を `absolute` で配置していたため、通常フロー外に出て「浮いている」見え方になっていた。
+  - 位置は確保できても、プレイマット枠と同一面で整列している印象になりにくかった。
+- Fix strategy:
+  - `スタジアム+コイン` をプレイヤー側 `battleLineRow` の通常レイアウト内へ戻し、非浮遊（non-floating）で扱う。
+  - 既存の 3 カラム構成（`side / main / side`）は維持し、`playerArea` の横幅圧迫を再発させない。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - プレイヤー側の active 行に `battleLineRowWithAux` クラスを追加。
+  - `src/css/playingField.module.css`
+    - `.playerBattleAux` から absolute 位置指定を除去し、通常フロー配置に変更。
+    - `.battleLineRowWithAux` を追加し、プレイヤー側の active 行を 3 カラムで整列:
+      - `max-content`（スタジアム+コイン） / `var(--active-zone-width)`（バトル場） / `var(--reveal-line-width)`（公開エリア）
+    - `.battleLineRowWithAux .battleLineRevealPlayer` を `position: static` 化し、同一平面で整列。
+- Validation:
+  - Command:
+    - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - Result:
+    - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 18:33 JST (Class assignment correction)
+- Issue found during verification:
+  - `battleLineRowWithAux` の付与先が相手側 active 行になっていた。
+- Fix:
+  - `src/components/PlayingField.js`
+    - `battleLineRowWithAux` を相手側行から外し、自分側 active 行へ付け替え。
+- Re-validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 18:38 JST (Player-side horizontal spacing equalization)
+- Requirement:
+  - `スタジアム+コイン` と `バトル場` の間隔を、`スタジアム+コイン` と `サイド（自分）` の間隔に一致させる。
+  - `公開エリア（自分）` と `バトル場` の間隔を、`公開エリア（自分）` と `山札（自分）` の間隔に一致させる。
+- Root cause:
+  - `battleLineRowWithAux` が中央寄せだったため、行の左右に余白が発生し、内側ギャップと外側ギャップが一致しなかった。
+- Fix:
+  - `src/css/playingField.module.css`
+    - `battleLineRowWithAux` に動的ギャップ計算を導入。
+      - `--player-line-inner-gap`（内側ギャップ）
+      - `--player-line-outer-gap`（左右外側ギャップ）
+    - 7カラム構成に変更し、`playerBattleAux / active / reveal` を固定カラムへ配置。
+    - `inlineStadiumZone` と `coinWidget` の幅を変数連携し、レイアウト計算の前提を固定化。
+    - `playerBattleAux` を `grid-column: 2` へ固定。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
