@@ -550,8 +550,8 @@
   position: relative;
   width: 100%;
   display: flex;
-  --reveal-line-width: var(--side-column-size);
-  --active-zone-width: min(320px, 100%);
+  --reveal-line-width: clamp(176px, 18.5vw, 212px);
+  --active-zone-width: min(var(--side-column-size), 100%);
   min-height: clamp(112px, 16vw, 170px);
   justify-content: center;
   align-items: start;
@@ -863,15 +863,17 @@
 
 .revealZoneValue {
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .revealCards {
-  width: 100%;
+  width: min(100%, calc((var(--card-w) * 2) + 6px));
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  justify-content: flex-start;
+  justify-content: center;
+  align-content: flex-start;
+  margin-inline: auto;
 }
 
 .revealCardDraggable {

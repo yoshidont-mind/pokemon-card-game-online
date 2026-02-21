@@ -77,3 +77,29 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Results:
   - Layout test: PASS (`30 passed, 30 total`)
   - DnD test: PASS (`2 passed, 2 total`)
+
+### 2026-02-21 17:20-17:24 JST (Battle/Reveal width tuning)
+- Requirement:
+  1. Reduce battle active zone width to be close to deck zone width.
+  2. Expand reveal zone width and support max 2 cards per row, wrapping from the 3rd card.
+  3. In reveal zone, rows with one card should be horizontally centered.
+- Implemented updates in `src/css/playingField.module.css`:
+  - `.battleLineRow`
+    - `--active-zone-width`: `min(var(--side-column-size), 100%)`
+    - `--reveal-line-width`: `clamp(176px, 18.5vw, 212px)`
+  - `.revealZoneValue`
+    - `justify-content: center;`
+  - `.revealCards`
+    - `width: min(100%, calc((var(--card-w) * 2) + 6px));`
+    - `justify-content: center;`
+    - `align-content: flex-start;`
+    - `margin-inline: auto;`
+- Notes:
+  - Flex-wrap remains enabled; width constraint limits each row to 2 cards.
+  - Centered justification ensures single-card rows are centered.
+
+### 2026-02-21 17:24-17:30 JST (Validation after width tuning)
+- Command:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js`
+- Result:
+  - PASS (`30 passed, 30 total`)
