@@ -1668,26 +1668,6 @@
   box-shadow: 0 0 0 2px rgba(203, 67, 67, 0.2);
 }
 
-.stackExpandButton {
-  border: 1px solid #6f8659;
-  border-radius: 999px;
-  background: rgba(244, 250, 239, 0.96);
-  color: #1f2b16;
-  font-size: 0.66rem;
-  font-weight: 800;
-  line-height: 1;
-  padding: 4px 9px;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
-  position: relative;
-  z-index: 5;
-  margin-top: 8px;
-}
-
-.stackExpandButton:hover {
-  background: rgba(235, 246, 225, 0.98);
-}
-
 .dropZoneActive {
   border-color: #e13f3f;
   box-shadow: 0 0 0 2px rgba(225, 63, 63, 0.24), var(--zone-shadow);

@@ -609,6 +609,9 @@ function BenchRow({
               benchIndex: index,
             })
           : false;
+        const stackToggleAriaLabel = isStackExpanded
+          ? `${ownerLabel}ベンチ${index + 1}の展開を閉じる`
+          : `${ownerLabel}ベンチ${index + 1}を展開`;
 
         return (
           <DroppableZone
@@ -633,6 +636,40 @@ function BenchRow({
               >
                 <div
                   className={joinClassNames(styles.stackDropSurfaceInner, hoverableClassName)}
+                  role={canExpandStack ? 'button' : undefined}
+                  tabIndex={canExpandStack ? 0 : undefined}
+                  aria-label={canExpandStack ? stackToggleAriaLabel : undefined}
+                  onClick={(event) => {
+                    if (!canExpandStack) {
+                      return;
+                    }
+                    if (event.target instanceof Element && event.target.closest('button')) {
+                      return;
+                    }
+                    onToggleStackCards({
+                      ownerPlayerId,
+                      ownerLabel,
+                      stackKind: STACK_KINDS.BENCH,
+                      benchIndex: index,
+                      sourceZoneId: `${zoneId}-stack`,
+                    });
+                  }}
+                  onKeyDown={(event) => {
+                    if (!canExpandStack) {
+                      return;
+                    }
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                      return;
+                    }
+                    event.preventDefault();
+                    onToggleStackCards({
+                      ownerPlayerId,
+                      ownerLabel,
+                      stackKind: STACK_KINDS.BENCH,
+                      benchIndex: index,
+                      sourceZoneId: `${zoneId}-stack`,
+                    });
+                  }}
                   onDoubleClick={(event) => {
                     if (typeof onOpenStackAdjustPopover !== 'function') {
                       return;
@@ -704,28 +741,6 @@ function BenchRow({
                   ) : (
                     <Pokemon {...toPokemonProps(stack, cardCatalog)} />
                   )}
-                  {canExpandStack ? (
-                    <button
-                      type="button"
-                      className={styles.stackExpandButton}
-                      onClick={() =>
-                        onToggleStackCards({
-                          ownerPlayerId,
-                          ownerLabel,
-                          stackKind: STACK_KINDS.BENCH,
-                          benchIndex: index,
-                          sourceZoneId: `${zoneId}-stack`,
-                        })
-                      }
-                      aria-label={
-                        isStackExpanded
-                          ? `${ownerLabel}ベンチ${index + 1}の展開を閉じる`
-                          : `${ownerLabel}ベンチ${index + 1}を展開`
-                      }
-                    >
-                      {isStackExpanded ? '展開を閉じる' : '展開'}
-                    </button>
-                  ) : null}
                 </div>
               </DroppableStack>
             ) : (
@@ -3417,6 +3432,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const shouldShowStackInsertTargets = isDraggingCard && !isDraggingStackSwapCandidate;
   const playerActiveCardIds = asArray(playerActive?.cardIds);
   const playerActiveCardCount = playerActiveCardIds.length;
+  const opponentActiveCardCount = asArray(opponentActive?.cardIds).length;
   const canDragPlayerActiveSingleCard = playerActiveCardCount === 1;
   const canDragPlayerActiveStackGroup = playerActiveCardCount > 1;
   const playerActiveStackDragPayload = canDragPlayerActiveStackGroup
@@ -3621,8 +3637,46 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                     <div
                       className={joinClassNames(
                         styles.stackDropSurfaceInner,
-                        asArray(opponentActive?.cardIds).length === 1 ? styles.stackDropSurfaceHoverable : ''
+                        opponentActiveCardCount === 1 ? styles.stackDropSurfaceHoverable : ''
                       )}
+                      role={opponentActiveCardCount > 1 ? 'button' : undefined}
+                      tabIndex={opponentActiveCardCount > 1 ? 0 : undefined}
+                      aria-label={
+                        opponentActiveCardCount > 1
+                          ? (isOpponentActiveStackExpanded
+                            ? '相手バトル場の展開を閉じる'
+                            : '相手バトル場を展開')
+                          : undefined
+                      }
+                      onClick={(event) => {
+                        if (opponentActiveCardCount <= 1) {
+                          return;
+                        }
+                        if (event.target instanceof Element && event.target.closest('button')) {
+                          return;
+                        }
+                        handleToggleStackCards({
+                          ownerPlayerId: opponentPlayerId,
+                          ownerLabel: '相手',
+                          stackKind: STACK_KINDS.ACTIVE,
+                          sourceZoneId: `${opponentActiveZoneId}-stack`,
+                        });
+                      }}
+                      onKeyDown={(event) => {
+                        if (opponentActiveCardCount <= 1) {
+                          return;
+                        }
+                        if (event.key !== 'Enter' && event.key !== ' ') {
+                          return;
+                        }
+                        event.preventDefault();
+                        handleToggleStackCards({
+                          ownerPlayerId: opponentPlayerId,
+                          ownerLabel: '相手',
+                          stackKind: STACK_KINDS.ACTIVE,
+                          sourceZoneId: `${opponentActiveZoneId}-stack`,
+                        });
+                      }}
                       onDoubleClick={(event) => {
                         if (event.target instanceof Element && event.target.closest('button')) {
                           return;
@@ -3636,27 +3690,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                       }}
                     >
                       <Pokemon {...toPokemonProps(opponentActive, renderCardCatalog)} />
-                      {asArray(opponentActive?.cardIds).length > 1 ? (
-                        <button
-                          type="button"
-                          className={styles.stackExpandButton}
-                          onClick={() =>
-                            handleToggleStackCards({
-                              ownerPlayerId: opponentPlayerId,
-                              ownerLabel: '相手',
-                              stackKind: STACK_KINDS.ACTIVE,
-                              sourceZoneId: `${opponentActiveZoneId}-stack`,
-                            })
-                          }
-                          aria-label={
-                            isOpponentActiveStackExpanded
-                              ? '相手バトル場の展開を閉じる'
-                              : '相手バトル場を展開'
-                          }
-                        >
-                          {isOpponentActiveStackExpanded ? '展開を閉じる' : '展開'}
-                        </button>
-                      ) : null}
                     </div>
                   </DroppableStack>
                 ) : (
@@ -3806,6 +3839,44 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                         styles.stackDropSurfaceInner,
                         playerActiveCardCount === 1 ? styles.stackDropSurfaceHoverable : ''
                       )}
+                      role={playerActiveCardCount > 1 ? 'button' : undefined}
+                      tabIndex={playerActiveCardCount > 1 ? 0 : undefined}
+                      aria-label={
+                        playerActiveCardCount > 1
+                          ? (isPlayerActiveStackExpanded
+                            ? '自分バトル場の展開を閉じる'
+                            : '自分バトル場を展開')
+                          : undefined
+                      }
+                      onClick={(event) => {
+                        if (playerActiveCardCount <= 1) {
+                          return;
+                        }
+                        if (event.target instanceof Element && event.target.closest('button')) {
+                          return;
+                        }
+                        handleToggleStackCards({
+                          ownerPlayerId,
+                          ownerLabel: '自分',
+                          stackKind: STACK_KINDS.ACTIVE,
+                          sourceZoneId: `${playerActiveZoneId}-stack`,
+                        });
+                      }}
+                      onKeyDown={(event) => {
+                        if (playerActiveCardCount <= 1) {
+                          return;
+                        }
+                        if (event.key !== 'Enter' && event.key !== ' ') {
+                          return;
+                        }
+                        event.preventDefault();
+                        handleToggleStackCards({
+                          ownerPlayerId,
+                          ownerLabel: '自分',
+                          stackKind: STACK_KINDS.ACTIVE,
+                          sourceZoneId: `${playerActiveZoneId}-stack`,
+                        });
+                      }}
                       onDoubleClick={(event) => {
                         if (event.target instanceof Element && event.target.closest('button')) {
                           return;
@@ -3886,27 +3957,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                       ) : (
                         <Pokemon {...toPokemonProps(playerActive, normalizedPlayerCatalog)} />
                       )}
-                      {playerActiveCardCount > 1 ? (
-                        <button
-                          type="button"
-                          className={styles.stackExpandButton}
-                          onClick={() =>
-                            handleToggleStackCards({
-                              ownerPlayerId,
-                              ownerLabel: '自分',
-                              stackKind: STACK_KINDS.ACTIVE,
-                              sourceZoneId: `${playerActiveZoneId}-stack`,
-                            })
-                          }
-                          aria-label={
-                            isPlayerActiveStackExpanded
-                              ? '自分バトル場の展開を閉じる'
-                              : '自分バトル場を展開'
-                          }
-                        >
-                          {isPlayerActiveStackExpanded ? '展開を閉じる' : '展開'}
-                        </button>
-                      ) : null}
                     </div>
                   </DroppableStack>
                 ) : (
