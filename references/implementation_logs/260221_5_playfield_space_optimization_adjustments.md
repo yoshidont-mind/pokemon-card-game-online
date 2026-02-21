@@ -305,3 +305,15 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 19:55 JST (Player active alignment with Bench-3 axis)
+- Requirement:
+  - 相手側は変更せず、自分側バトル場の横方向中心軸を「自分側ベンチ3」の中心軸に一致させる。
+- Applied change:
+  - `src/css/playingField.module.css`
+    - `.battleLineRowWithAux .battleLineActive` に横オフセットを追加:
+      - `transform: translateX(calc((var(--reveal-line-width) - var(--aux-line-width)) / 2));`
+    - これにより、自分側バトル場のみが左方向へ補正され、中央軸がベンチ3と一致するよう調整。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)

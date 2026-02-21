@@ -630,6 +630,7 @@
 .battleLineRowWithAux .battleLineActive {
   grid-column: 4;
   justify-self: center;
+  transform: translateX(calc((var(--reveal-line-width) - var(--aux-line-width)) / 2));
 }
 
 .battleLineRowWithAux .battleLineRevealPlayer {
