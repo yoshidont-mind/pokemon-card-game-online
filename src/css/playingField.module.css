@@ -1447,6 +1447,18 @@
   cursor: grabbing;
 }
 
+.stackGroupDraggable {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  cursor: grab;
+}
+
+.stackGroupDraggable:active {
+  cursor: grabbing;
+}
+
 .stackSingleCardButton {
   display: inline-block;
   width: fit-content;
@@ -1544,6 +1556,10 @@
   width: var(--card-w);
   border-radius: var(--radius-sm);
   box-shadow: 0 14px 24px rgba(0, 0, 0, 0.28);
+}
+
+.dragOverlayStack {
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.28));
 }
 
 .dragOverlayPileCard {

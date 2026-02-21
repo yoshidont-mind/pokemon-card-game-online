@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { DragOverlay } from '@dnd-kit/core';
 import { DRAG_TYPES } from '../../interaction/dnd/constants';
+import Pokemon from '../Pokemon';
 import styles from '../../css/playingField.module.css';
 
 const STATUS_BADGE_LABEL = Object.freeze({
@@ -25,6 +26,30 @@ const BoardDragOverlay = ({ activeDragPayload, cardCatalog = {} }) => {
           <img src={imageUrl} alt="Dragging Card" className={styles.dragOverlayCard} />
         ) : (
           <div className={styles.dragOverlayTool}>CARD</div>
+        )}
+      </DragOverlay>
+    );
+  }
+
+  if (activeDragPayload.dragType === DRAG_TYPES.STACK) {
+    const previewCardIds = Array.isArray(activeDragPayload.previewCardIds)
+      ? activeDragPayload.previewCardIds.filter(Boolean)
+      : [];
+    const previewImageUrls = previewCardIds
+      .map((cardId) => cardCatalog?.[cardId]?.imageUrl || null)
+      .filter(Boolean);
+    const previewCardId = activeDragPayload.previewCardId || previewCardIds[previewCardIds.length - 1] || '';
+    const imageUrl = cardCatalog?.[previewCardId]?.imageUrl;
+    return (
+      <DragOverlay>
+        {previewImageUrls.length > 0 ? (
+          <div className={styles.dragOverlayStack}>
+            <Pokemon images={previewImageUrls} />
+          </div>
+        ) : imageUrl ? (
+          <img src={imageUrl} alt="Dragging Stack" className={styles.dragOverlayCard} />
+        ) : (
+          <div className={styles.dragOverlayPileLabel}>スタックを移動</div>
         )}
       </DragOverlay>
     );
@@ -80,6 +105,8 @@ BoardDragOverlay.propTypes = {
   activeDragPayload: PropTypes.shape({
     dragType: PropTypes.string,
     cardId: PropTypes.string,
+    previewCardId: PropTypes.string,
+    previewCardIds: PropTypes.arrayOf(PropTypes.string),
     toolValue: PropTypes.string,
     sourceZone: PropTypes.string,
   }),

@@ -533,4 +533,120 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.sessionDoc.publicState.players.player1.board.discard[0].cardId).toBe('c_player1_060');
     expect(result.sessionDoc.publicState.players.player1.counters.handCount).toBe(1);
   });
+
+  test('swaps occupied active and bench stacks', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.active = {
+      stackId: 's_player1_active',
+      cardIds: ['c_player1_010'],
+      damage: 20,
+      specialConditions: {
+        poisoned: true,
+        burned: false,
+        asleep: false,
+        paralyzed: false,
+        confused: false,
+      },
+      orientation: 'vertical',
+      isFaceDown: false,
+    };
+    sessionDoc.publicState.players.player1.board.bench = [
+      {
+        stackId: 's_player1_bench_1',
+        cardIds: ['c_player1_020', 'c_player1_021'],
+        damage: 0,
+        specialConditions: {
+          poisoned: false,
+          burned: false,
+          asleep: false,
+          paralyzed: false,
+          confused: false,
+        },
+        orientation: 'vertical',
+        isFaceDown: false,
+      },
+    ];
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'swap-stacks-between-zones',
+          sourceStackKind: 'active',
+          targetZoneKind: 'bench',
+          targetBenchIndex: 0,
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.active.cardIds).toEqual([
+      'c_player1_020',
+      'c_player1_021',
+    ]);
+    expect(result.sessionDoc.publicState.players.player1.board.bench[0].cardIds).toEqual([
+      'c_player1_010',
+    ]);
+    expect(result.sessionDoc.status).toBe('playing');
+  });
+
+  test('swaps occupied bench stacks between slots', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.bench = [
+      {
+        stackId: 's_player1_bench_1',
+        cardIds: ['c_player1_110'],
+        damage: 0,
+        specialConditions: {
+          poisoned: false,
+          burned: false,
+          asleep: false,
+          paralyzed: false,
+          confused: false,
+        },
+        orientation: 'vertical',
+        isFaceDown: false,
+      },
+      {
+        stackId: 's_player1_bench_2',
+        cardIds: ['c_player1_120', 'c_player1_121'],
+        damage: 30,
+        specialConditions: {
+          poisoned: false,
+          burned: false,
+          asleep: true,
+          paralyzed: false,
+          confused: false,
+        },
+        orientation: 'vertical',
+        isFaceDown: false,
+      },
+    ];
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'swap-stacks-between-zones',
+          sourceStackKind: 'bench',
+          sourceBenchIndex: 0,
+          targetZoneKind: 'bench',
+          targetBenchIndex: 1,
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.bench[0].cardIds).toEqual([
+      'c_player1_120',
+      'c_player1_121',
+    ]);
+    expect(result.sessionDoc.publicState.players.player1.board.bench[1].cardIds).toEqual([
+      'c_player1_110',
+    ]);
+  });
 });

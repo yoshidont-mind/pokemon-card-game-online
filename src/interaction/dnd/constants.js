@@ -2,6 +2,7 @@ export const BENCH_SLOT_COUNT = 5;
 
 export const DRAG_TYPES = Object.freeze({
   CARD: 'card',
+  STACK: 'stack',
   PILE_CARD: 'pile-card',
   DAMAGE_COUNTER: 'damage-counter',
   STATUS_BADGE: 'status-badge',
@@ -33,6 +34,7 @@ export const INTENT_ACTIONS = Object.freeze({
   MOVE_CARD_FROM_HAND_TO_ZONE: 'move-card-from-hand-to-zone',
   MOVE_CARD_TO_DECK_EDGE: 'move-card-to-deck-edge',
   MOVE_CARD_TO_STACK_EDGE: 'move-card-to-stack-edge',
+  SWAP_STACKS: 'swap-stacks-between-zones',
   MOVE_TOP_CARD_FROM_SOURCE_TO_HAND: 'move-top-card-from-source-to-hand',
   APPLY_TOOL_TO_STACK: 'apply-tool-to-stack',
 });

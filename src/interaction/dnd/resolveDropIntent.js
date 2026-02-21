@@ -35,17 +35,42 @@ function isBenchIndexValid(value) {
 }
 
 function hasStack(boardSnapshot, playerId, stackKind, benchIndex) {
+  return getStackCardCount(boardSnapshot, playerId, stackKind, benchIndex) > 0;
+}
+
+function getStackCardCount(boardSnapshot, playerId, stackKind, benchIndex) {
   const playerSnapshot = boardSnapshot?.players?.[playerId];
   if (!playerSnapshot) {
-    return false;
+    return 0;
   }
   if (stackKind === STACK_KINDS.ACTIVE) {
-    return Boolean(playerSnapshot.activeExists);
+    return Math.max(0, Number(playerSnapshot.activeCardCount) || 0);
   }
   if (stackKind === STACK_KINDS.BENCH && isBenchIndexValid(benchIndex)) {
-    return Boolean(playerSnapshot.benchOccupied?.[benchIndex]);
+    return Math.max(0, Number(playerSnapshot.benchCardCounts?.[benchIndex]) || 0);
   }
-  return false;
+  return 0;
+}
+
+function normalizeStackKind(value) {
+  return value === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+}
+
+function isSameStackLocation({
+  sourceStackKind,
+  sourceBenchIndex = null,
+  targetZoneKind,
+  targetBenchIndex = null,
+}) {
+  const normalizedSourceKind = normalizeStackKind(sourceStackKind);
+  const normalizedTargetKind = targetZoneKind === ZONE_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+  if (normalizedSourceKind !== normalizedTargetKind) {
+    return false;
+  }
+  if (normalizedSourceKind === STACK_KINDS.BENCH) {
+    return Number(sourceBenchIndex) === Number(targetBenchIndex);
+  }
+  return true;
 }
 
 function isZoneOccupied(boardSnapshot, playerId, zoneKind, benchIndex) {
@@ -60,6 +85,31 @@ function isZoneOccupied(boardSnapshot, playerId, zoneKind, benchIndex) {
     return Boolean(playerSnapshot.benchOccupied?.[benchIndex]);
   }
   return false;
+}
+
+function buildSwapStacksIntent({
+  actorPlayerId,
+  sourceStackKind,
+  sourceBenchIndex = null,
+  targetZoneKind,
+  targetZoneId,
+  targetBenchIndex = null,
+}) {
+  return accept({
+    action: {
+      kind: INTENT_ACTIONS.SWAP_STACKS,
+      targetPlayerId: actorPlayerId,
+      sourceStackKind,
+      sourceBenchIndex: sourceStackKind === STACK_KINDS.BENCH ? sourceBenchIndex : null,
+      targetZoneKind,
+      targetZoneId,
+      targetBenchIndex: targetZoneKind === ZONE_KINDS.BENCH ? targetBenchIndex : null,
+    },
+    highlightTarget: {
+      type: DROP_TYPES.ZONE,
+      zoneId: targetZoneId,
+    },
+  });
 }
 
 function isSupportedCardSourceZone(sourceZone) {
@@ -78,9 +128,17 @@ export function createBoardSnapshot(sessionDoc) {
   const toPlayerSnapshot = (playerKey) => {
     const board = players?.[playerKey]?.board || {};
     const bench = asArray(board.bench);
+    const activeCardCount = Array.isArray(board?.active?.cardIds) ? board.active.cardIds.length : 0;
     return {
-      activeExists: Boolean(board.active),
-      benchOccupied: Array.from({ length: BENCH_SLOT_COUNT }, (_, index) => Boolean(bench[index])),
+      activeExists: activeCardCount > 0,
+      activeCardCount,
+      benchOccupied: Array.from({ length: BENCH_SLOT_COUNT }, (_, index) => {
+        const cardIds = asArray(bench[index]?.cardIds);
+        return cardIds.length > 0;
+      }),
+      benchCardCounts: Array.from({ length: BENCH_SLOT_COUNT }, (_, index) =>
+        asArray(bench[index]?.cardIds).length
+      ),
     };
   };
 
@@ -103,6 +161,61 @@ export function resolveDropIntent({
   }
 
   if (dropPayload.dropType === DROP_TYPES.ZONE) {
+    if (dragPayload.dragType === DRAG_TYPES.STACK) {
+      if (dragPayload.sourceZone !== 'player-stack') {
+        return reject(REJECT_REASONS.UNSUPPORTED_SOURCE);
+      }
+      if (dropPayload.targetPlayerId !== actorPlayerId) {
+        return reject(REJECT_REASONS.PERMISSION_DENIED);
+      }
+      if (dropPayload.zoneKind !== ZONE_KINDS.ACTIVE && dropPayload.zoneKind !== ZONE_KINDS.BENCH) {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+      }
+      if (dropPayload.zoneKind === ZONE_KINDS.BENCH && !isBenchIndexValid(dropPayload.benchIndex)) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+
+      const sourceStackKind = normalizeStackKind(dragPayload.sourceStackKind);
+      if (sourceStackKind === STACK_KINDS.BENCH && !isBenchIndexValid(dragPayload.sourceBenchIndex)) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+
+      if (
+        isSameStackLocation({
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind: dropPayload.zoneKind,
+          targetBenchIndex: dropPayload.benchIndex,
+        })
+      ) {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+      }
+
+      if (
+        !hasStack(
+          boardSnapshot,
+          actorPlayerId,
+          sourceStackKind,
+          sourceStackKind === STACK_KINDS.BENCH ? dragPayload.sourceBenchIndex : null
+        )
+      ) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      if (!isZoneOccupied(boardSnapshot, actorPlayerId, dropPayload.zoneKind, dropPayload.benchIndex)) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      return buildSwapStacksIntent({
+        actorPlayerId,
+        sourceStackKind,
+        sourceBenchIndex: dragPayload.sourceBenchIndex,
+        targetZoneKind: dropPayload.zoneKind,
+        targetZoneId: dropPayload.zoneId,
+        targetBenchIndex: dropPayload.benchIndex,
+      });
+    }
+
     if (dragPayload.dragType === DRAG_TYPES.PILE_CARD) {
       if (
         dragPayload.sourceZone !== 'player-deck' &&
@@ -247,6 +360,36 @@ export function resolveDropIntent({
       (dropPayload.zoneKind === ZONE_KINDS.ACTIVE || dropPayload.zoneKind === ZONE_KINDS.BENCH) &&
       isZoneOccupied(boardSnapshot, actorPlayerId, dropPayload.zoneKind, dropPayload.benchIndex)
     ) {
+      const sourceStackKind = normalizeStackKind(dragPayload.sourceStackKind);
+      const sourceStackCardCount =
+        dragPayload.sourceZone === 'player-stack'
+          ? getStackCardCount(
+              boardSnapshot,
+              actorPlayerId,
+              sourceStackKind,
+              sourceStackKind === STACK_KINDS.BENCH ? dragPayload.sourceBenchIndex : null
+            )
+          : 0;
+
+      if (
+        dragPayload.sourceZone === 'player-stack' &&
+        sourceStackCardCount === 1 &&
+        !isSameStackLocation({
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind: dropPayload.zoneKind,
+          targetBenchIndex: dropPayload.benchIndex,
+        })
+      ) {
+        return buildSwapStacksIntent({
+          actorPlayerId,
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind: dropPayload.zoneKind,
+          targetZoneId: dropPayload.zoneId,
+          targetBenchIndex: dropPayload.benchIndex,
+        });
+      }
       return reject(REJECT_REASONS.TARGET_OCCUPIED);
     }
 
@@ -281,6 +424,115 @@ export function resolveDropIntent({
   }
 
   if (dropPayload.dropType === DROP_TYPES.STACK) {
+    const targetZoneKind =
+      dropPayload.stackKind === STACK_KINDS.BENCH ? ZONE_KINDS.BENCH : ZONE_KINDS.ACTIVE;
+    const targetBenchIndex =
+      targetZoneKind === ZONE_KINDS.BENCH ? dropPayload.benchIndex : null;
+
+    if (dragPayload.dragType === DRAG_TYPES.STACK) {
+      if (dragPayload.sourceZone !== 'player-stack') {
+        return reject(REJECT_REASONS.UNSUPPORTED_SOURCE);
+      }
+      if (dropPayload.targetPlayerId !== actorPlayerId) {
+        return reject(REJECT_REASONS.PERMISSION_DENIED);
+      }
+      if (targetZoneKind === ZONE_KINDS.BENCH && !isBenchIndexValid(targetBenchIndex)) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+
+      const sourceStackKind = normalizeStackKind(dragPayload.sourceStackKind);
+      if (sourceStackKind === STACK_KINDS.BENCH && !isBenchIndexValid(dragPayload.sourceBenchIndex)) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+
+      if (
+        isSameStackLocation({
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind,
+          targetBenchIndex,
+        })
+      ) {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+      }
+
+      if (
+        !hasStack(
+          boardSnapshot,
+          actorPlayerId,
+          sourceStackKind,
+          sourceStackKind === STACK_KINDS.BENCH ? dragPayload.sourceBenchIndex : null
+        )
+      ) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      if (!hasStack(boardSnapshot, actorPlayerId, targetZoneKind, targetBenchIndex)) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      return buildSwapStacksIntent({
+        actorPlayerId,
+        sourceStackKind,
+        sourceBenchIndex: dragPayload.sourceBenchIndex,
+        targetZoneKind,
+        targetZoneId: dropPayload.zoneId,
+        targetBenchIndex,
+      });
+    }
+
+    if (dragPayload.dragType === DRAG_TYPES.CARD) {
+      if (dragPayload.sourceZone !== 'player-stack') {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+      }
+      if (dropPayload.targetPlayerId !== actorPlayerId) {
+        return reject(REJECT_REASONS.PERMISSION_DENIED);
+      }
+      if (targetZoneKind === ZONE_KINDS.BENCH && !isBenchIndexValid(targetBenchIndex)) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+
+      const sourceStackKind = normalizeStackKind(dragPayload.sourceStackKind);
+      if (sourceStackKind === STACK_KINDS.BENCH && !isBenchIndexValid(dragPayload.sourceBenchIndex)) {
+        return reject(REJECT_REASONS.INVALID_PAYLOAD);
+      }
+
+      const sourceStackCardCount = getStackCardCount(
+        boardSnapshot,
+        actorPlayerId,
+        sourceStackKind,
+        sourceStackKind === STACK_KINDS.BENCH ? dragPayload.sourceBenchIndex : null
+      );
+
+      if (sourceStackCardCount !== 1) {
+        return reject(REJECT_REASONS.TARGET_OCCUPIED);
+      }
+
+      if (
+        isSameStackLocation({
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind,
+          targetBenchIndex,
+        })
+      ) {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+      }
+
+      if (!hasStack(boardSnapshot, actorPlayerId, targetZoneKind, targetBenchIndex)) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      return buildSwapStacksIntent({
+        actorPlayerId,
+        sourceStackKind,
+        sourceBenchIndex: dragPayload.sourceBenchIndex,
+        targetZoneKind,
+        targetZoneId: dropPayload.zoneId,
+        targetBenchIndex,
+      });
+    }
+
     if (
       dragPayload.dragType !== DRAG_TYPES.DAMAGE_COUNTER &&
       dragPayload.dragType !== DRAG_TYPES.STATUS_BADGE

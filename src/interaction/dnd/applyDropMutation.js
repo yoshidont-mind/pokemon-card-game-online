@@ -475,6 +475,87 @@ function moveCardToStackEdge({ sessionDoc, privateStateDoc, playerId, action }) 
   };
 }
 
+function swapStacksBetweenZones({ sessionDoc, privateStateDoc, playerId, action }) {
+  const sourceStackKind =
+    action?.sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+  const targetZoneKind =
+    action?.targetZoneKind === ZONE_KINDS.BENCH ? ZONE_KINDS.BENCH : ZONE_KINDS.ACTIVE;
+
+  const board = resolvePlayerBoard(sessionDoc, playerId);
+  const bench = normalizeBenchSlots(board.bench);
+
+  const sourceBenchIndex =
+    sourceStackKind === STACK_KINDS.BENCH ? Number(action?.sourceBenchIndex) : null;
+  const targetBenchIndex =
+    targetZoneKind === ZONE_KINDS.BENCH ? Number(action?.targetBenchIndex) : null;
+
+  if (
+    sourceStackKind === STACK_KINDS.BENCH &&
+    (!Number.isInteger(sourceBenchIndex) || sourceBenchIndex < 0 || sourceBenchIndex >= BENCH_SLOT_COUNT)
+  ) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Invalid source bench index.');
+  }
+
+  if (
+    targetZoneKind === ZONE_KINDS.BENCH &&
+    (!Number.isInteger(targetBenchIndex) || targetBenchIndex < 0 || targetBenchIndex >= BENCH_SLOT_COUNT)
+  ) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Invalid target bench index.');
+  }
+
+  const sourceStack =
+    sourceStackKind === STACK_KINDS.ACTIVE ? board.active || null : bench[sourceBenchIndex] || null;
+  const targetStack =
+    targetZoneKind === ZONE_KINDS.ACTIVE ? board.active || null : bench[targetBenchIndex] || null;
+
+  if (!sourceStack || !Array.isArray(sourceStack.cardIds) || sourceStack.cardIds.length <= 0) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Source stack does not exist.');
+  }
+  if (!targetStack || !Array.isArray(targetStack.cardIds) || targetStack.cardIds.length <= 0) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Target stack does not exist.');
+  }
+
+  const isSameStackLocation =
+    sourceStackKind === STACK_KINDS.ACTIVE &&
+    targetZoneKind === ZONE_KINDS.ACTIVE
+      ? true
+      : sourceStackKind === STACK_KINDS.BENCH &&
+          targetZoneKind === ZONE_KINDS.BENCH &&
+          sourceBenchIndex === targetBenchIndex;
+
+  if (isSameStackLocation) {
+    return {
+      sessionDoc,
+      privateStateDoc,
+    };
+  }
+
+  if (sourceStackKind === STACK_KINDS.ACTIVE) {
+    board.active = targetStack;
+  } else {
+    bench[sourceBenchIndex] = targetStack;
+  }
+
+  if (targetZoneKind === ZONE_KINDS.ACTIVE) {
+    board.active = sourceStack;
+  } else {
+    bench[targetBenchIndex] = sourceStack;
+  }
+  board.bench = bench;
+
+  if (
+    sessionDoc.status === SESSION_STATUS.WAITING ||
+    sessionDoc.status === SESSION_STATUS.READY
+  ) {
+    sessionDoc.status = SESSION_STATUS.PLAYING;
+  }
+
+  return {
+    sessionDoc,
+    privateStateDoc,
+  };
+}
+
 function resolveTargetStack(board, stackKind, benchIndex) {
   if (stackKind === STACK_KINDS.ACTIVE) {
     return board.active || null;
@@ -651,6 +732,15 @@ export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId,
 
   if (intent.action.kind === INTENT_ACTIONS.MOVE_CARD_TO_STACK_EDGE) {
     return moveCardToStackEdge({
+      sessionDoc,
+      privateStateDoc,
+      playerId,
+      action: intent.action,
+    });
+  }
+
+  if (intent.action.kind === INTENT_ACTIONS.SWAP_STACKS) {
+    return swapStacksBetweenZones({
       sessionDoc,
       privateStateDoc,
       playerId,
