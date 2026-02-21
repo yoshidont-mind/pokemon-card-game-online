@@ -403,3 +403,29 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 21:39 JST (Mutation popup auto-dismiss timing adjustment)
+- Requirement:
+  - 「山札がシャッフルされました。」/「相手プレイヤーの山札がシャッフルされました。」の表示上限を 10 秒 → 5 秒へ短縮。
+  - 「カードを山札の下に戻しました。」/「相手がカードを山札の下に戻しました。」（実装上は上/下両方）の表示上限を 10 秒に設定。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - メッセージ種別ごとの自動消去時間定義を追加:
+      - `SHUFFLE_NOTICE_AUTO_DISMISS_MS = 5000`
+      - `DECK_INSERT_NOTICE_AUTO_DISMISS_MS = 10000`
+    - 判定ロジック `resolveMutationNoticeTimeoutMs(message)` を追加。
+      - シャッフル2種は 5 秒
+      - 山札戻し（上/下、自己/相手）は 10 秒
+      - それ以外は自動消去しない
+    - 既存の `mutationNotice` 自動消去 `useEffect` を上記判定へ置換。
+- Validation:
+  - コードレビューで、対象メッセージのみ指定秒数で `clearMutationNotice()` されることを確認。
+
+### 2026-02-21 21:43 JST (Follow-up correction: deck-insert notice duration)
+- Correction request:
+  - 直前指定のうち「カードを山札の下に戻しました。」/「相手がカードを山札の下に戻しました。」も 10 秒ではなく 5 秒へ統一。
+- Applied change:
+  - `src/components/PlayingField.js`
+    - `DECK_INSERT_NOTICE_AUTO_DISMISS_MS` を `10000` から `5000` へ変更。
+- Result:
+  - シャッフル通知・山札戻し通知ともに最大 5 秒で自動消去。

@@ -52,6 +52,13 @@ const POPUP_CARD_BASE_SHIFT = Object.freeze({
   y: -40,
 });
 const POPUP_CARD_VIEWPORT_MARGIN_PX = 6;
+const SHUFFLE_NOTICE_AUTO_DISMISS_MS = 5000;
+const DECK_INSERT_NOTICE_AUTO_DISMISS_MS = 5000;
+const SHUFFLE_NOTICE_MESSAGES = new Set([
+  '山札がシャッフルされました。',
+  '相手プレイヤーの山札がシャッフルされました。',
+]);
+const DECK_INSERT_NOTICE_PATTERN = /^(?:相手が)?カードを山札の(?:上|下)に戻しました。$/;
 const COIN_RESULT_LABEL = Object.freeze({
   heads: 'オモテ',
   tails: 'ウラ',
@@ -539,6 +546,19 @@ function formatPendingRequestLabel(request) {
   }
 
   return '相手から操作の承認が必要です。';
+}
+
+function resolveMutationNoticeTimeoutMs(message) {
+  if (typeof message !== 'string' || message.trim() === '') {
+    return null;
+  }
+  if (SHUFFLE_NOTICE_MESSAGES.has(message)) {
+    return SHUFFLE_NOTICE_AUTO_DISMISS_MS;
+  }
+  if (DECK_INSERT_NOTICE_PATTERN.test(message)) {
+    return DECK_INSERT_NOTICE_AUTO_DISMISS_MS;
+  }
+  return null;
 }
 
 function ZoneTile({
@@ -2014,10 +2034,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   );
 
   useEffect(() => {
-    if (
-      mutationNotice.text !== '山札がシャッフルされました。' &&
-      mutationNotice.text !== '相手プレイヤーの山札がシャッフルされました。'
-    ) {
+    const timeoutMs = resolveMutationNoticeTimeoutMs(mutationNotice.text);
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       return undefined;
     }
     if (typeof window === 'undefined') {
@@ -2025,7 +2043,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     }
     const timeoutId = window.setTimeout(() => {
       clearMutationNotice();
-    }, 10000);
+    }, timeoutMs);
     return () => window.clearTimeout(timeoutId);
   }, [clearMutationNotice, mutationNotice.text]);
 
