@@ -672,6 +672,16 @@
   justify-items: center;
 }
 
+.deckPileInteractive {
+  cursor: pointer;
+}
+
+.deckPileInteractive:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
 .publicPilePreview {
   width: 100%;
   display: grid;

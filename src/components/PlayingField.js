@@ -478,10 +478,28 @@ function ZoneTile({
   );
 }
 
-function DeckPile({ count, alt }) {
+function DeckPile({ count, alt, onActivate = null }) {
   const normalizedCount = Math.max(0, Number(count) || 0);
+  const isInteractive = typeof onActivate === 'function' && normalizedCount > 0;
+  const handleKeyDown = (event) => {
+    if (!isInteractive) {
+      return;
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+    event.preventDefault();
+    onActivate();
+  };
   return (
-    <div className={styles.deckPile}>
+    <div
+      className={joinClassNames(styles.deckPile, isInteractive ? styles.deckPileInteractive : '')}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={isInteractive ? '山札を閲覧する' : undefined}
+      onClick={isInteractive ? onActivate : undefined}
+      onKeyDown={handleKeyDown}
+    >
       {normalizedCount > 0 ? (
         <div className={styles.pileCardFrame}>
           <img src={CARD_BACK_IMAGE} alt={alt} className={styles.deckCardBack} />
@@ -4045,7 +4063,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                       })}
                       className={styles.pileCardDraggable}
                     >
-                      <DeckPile count={displayPlayerDeckCount} alt="Player Deck" />
+                      <DeckPile
+                        count={displayPlayerDeckCount}
+                        alt="Player Deck"
+                        onActivate={!isQuickActionLocked ? handleOpenDeckPeekConfig : null}
+                      />
                     </DraggableCard>
                   ) : (
                     <DeckPile count={displayPlayerDeckCount} alt="Player Deck" />
@@ -4097,15 +4119,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                     aria-label="山札をシャッフルする"
                   >
                     シャッフル
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.zoneQuickActionButton}
-                    onClick={handleOpenDeckPeekConfig}
-                    disabled={playerDeckCount <= 0 || isQuickActionLocked}
-                    aria-label="山札を閲覧する"
-                  >
-                    閲覧
                   </button>
                 </div>
               </div>

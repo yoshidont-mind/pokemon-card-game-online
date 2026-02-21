@@ -53,3 +53,27 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldDnd.test.js`
 - Result:
   - PASS (`2 passed, 2 total`)
+
+### 2026-02-21 17:03-17:11 JST (Deck peek trigger UX update)
+- Requirement:
+  - Remove dedicated `閲覧` button under deck card.
+  - Open deck peek count selection modal by clicking the deck back card image directly.
+- Implemented updates:
+  - `src/components/PlayingField.js`
+    - `DeckPile` now supports interactive mode via `onActivate`.
+    - Added keyboard activation support (`Enter` / `Space`) for accessibility.
+    - Removed deck quick-action `閲覧` button.
+    - Wired player deck pile to `handleOpenDeckPeekConfig` (`onActivate`) when interaction is allowed.
+  - `src/css/playingField.module.css`
+    - Added `.deckPileInteractive` and focus-visible style.
+  - `src/components/__tests__/PlayingFieldLayout.test.js`
+    - Updated deck peek modal test to click deck image (`alt="Player Deck"`) instead of old `閲覧` button.
+    - Updated test title accordingly.
+
+### 2026-02-21 17:11 JST (Validation after deck peek trigger update)
+- Commands:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js`
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldDnd.test.js`
+- Results:
+  - Layout test: PASS (`30 passed, 30 total`)
+  - DnD test: PASS (`2 passed, 2 total`)

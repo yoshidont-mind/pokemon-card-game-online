@@ -261,10 +261,10 @@ test('shows quick action buttons for deck draw, shuffle, and prize take', () => 
   expect(screen.getByRole('button', { name: /サイドから1枚取る/i })).toBeInTheDocument();
 });
 
-test('opens deck peek count config modal from deck quick action', async () => {
+test('opens deck peek count config modal from deck card image click', async () => {
   renderPlayingField();
 
-  fireEvent.click(screen.getByRole('button', { name: '山札を閲覧する' }));
+  fireEvent.click(screen.getByAltText('Player Deck'));
   const modal = await screen.findByRole('dialog');
   expect(within(modal).getByText('山札を閲覧')).toBeInTheDocument();
   expect(within(modal).getByText('1 枚')).toBeInTheDocument();
