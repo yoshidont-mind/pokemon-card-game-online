@@ -322,6 +322,30 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.sessionDoc.publicState.turnContext.deckPeekState.isOpen).toBe(true);
   });
 
+  test('moves top card from deck pile to prize zone as face-down', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-top-card-from-source-to-hand',
+          sourceZone: 'player-deck',
+          targetZoneKind: 'prize',
+        },
+      },
+    });
+
+    expect(result.privateStateDoc.zones.deck).toHaveLength(0);
+    expect(result.sessionDoc.publicState.players.player1.counters.deckCount).toBe(0);
+    expect(result.sessionDoc.publicState.players.player1.board.prize).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.prize[0].cardId).toBe('c_player1_099');
+    expect(result.sessionDoc.publicState.players.player1.board.prize[0].isFaceDown).toBe(true);
+  });
+
   test('moves a hand card to deck top edge and records deck insert event', () => {
     const { sessionDoc, privateStateDoc } = createDocs();
 
@@ -532,6 +556,174 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.sessionDoc.publicState.players.player1.board.discard).toHaveLength(1);
     expect(result.sessionDoc.publicState.players.player1.board.discard[0].cardId).toBe('c_player1_060');
     expect(result.sessionDoc.publicState.players.player1.counters.handCount).toBe(1);
+  });
+
+  test('moves whole active stack to discard when stack-move intent is used', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.active = {
+      stackId: 's_player1_active',
+      cardIds: ['c_player1_010', 'c_player1_011'],
+      damage: 30,
+      specialConditions: {
+        poisoned: true,
+        burned: false,
+        asleep: false,
+        paralyzed: false,
+        confused: false,
+      },
+      orientation: 'vertical',
+      isFaceDown: false,
+    };
+    privateStateDoc.cardCatalog.c_player1_010 = {
+      cardId: 'c_player1_010',
+      imageUrl: 'https://example.com/10.jpg',
+      ownerPlayerId: 'player1',
+    };
+    privateStateDoc.cardCatalog.c_player1_011 = {
+      cardId: 'c_player1_011',
+      imageUrl: 'https://example.com/11.jpg',
+      ownerPlayerId: 'player1',
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-stack-from-stack-to-zone',
+          sourceStackKind: 'active',
+          targetZoneKind: 'discard',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.active).toBeNull();
+    expect(result.sessionDoc.publicState.players.player1.board.discard.map((entry) => entry.cardId)).toEqual([
+      'c_player1_010',
+      'c_player1_011',
+    ]);
+  });
+
+  test('moves whole bench stack to lost zone when stack-move intent is used', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.bench = [
+      {
+        stackId: 's_player1_bench_1',
+        cardIds: ['c_player1_020', 'c_player1_021'],
+        damage: 0,
+        specialConditions: {
+          poisoned: false,
+          burned: false,
+          asleep: false,
+          paralyzed: false,
+          confused: false,
+        },
+        orientation: 'vertical',
+        isFaceDown: false,
+      },
+    ];
+    privateStateDoc.cardCatalog.c_player1_020 = {
+      cardId: 'c_player1_020',
+      imageUrl: 'https://example.com/20.jpg',
+      ownerPlayerId: 'player1',
+    };
+    privateStateDoc.cardCatalog.c_player1_021 = {
+      cardId: 'c_player1_021',
+      imageUrl: 'https://example.com/21.jpg',
+      ownerPlayerId: 'player1',
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-stack-from-stack-to-zone',
+          sourceStackKind: 'bench',
+          sourceBenchIndex: 0,
+          targetZoneKind: 'lost',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.bench[0]).toBeNull();
+    expect(result.sessionDoc.publicState.players.player1.board.lostZone.map((entry) => entry.cardId)).toEqual([
+      'c_player1_020',
+      'c_player1_021',
+    ]);
+  });
+
+  test('moves a card from discard source zone to hand', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.discard = [
+      { cardId: 'c_player1_060', imageUrl: 'https://example.com/60.jpg' },
+    ];
+    privateStateDoc.cardCatalog.c_player1_060 = {
+      cardId: 'c_player1_060',
+      imageUrl: 'https://example.com/60.jpg',
+      ownerPlayerId: 'player1',
+    };
+    privateStateDoc.zones.hand = [
+      { cardId: 'c_player1_002', orientation: 'vertical', isFaceDown: false, visibility: 'ownerOnly' },
+    ];
+    sessionDoc.publicState.players.player1.counters.handCount = 1;
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-from-hand-to-zone',
+          cardId: 'c_player1_060',
+          sourceZone: 'player-discard',
+          targetZoneKind: 'hand',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.discard).toHaveLength(0);
+    expect(result.privateStateDoc.zones.hand.map((entry) => entry.cardId)).toEqual([
+      'c_player1_002',
+      'c_player1_060',
+    ]);
+    expect(result.sessionDoc.publicState.players.player1.counters.handCount).toBe(2);
+  });
+
+  test('moves a card from lost source zone to reveal', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.lostZone = [
+      { cardId: 'c_player1_070', imageUrl: 'https://example.com/70.jpg' },
+    ];
+    privateStateDoc.cardCatalog.c_player1_070 = {
+      cardId: 'c_player1_070',
+      imageUrl: 'https://example.com/70.jpg',
+      ownerPlayerId: 'player1',
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-from-hand-to-zone',
+          cardId: 'c_player1_070',
+          sourceZone: 'player-lost',
+          targetZoneKind: 'reveal',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.lostZone).toHaveLength(0);
+    expect(result.sessionDoc.publicState.players.player1.board.reveal).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.reveal[0].cardId).toBe('c_player1_070');
   });
 
   test('swaps occupied active and bench stacks', () => {
