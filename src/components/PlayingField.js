@@ -1629,6 +1629,30 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const opponentDeckCount = Number(opponentCounters.deckCount ?? 0);
   const opponentHandCount = Number(opponentCounters.handCount ?? 0);
   const opponentPrizeCount = asArray(opponentBoard?.prize).length;
+  const stadiumState = sessionDoc?.publicState?.stadium || null;
+  const stadiumCardId = typeof stadiumState?.cardId === 'string' ? stadiumState.cardId : '';
+  const stadiumOwnerPlayerId =
+    stadiumState?.ownerPlayerId === 'player1' || stadiumState?.ownerPlayerId === 'player2'
+      ? stadiumState.ownerPlayerId
+      : null;
+  const stadiumOwnerLabel =
+    stadiumOwnerPlayerId === ownerPlayerId
+      ? '自分'
+      : stadiumOwnerPlayerId === opponentPlayerId
+      ? '相手'
+      : '';
+  const stadiumCardImageUrl =
+    (typeof stadiumState?.imageUrl === 'string' && stadiumState.imageUrl.trim() !== ''
+      ? stadiumState.imageUrl
+      : null) ||
+    (stadiumCardId ? renderCardCatalog?.[stadiumCardId]?.imageUrl || null : null);
+  const canDragStadiumCard = Boolean(stadiumCardId) && stadiumOwnerPlayerId === ownerPlayerId;
+  const stadiumCardDragPayload = canDragStadiumCard
+    ? buildCardDragPayload({
+        cardId: stadiumCardId,
+        sourceZone: 'player-stadium',
+      })
+    : null;
   const sharedNotes = toSharedNotes(sessionDoc?.publicState);
   const operationRequests = asArray(sessionDoc?.publicState?.operationRequests);
   const playerRevealCards = toRevealCards(playerBoard, renderCardCatalog);
@@ -1747,11 +1771,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     edge: 'top',
   });
 
-  const playerStadiumDropPayload = buildZoneDropPayload({
-    zoneId: 'center-stadium',
-    targetPlayerId: ownerPlayerId,
-    zoneKind: ZONE_KINDS.STADIUM,
-  });
+  const playerStadiumDropPayload = stadiumCardId
+    ? null
+    : buildZoneDropPayload({
+        zoneId: 'center-stadium',
+        targetPlayerId: ownerPlayerId,
+        zoneKind: ZONE_KINDS.STADIUM,
+      });
 
   const playerActiveStackDropPayload = buildStackDropPayload({
     zoneId: playerActiveZoneId,
@@ -3365,9 +3391,33 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               data-drop-group="stadium"
             >
               <p className={styles.zoneTitle}>スタジアム</p>
-              <span className={styles.zoneValueMuted}>
-                {sessionDoc?.publicState?.stadium ? '場に出ている' : 'なし'}
-              </span>
+              {stadiumCardId && stadiumCardImageUrl ? (
+                canDragStadiumCard ? (
+                  <DraggableCard
+                    dragId={`stadium-card-${stadiumCardId}`}
+                    dragPayload={stadiumCardDragPayload}
+                    className={styles.stadiumCardDraggable}
+                    draggingClassName={styles.draggingSource}
+                  >
+                    <img
+                      src={stadiumCardImageUrl}
+                      alt="場に出ているスタジアムカード"
+                      className={styles.stadiumCardImage}
+                    />
+                  </DraggableCard>
+                ) : (
+                  <img
+                    src={stadiumCardImageUrl}
+                    alt="場に出ているスタジアムカード"
+                    className={styles.stadiumCardImage}
+                  />
+                )
+              ) : (
+                <span className={styles.zoneValueMuted}>なし</span>
+              )}
+              {stadiumCardId && stadiumOwnerLabel ? (
+                <span className={styles.stadiumOwnerLabel}>{stadiumOwnerLabel}が配置</span>
+              ) : null}
             </DroppableZone>
             <div className={styles.coinWidget} data-zone="coin-widget">
               <p className={styles.coinWidgetTitle}>コイン</p>

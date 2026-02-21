@@ -7,6 +7,7 @@ function createDocs() {
       status: 'ready',
       revision: 1,
       publicState: {
+        stadium: null,
         players: {
           player1: {
             counters: { deckCount: 53, handCount: 2 },
@@ -185,6 +186,72 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.privateStateDoc.zones.hand).toHaveLength(1);
     expect(result.sessionDoc.publicState.stadium).toBeTruthy();
     expect(result.sessionDoc.publicState.stadium.cardId).toBe('c_player1_001');
+    expect(result.sessionDoc.publicState.stadium.ownerPlayerId).toBe('player1');
+    expect(result.sessionDoc.publicState.stadium.imageUrl).toBe('https://example.com/1.jpg');
+  });
+
+  test('moves a stadium card to discard and clears stadium', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.stadium = {
+      cardId: 'c_player1_070',
+      ownerPlayerId: 'player1',
+      imageUrl: 'https://example.com/70.jpg',
+      placedVia: 'dnd',
+    };
+    privateStateDoc.cardCatalog.c_player1_070 = {
+      cardId: 'c_player1_070',
+      imageUrl: 'https://example.com/70.jpg',
+      ownerPlayerId: 'player1',
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-card-from-hand-to-zone',
+          cardId: 'c_player1_070',
+          sourceZone: 'player-stadium',
+          targetZoneKind: 'discard',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.stadium).toBeNull();
+    expect(result.sessionDoc.publicState.players.player1.board.discard).toHaveLength(1);
+    expect(result.sessionDoc.publicState.players.player1.board.discard[0].cardId).toBe('c_player1_070');
+    expect(result.sessionDoc.publicState.players.player1.board.discard[0].imageUrl).toBe(
+      'https://example.com/70.jpg'
+    );
+  });
+
+  test('throws when non-owner tries to move a stadium card', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.stadium = {
+      cardId: 'c_player1_070',
+      ownerPlayerId: 'player1',
+      imageUrl: 'https://example.com/70.jpg',
+      placedVia: 'dnd',
+    };
+
+    expect(() =>
+      mutateDocsForDropIntent({
+        sessionDoc,
+        privateStateDoc,
+        playerId: 'player2',
+        intent: {
+          accepted: true,
+          action: {
+            kind: 'move-card-from-hand-to-zone',
+            cardId: 'c_player1_070',
+            sourceZone: 'player-stadium',
+            targetZoneKind: 'discard',
+          },
+        },
+      })
+    ).toThrow('Only the stadium owner can move this card.');
   });
 
   test('moves a hand card to reveal zone and keeps imageUrl for opponent display', () => {

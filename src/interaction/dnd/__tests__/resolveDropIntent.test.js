@@ -9,10 +9,17 @@ import {
 import { REJECT_REASONS, STACK_KINDS, ZONE_KINDS } from '../constants';
 import { createBoardSnapshot, resolveDropIntent } from '../resolveDropIntent';
 
-function createSessionDoc({ playerActive = null, opponentActive = null, playerBench = [], opponentBench = [] } = {}) {
+function createSessionDoc({
+  playerActive = null,
+  opponentActive = null,
+  playerBench = [],
+  opponentBench = [],
+  stadium = null,
+} = {}) {
   return {
     version: 2,
     publicState: {
+      stadium,
       players: {
         player1: {
           board: {
@@ -191,6 +198,95 @@ describe('resolveDropIntent', () => {
 
     expect(result.accepted).toBe(true);
     expect(result.action.targetZoneKind).toBe(ZONE_KINDS.STADIUM);
+  });
+
+  test('rejects moving a hand card to occupied stadium zone', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        stadium: {
+          cardId: 'c_player1_099',
+          ownerPlayerId: 'player1',
+        },
+      })
+    );
+    const dragPayload = buildCardDragPayload({ cardId: 'c_player1_001', sourceZone: 'player-hand' });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'center-stadium',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.STADIUM,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toBe(REJECT_REASONS.TARGET_OCCUPIED);
+  });
+
+  test('accepts moving a stadium card to discard for the stadium owner', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        stadium: {
+          cardId: 'c_player1_070',
+          ownerPlayerId: 'player1',
+        },
+      })
+    );
+    const dragPayload = buildCardDragPayload({
+      cardId: 'c_player1_070',
+      sourceZone: 'player-stadium',
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-discard',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DISCARD,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-card-from-hand-to-zone');
+    expect(result.action.sourceZone).toBe('player-stadium');
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.DISCARD);
+  });
+
+  test('rejects moving a stadium card to non-owner field', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        stadium: {
+          cardId: 'c_player1_070',
+          ownerPlayerId: 'player1',
+        },
+      })
+    );
+    const dragPayload = buildCardDragPayload({
+      cardId: 'c_player1_070',
+      sourceZone: 'player-stadium',
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player2-discard',
+      targetPlayerId: 'player2',
+      zoneKind: ZONE_KINDS.DISCARD,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player2',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toBe(REJECT_REASONS.PERMISSION_DENIED);
   });
 
   test('accepts moving a hand card to reveal zone', () => {
