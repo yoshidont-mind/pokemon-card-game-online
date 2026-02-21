@@ -292,3 +292,16 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 19:48 JST (Shared-area emphasis for Stadium/Coin)
+- Requirement:
+  - `スタジアム＋コイン` を少し上にずらし、相手/自分エリア境界の白線を約 1/3 高さだけまたがせることで、共有エリア感を明確化。
+- Applied change:
+  - `src/css/playingField.module.css`
+    - `.battleLineRowWithAux .playerBattleAux` に上方向オフセットを追加:
+      - `--shared-center-overlap: clamp(28px, 3.2vw, 40px)`
+      - `transform: translateY(calc(-1 * var(--shared-center-overlap)))`
+    - 重なり順を安定させるため `position: relative; z-index: 3;` を追加。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)

@@ -1094,9 +1094,13 @@
 }
 
 .battleLineRowWithAux .playerBattleAux {
+  --shared-center-overlap: clamp(28px, 3.2vw, 40px);
   grid-column: 2;
   width: var(--aux-line-width);
   justify-self: center;
+  position: relative;
+  z-index: 3;
+  transform: translateY(calc(-1 * var(--shared-center-overlap)));
 }
 
 .coinWidgetTitle {
