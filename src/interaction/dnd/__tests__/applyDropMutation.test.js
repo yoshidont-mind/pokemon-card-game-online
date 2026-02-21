@@ -116,6 +116,35 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.sessionDoc.publicState.players.player2.board.active.damage).toBe(50);
   });
 
+  test('removes a status condition from target stack', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player2.board.active.specialConditions = {
+      poisoned: true,
+      burned: false,
+      asleep: true,
+      paralyzed: false,
+      confused: false,
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'remove-status-from-stack',
+          targetPlayerId: 'player2',
+          targetStackKind: 'active',
+          condition: 'poison',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player2.board.active.specialConditions.poisoned).toBe(false);
+    expect(result.sessionDoc.publicState.players.player2.board.active.specialConditions.asleep).toBe(true);
+  });
+
   test('moves a hand card to a later bench slot without sparse undefined entries', () => {
     const { sessionDoc, privateStateDoc } = createDocs();
 

@@ -23,6 +23,7 @@ export const ZONE_KINDS = Object.freeze({
   LOST: 'lost',
   PRIZE: 'prize',
   STADIUM: 'stadium',
+  TOOLBOX: 'toolbox',
 });
 
 export const STACK_KINDS = Object.freeze({
@@ -38,6 +39,7 @@ export const INTENT_ACTIONS = Object.freeze({
   SWAP_STACKS: 'swap-stacks-between-zones',
   MOVE_TOP_CARD_FROM_SOURCE_TO_HAND: 'move-top-card-from-source-to-hand',
   APPLY_TOOL_TO_STACK: 'apply-tool-to-stack',
+  REMOVE_STATUS_FROM_STACK: 'remove-status-from-stack',
 });
 
 export const REJECT_REASONS = Object.freeze({

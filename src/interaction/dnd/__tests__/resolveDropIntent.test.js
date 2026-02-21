@@ -2,6 +2,7 @@ import {
   buildCardDragPayload,
   buildDamageCounterDragPayload,
   buildPileCardDragPayload,
+  buildStackStatusBadgeDragPayload,
   buildStackDragPayload,
   buildStackDropPayload,
   buildZoneDropPayload,
@@ -138,6 +139,59 @@ describe('resolveDropIntent', () => {
 
     expect(result.accepted).toBe(false);
     expect(result.reason).toBe(REJECT_REASONS.TARGET_NOT_FOUND);
+  });
+
+  test('accepts removing a stack status by dropping badge to toolbox zone', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerBench: [{ stackId: 's_player1_bench_1', cardIds: ['c_player1_020'] }],
+      })
+    );
+    const dragPayload = buildStackStatusBadgeDragPayload({
+      value: 'poison',
+      sourcePlayerId: 'player1',
+      sourceStackKind: STACK_KINDS.BENCH,
+      sourceBenchIndex: 0,
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'toolbox-panel',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.TOOLBOX,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('remove-status-from-stack');
+    expect(result.action.targetPlayerId).toBe('player1');
+    expect(result.action.targetStackKind).toBe(STACK_KINDS.BENCH);
+    expect(result.action.targetBenchIndex).toBe(0);
+    expect(result.action.condition).toBe('poison');
+  });
+
+  test('rejects removing stack status from toolbox drop when source is not stack', () => {
+    const boardSnapshot = createBoardSnapshot(createSessionDoc());
+    const dragPayload = buildDamageCounterDragPayload({ value: 10 });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'toolbox-panel',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.TOOLBOX,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toBe(REJECT_REASONS.UNSUPPORTED_TARGET);
   });
 
   test('rejects moving hand card to opponent owned zone', () => {

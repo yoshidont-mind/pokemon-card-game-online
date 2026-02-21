@@ -846,6 +846,48 @@ function applyToolToStack({ sessionDoc, action }) {
   );
 }
 
+function removeStatusFromStack({ sessionDoc, action }) {
+  const targetPlayerId = action?.targetPlayerId;
+  const targetStackKind =
+    action?.targetStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+  const targetBenchIndex = targetStackKind === STACK_KINDS.BENCH ? action?.targetBenchIndex : null;
+  const conditionKey = STATUS_BADGE_TO_CONDITION_KEY[action?.condition];
+
+  if (!conditionKey) {
+    throw new GameStateError(
+      ERROR_CODES.INVALID_STATE,
+      `Unsupported status condition: ${String(action?.condition)}`
+    );
+  }
+
+  const targetBoard = resolvePlayerBoard(sessionDoc, targetPlayerId);
+  const targetStack = resolveTargetStack(targetBoard, targetStackKind, targetBenchIndex);
+
+  if (!targetStack) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Drop target stack does not exist.');
+  }
+
+  targetStack.specialConditions = {
+    poisoned: Boolean(targetStack?.specialConditions?.poisoned),
+    burned: Boolean(targetStack?.specialConditions?.burned),
+    asleep: Boolean(targetStack?.specialConditions?.asleep),
+    paralyzed: Boolean(targetStack?.specialConditions?.paralyzed),
+    confused: Boolean(targetStack?.specialConditions?.confused),
+  };
+  targetStack.specialConditions[conditionKey] = false;
+
+  if (
+    sessionDoc.status === SESSION_STATUS.WAITING ||
+    sessionDoc.status === SESSION_STATUS.READY
+  ) {
+    sessionDoc.status = SESSION_STATUS.PLAYING;
+  }
+
+  return {
+    sessionDoc,
+  };
+}
+
 export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId, intent }) {
   if (!intent?.accepted || !intent?.action) {
     throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Accepted intent with action is required.');
@@ -907,6 +949,13 @@ export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId,
 
   if (intent.action.kind === INTENT_ACTIONS.APPLY_TOOL_TO_STACK) {
     return applyToolToStack({
+      sessionDoc,
+      action: intent.action,
+    });
+  }
+
+  if (intent.action.kind === INTENT_ACTIONS.REMOVE_STATUS_FROM_STACK) {
+    return removeStatusFromStack({
       sessionDoc,
       action: intent.action,
     });

@@ -100,6 +100,34 @@ export function buildStatusBadgeDragPayload({ value }) {
   };
 }
 
+export function buildStackStatusBadgeDragPayload({
+  value,
+  sourcePlayerId,
+  sourceStackKind = STACK_KINDS.ACTIVE,
+  sourceBenchIndex = null,
+}) {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+  if (sourcePlayerId !== 'player1' && sourcePlayerId !== 'player2') {
+    return null;
+  }
+
+  const normalizedSourceStackKind =
+    sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+  const normalizedSourceBenchIndex =
+    normalizedSourceStackKind === STACK_KINDS.BENCH ? asBenchIndex(sourceBenchIndex) : null;
+
+  return {
+    dragType: DRAG_TYPES.STATUS_BADGE,
+    toolValue: value,
+    sourceZone: 'player-stack',
+    sourcePlayerId,
+    sourceStackKind: normalizedSourceStackKind,
+    sourceBenchIndex: normalizedSourceBenchIndex,
+  };
+}
+
 export function buildZoneDropPayload({
   zoneId,
   targetPlayerId,
