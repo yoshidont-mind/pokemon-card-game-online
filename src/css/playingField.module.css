@@ -577,6 +577,7 @@
   --coin-widget-width: clamp(88px, 8.4vw, 102px);
   --stadium-coin-gap: 10px;
   --aux-line-width: calc(var(--stadium-inline-width) + var(--stadium-coin-gap) + var(--coin-widget-width));
+  --player-active-axis-shift: calc((var(--reveal-line-width) - var(--aux-line-width)) / 2);
   --player-line-inner-gap-raw: calc(
     (100% - var(--aux-line-width) - var(--active-zone-width) - var(--reveal-line-width) + (2 * var(--player-line-base-gap)))
       / 4
@@ -630,13 +631,14 @@
 .battleLineRowWithAux .battleLineActive {
   grid-column: 4;
   justify-self: center;
-  transform: translateX(calc((var(--reveal-line-width) - var(--aux-line-width)) / 2));
+  transform: translateX(var(--player-active-axis-shift));
 }
 
 .battleLineRowWithAux .battleLineRevealPlayer {
   grid-column: 6;
   position: static;
   width: var(--reveal-line-width);
+  transform: translateX(calc(var(--player-active-axis-shift) / 2));
 }
 
 .zoneTile,
@@ -1101,7 +1103,10 @@
   justify-self: center;
   position: relative;
   z-index: 3;
-  transform: translateY(calc(-1 * var(--shared-center-overlap)));
+  transform: translate(
+    calc(var(--player-active-axis-shift) / 2),
+    calc(-1 * var(--shared-center-overlap))
+  );
 }
 
 .coinWidgetTitle {

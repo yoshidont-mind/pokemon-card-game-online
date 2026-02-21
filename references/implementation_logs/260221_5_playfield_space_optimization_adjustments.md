@@ -317,3 +317,22 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 19:59 JST (Gap parity re-tuning after active-axis shift)
+- Background:
+  - バトル場を左補正した結果、以下2条件が崩れた:
+    1. `スタジアム＋コイン` ↔ `バトル場` の間隔 = `スタジアム＋コイン` ↔ `サイド` の間隔
+    2. `公開エリア` ↔ `バトル場` の間隔 = `公開エリア` ↔ `山札（自分）` の間隔
+- Constraint:
+  - 見た目調整は `スタジアム＋コイン` と `公開エリア` のみに限定し、他枠のサイズ・見た目は変更しない。
+- Applied change:
+  - `src/css/playingField.module.css`
+    - `battleLineRowWithAux` に `--player-active-axis-shift` を追加（既存バトル場補正量を変数化）。
+    - バトル場補正はそのまま維持しつつ、
+      - `playerBattleAux` に `translateX(calc(var(--player-active-axis-shift) / 2))`
+      - `battleLineRevealPlayer` に `translateX(calc(var(--player-active-axis-shift) / 2))`
+      を適用。
+    - これにより、バトル場補正後も左右ギャップが再び等しくなるよう再整列。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
