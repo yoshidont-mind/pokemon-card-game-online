@@ -964,6 +964,12 @@
 .revealCardItem {
   position: relative;
   z-index: 1;
+  --reveal-card-shift-x: 0px;
+  --reveal-card-shift-y: 0px;
+}
+
+.revealCardItemActive {
+  z-index: calc(var(--z-overlay) + 2);
 }
 
 .revealCardDraggable:not(.popupCardItem):hover,
@@ -987,8 +993,13 @@
 .revealCardDraggable:not(.popupCardItem):hover .revealCardImage,
 .revealCardDraggable:not(.popupCardItem):focus-within .revealCardImage,
 .revealCardItem:hover .revealCardImage,
-.revealCardItem:focus-within .revealCardImage {
-  transform: translateY(var(--reveal-card-lift)) scale(var(--reveal-card-scale));
+.revealCardItem:focus-within .revealCardImage,
+.revealCardItemActive .revealCardImage {
+  transform: translate(
+      var(--reveal-card-shift-x),
+      calc(var(--reveal-card-lift) + var(--reveal-card-shift-y))
+    )
+    scale(var(--reveal-card-scale));
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.32);
 }
 
@@ -1740,10 +1751,13 @@
 }
 
 .stackDropSurfaceHoverable:hover :global(.pokemon-image:last-child),
+.stackDropSurfaceHoverable:focus-within :global(.pokemon-image:last-child),
 .stackSingleCardDraggable:focus-visible :global(.pokemon-image:last-child) {
   position: relative;
   z-index: calc(var(--z-overlay) + 6);
-  --pokemon-image-hover-lift: -40px;
+  --pokemon-image-hover-lift: 0px;
+  --pokemon-image-hover-shift-x: var(--stack-hover-shift-x, 0px);
+  --pokemon-image-hover-shift-y: var(--stack-hover-shift-y, -40px);
   --pokemon-image-scale: 5;
   box-shadow: 0 24px 38px rgba(0, 0, 0, 0.42);
 }

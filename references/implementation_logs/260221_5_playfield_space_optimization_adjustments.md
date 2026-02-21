@@ -375,3 +375,31 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 21:35 JST (Opponent-side hover zoom viewport clamp for reveal/bench/active)
+- Requirement:
+  - 相手側の以下エリアで、ホバー拡大カードが画面外にはみ出さないようにする。
+    - 公開エリア
+    - バトル場（1枚時）
+    - ベンチ（1枚時）
+- Root cause:
+  - 上記3箇所は従来、固定の `translateY(-40px) + scale(5)` だけで拡大しており、表示位置が画面端に近いと viewport クランプされない。
+- Fix approach:
+  - 手札/モーダルと同系のクランプ計算（`resolvePopupCardHoverShift`）を流用し、ホバー対象ごとに `shift-x / shift-y` を動的算出。
+  - CSS変数経由で既存ホバー拡大へ注入し、見た目を維持しつつ画面外はみ出しのみ抑止。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - `resolveStackCardHoverShift(...)` を追加（`pokemon-image:last-child` の矩形でクランプ計算）。
+    - `BenchRow` に相手側ベンチ1枚時専用のホバー追従状態を追加し、`--stack-hover-shift-x/y` を注入。
+    - 相手公開エリアカードに `opponentBoardRevealActiveIndex/Shift` を追加し、`--reveal-card-shift-x/y` を注入。
+    - 相手バトル場1枚時に `opponentActiveSingleHoverShift` を追加し、`--stack-hover-shift-x/y` を注入。
+    - いずれも `window.resize` 時に再計算。
+  - `src/css/playingField.module.css`
+    - `.revealCardItem` に shift 変数を追加し、active時 transform へ反映。
+    - `.revealCardItemActive` を追加（前面化の安定化）。
+    - `.stackDropSurfaceHoverable` のホバー時に `--pokemon-image-hover-shift-x/y` を適用。
+  - `src/css/pokemon.css`
+    - `.pokemon-image` transform に `--pokemon-image-hover-shift-x/y` を組み込み。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)

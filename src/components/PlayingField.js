@@ -468,6 +468,30 @@ function resolvePopupPreviewPlacement({
   };
 }
 
+function resolveStackCardHoverShift({
+  containerNode,
+  viewportWidth,
+  viewportHeight,
+  scale = POPUP_CARD_HOVER_SCALE,
+}) {
+  if (
+    !containerNode ||
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight)
+  ) {
+    return { ...POPUP_CARD_BASE_SHIFT };
+  }
+
+  const imageNode = containerNode.querySelector('.pokemon-image:last-child');
+  const anchorRect = imageNode?.getBoundingClientRect?.() || containerNode.getBoundingClientRect();
+  return resolvePopupCardHoverShift({
+    cardRect: anchorRect,
+    viewportWidth,
+    viewportHeight,
+    scale,
+  });
+}
+
 function PopupHoverPreview({ preview }) {
   if (!preview || typeof document === 'undefined') {
     return null;
@@ -644,6 +668,90 @@ function BenchRow({
   onOpenStackAdjustPopover,
 }) {
   const slots = Array.from({ length: BENCH_SLOTS }, (_, index) => bench[index] || null);
+  const isOpponentRow = owner === 'opponent';
+  const singleHoverSurfaceRefs = useRef({});
+  const [singleHoverIndex, setSingleHoverIndex] = useState(null);
+  const [singleHoverShift, setSingleHoverShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
+
+  const clearSingleHover = useCallback(() => {
+    setSingleHoverIndex(null);
+    setSingleHoverShift((previous) => {
+      if (
+        previous.x === POPUP_CARD_BASE_SHIFT.x &&
+        previous.y === POPUP_CARD_BASE_SHIFT.y
+      ) {
+        return previous;
+      }
+      return { ...POPUP_CARD_BASE_SHIFT };
+    });
+  }, []);
+
+  const activateSingleHover = useCallback(
+    (index, containerNode) => {
+      if (!isOpponentRow || typeof window === 'undefined' || !containerNode) {
+        clearSingleHover();
+        return;
+      }
+      const next = resolveStackCardHoverShift({
+        containerNode,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      });
+      setSingleHoverIndex(index);
+      setSingleHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    },
+    [clearSingleHover, isOpponentRow]
+  );
+
+  useEffect(() => {
+    if (singleHoverIndex === null) {
+      return;
+    }
+    const activeStack = slots[singleHoverIndex];
+    if (asArray(activeStack?.cardIds).length !== 1) {
+      clearSingleHover();
+    }
+  }, [clearSingleHover, singleHoverIndex, slots]);
+
+  useEffect(() => {
+    if (!isOpponentRow && singleHoverIndex !== null) {
+      clearSingleHover();
+    }
+  }, [clearSingleHover, isOpponentRow, singleHoverIndex]);
+
+  useEffect(() => {
+    if (!isOpponentRow || singleHoverIndex === null || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const node = singleHoverSurfaceRefs.current[singleHoverIndex];
+      if (!node) {
+        return;
+      }
+      const next = resolveStackCardHoverShift({
+        containerNode: node,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      });
+      setSingleHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpponentRow, singleHoverIndex]);
 
   return (
     <div className={styles.benchRow} data-zone={`${owner}-bench`} data-drop-group="bench">
@@ -687,6 +795,8 @@ function BenchRow({
           : null;
         const cardCount = asArray(stack?.cardIds).length;
         const canExpandStack = cardCount > 1;
+        const shouldUseViewportAwareHover = isOpponentRow && cardCount === 1;
+        const isSingleHoverActive = shouldUseViewportAwareHover && singleHoverIndex === index;
         const hoverableClassName = cardCount === 1 ? styles.stackDropSurfaceHoverable : '';
         const ownerLabel = owner === 'player' ? '自分' : '相手';
         const canDragSingleCard = allowCardDrop && cardCount === 1;
@@ -735,10 +845,41 @@ function BenchRow({
                 data-drop-group="stack"
               >
                 <div
+                  ref={(node) => {
+                    if (!shouldUseViewportAwareHover) {
+                      delete singleHoverSurfaceRefs.current[index];
+                      return;
+                    }
+                    if (node) {
+                      singleHoverSurfaceRefs.current[index] = node;
+                    } else {
+                      delete singleHoverSurfaceRefs.current[index];
+                    }
+                  }}
                   className={joinClassNames(styles.stackDropSurfaceInner, hoverableClassName)}
+                  style={
+                    isSingleHoverActive
+                      ? {
+                          '--stack-hover-shift-x': `${singleHoverShift.x}px`,
+                          '--stack-hover-shift-y': `${singleHoverShift.y}px`,
+                        }
+                      : undefined
+                  }
                   role={canExpandStack ? 'button' : undefined}
                   tabIndex={canExpandStack ? 0 : undefined}
                   aria-label={canExpandStack ? stackToggleAriaLabel : undefined}
+                  onMouseEnter={(event) => {
+                    if (!shouldUseViewportAwareHover) {
+                      return;
+                    }
+                    activateSingleHover(index, event.currentTarget);
+                  }}
+                  onMouseLeave={() => {
+                    if (!shouldUseViewportAwareHover) {
+                      return;
+                    }
+                    clearSingleHover();
+                  }}
                   onClick={(event) => {
                     if (!canExpandStack) {
                       return;
@@ -1780,6 +1921,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [opponentRevealActiveShift, setOpponentRevealActiveShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
+  const [opponentBoardRevealActiveIndex, setOpponentBoardRevealActiveIndex] = useState(null);
+  const [opponentBoardRevealActiveShift, setOpponentBoardRevealActiveShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
+  const [isOpponentActiveSingleHovering, setIsOpponentActiveSingleHovering] = useState(false);
+  const [opponentActiveSingleHoverShift, setOpponentActiveSingleHoverShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
   const [stackModalState, setStackModalState] = useState({
     ownerPlayerId: '',
     ownerLabel: '',
@@ -1813,6 +1962,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const handledDeckInsertEventAtRef = useRef('');
   const hasInitializedDeckInsertEventRef = useRef(false);
   const opponentRevealButtonRefs = useRef({});
+  const opponentBoardRevealRefs = useRef({});
+  const opponentActiveHoverSurfaceRef = useRef(null);
 
   const clearMutationNotice = useCallback(() => {
     setMutationNotice((previous) => {
@@ -2723,6 +2874,147 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isOpponentHandRevealOpen, recalcOpponentRevealCardShift]);
+
+  const clearOpponentBoardRevealHover = useCallback(() => {
+    setOpponentBoardRevealActiveIndex(null);
+    setOpponentBoardRevealActiveShift((previous) => {
+      if (
+        previous.x === POPUP_CARD_BASE_SHIFT.x &&
+        previous.y === POPUP_CARD_BASE_SHIFT.y
+      ) {
+        return previous;
+      }
+      return { ...POPUP_CARD_BASE_SHIFT };
+    });
+  }, []);
+
+  const recalcOpponentBoardRevealCardShift = useCallback(() => {
+    if (opponentBoardRevealActiveIndex === null || typeof window === 'undefined') {
+      setOpponentBoardRevealActiveShift((previous) => {
+        if (
+          previous.x === POPUP_CARD_BASE_SHIFT.x &&
+          previous.y === POPUP_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...POPUP_CARD_BASE_SHIFT };
+      });
+      return;
+    }
+
+    const cardNode = opponentBoardRevealRefs.current[opponentBoardRevealActiveIndex];
+    if (!cardNode) {
+      return;
+    }
+    const next = resolvePopupCardHoverShift({
+      cardRect: cardNode.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      scale: POPUP_CARD_HOVER_SCALE,
+    });
+    setOpponentBoardRevealActiveShift((previous) => {
+      if (previous.x === next.x && previous.y === next.y) {
+        return previous;
+      }
+      return next;
+    });
+  }, [opponentBoardRevealActiveIndex]);
+
+  useEffect(() => {
+    if (!opponentRevealCards[opponentBoardRevealActiveIndex]) {
+      clearOpponentBoardRevealHover();
+    }
+  }, [clearOpponentBoardRevealHover, opponentBoardRevealActiveIndex, opponentRevealCards]);
+
+  useEffect(() => {
+    recalcOpponentBoardRevealCardShift();
+  }, [opponentBoardRevealActiveIndex, opponentRevealCards, recalcOpponentBoardRevealCardShift]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || opponentBoardRevealActiveIndex === null) {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      recalcOpponentBoardRevealCardShift();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [opponentBoardRevealActiveIndex, recalcOpponentBoardRevealCardShift]);
+
+  const clearOpponentActiveSingleHover = useCallback(() => {
+    setIsOpponentActiveSingleHovering(false);
+    setOpponentActiveSingleHoverShift((previous) => {
+      if (
+        previous.x === POPUP_CARD_BASE_SHIFT.x &&
+        previous.y === POPUP_CARD_BASE_SHIFT.y
+      ) {
+        return previous;
+      }
+      return { ...POPUP_CARD_BASE_SHIFT };
+    });
+  }, []);
+
+  const activateOpponentActiveSingleHover = useCallback(
+    (containerNode) => {
+      if (!containerNode || typeof window === 'undefined') {
+        clearOpponentActiveSingleHover();
+        return;
+      }
+      const activeCardCount = asArray(opponentActive?.cardIds).length;
+      if (activeCardCount !== 1) {
+        clearOpponentActiveSingleHover();
+        return;
+      }
+      opponentActiveHoverSurfaceRef.current = containerNode;
+      setIsOpponentActiveSingleHovering(true);
+      const next = resolveStackCardHoverShift({
+        containerNode,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      });
+      setOpponentActiveSingleHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    },
+    [clearOpponentActiveSingleHover, opponentActive]
+  );
+
+  useEffect(() => {
+    if (asArray(opponentActive?.cardIds).length !== 1) {
+      clearOpponentActiveSingleHover();
+    }
+  }, [clearOpponentActiveSingleHover, opponentActive]);
+
+  useEffect(() => {
+    if (!isOpponentActiveSingleHovering || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const node = opponentActiveHoverSurfaceRef.current;
+      if (!node) {
+        return;
+      }
+      const next = resolveStackCardHoverShift({
+        containerNode: node,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      });
+      setOpponentActiveSingleHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpponentActiveSingleHovering]);
 
   useEffect(() => {
     const revealRequestsForActor = operationRequests.filter(
@@ -3781,18 +4073,53 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 >
                   {opponentRevealCards.length > 0 ? (
                     <div className={styles.revealCards}>
-                      {opponentRevealCards.map((card, index) => (
-                        <div
-                          key={`opponent-reveal-${card.cardId}-${index}`}
-                          className={styles.revealCardItem}
-                        >
-                          <img
-                            src={card.imageUrl}
-                            alt={`公開カード（相手）${index + 1}`}
-                            className={styles.revealCardImage}
-                          />
-                        </div>
-                      ))}
+                      {opponentRevealCards.map((card, index) => {
+                        const isActive = opponentBoardRevealActiveIndex === index;
+                        return (
+                          <div
+                            key={`opponent-reveal-${card.cardId}-${index}`}
+                            ref={(node) => {
+                              if (node) {
+                                opponentBoardRevealRefs.current[index] = node;
+                              } else {
+                                delete opponentBoardRevealRefs.current[index];
+                              }
+                            }}
+                            className={joinClassNames(
+                              styles.revealCardItem,
+                              isActive ? styles.revealCardItemActive : ''
+                            )}
+                            style={
+                              isActive
+                                ? {
+                                    '--reveal-card-shift-x': `${opponentBoardRevealActiveShift.x}px`,
+                                    '--reveal-card-shift-y': `${opponentBoardRevealActiveShift.y}px`,
+                                  }
+                                : undefined
+                            }
+                            tabIndex={0}
+                            aria-label={`公開カード（相手）${index + 1}を拡大表示`}
+                            onMouseEnter={() => setOpponentBoardRevealActiveIndex(index)}
+                            onMouseLeave={() => {
+                              setOpponentBoardRevealActiveIndex((previous) =>
+                                previous === index ? null : previous
+                              );
+                            }}
+                            onFocus={() => setOpponentBoardRevealActiveIndex(index)}
+                            onBlur={() => {
+                              setOpponentBoardRevealActiveIndex((previous) =>
+                                previous === index ? null : previous
+                              );
+                            }}
+                          >
+                            <img
+                              src={card.imageUrl}
+                              alt={`公開カード（相手）${index + 1}`}
+                              className={styles.revealCardImage}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <span className={styles.zoneValueMuted}>なし</span>
@@ -3819,10 +4146,25 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                     data-drop-group="stack"
                   >
                     <div
+                      ref={(node) => {
+                        if (opponentActiveCardCount === 1) {
+                          opponentActiveHoverSurfaceRef.current = node;
+                        } else {
+                          opponentActiveHoverSurfaceRef.current = null;
+                        }
+                      }}
                       className={joinClassNames(
                         styles.stackDropSurfaceInner,
                         opponentActiveCardCount === 1 ? styles.stackDropSurfaceHoverable : ''
                       )}
+                      style={
+                        opponentActiveCardCount === 1
+                          ? {
+                              '--stack-hover-shift-x': `${opponentActiveSingleHoverShift.x}px`,
+                              '--stack-hover-shift-y': `${opponentActiveSingleHoverShift.y}px`,
+                            }
+                          : undefined
+                      }
                       role={opponentActiveCardCount > 1 ? 'button' : undefined}
                       tabIndex={opponentActiveCardCount > 1 ? 0 : undefined}
                       aria-label={
@@ -3832,6 +4174,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                             : '相手バトル場を展開')
                           : undefined
                       }
+                      onMouseEnter={(event) => {
+                        if (opponentActiveCardCount !== 1) {
+                          return;
+                        }
+                        activateOpponentActiveSingleHover(event.currentTarget);
+                      }}
+                      onMouseLeave={() => {
+                        if (opponentActiveCardCount !== 1) {
+                          return;
+                        }
+                        clearOpponentActiveSingleHover();
+                      }}
                       onClick={(event) => {
                         if (opponentActiveCardCount <= 1) {
                           return;
