@@ -242,10 +242,6 @@ export function resolveDropIntent({
         return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
       }
 
-      if (!isZoneOccupied(boardSnapshot, actorPlayerId, dropPayload.zoneKind, dropPayload.benchIndex)) {
-        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
-      }
-
       return buildSwapStacksIntent({
         actorPlayerId,
         sourceStackKind,

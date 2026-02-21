@@ -602,10 +602,6 @@ function swapStacksBetweenZones({ sessionDoc, privateStateDoc, playerId, action 
   if (!sourceStack || !Array.isArray(sourceStack.cardIds) || sourceStack.cardIds.length <= 0) {
     throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Source stack does not exist.');
   }
-  if (!targetStack || !Array.isArray(targetStack.cardIds) || targetStack.cardIds.length <= 0) {
-    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Target stack does not exist.');
-  }
-
   const isSameStackLocation =
     sourceStackKind === STACK_KINDS.ACTIVE &&
     targetZoneKind === ZONE_KINDS.ACTIVE
@@ -615,6 +611,36 @@ function swapStacksBetweenZones({ sessionDoc, privateStateDoc, playerId, action 
           sourceBenchIndex === targetBenchIndex;
 
   if (isSameStackLocation) {
+    return {
+      sessionDoc,
+      privateStateDoc,
+    };
+  }
+
+  const targetExists =
+    Boolean(targetStack) && Array.isArray(targetStack.cardIds) && targetStack.cardIds.length > 0;
+
+  if (!targetExists) {
+    if (sourceStackKind === STACK_KINDS.ACTIVE) {
+      board.active = null;
+    } else {
+      bench[sourceBenchIndex] = null;
+    }
+
+    if (targetZoneKind === ZONE_KINDS.ACTIVE) {
+      board.active = sourceStack;
+    } else {
+      bench[targetBenchIndex] = sourceStack;
+    }
+    board.bench = bench;
+
+    if (
+      sessionDoc.status === SESSION_STATUS.WAITING ||
+      sessionDoc.status === SESSION_STATUS.READY
+    ) {
+      sessionDoc.status = SESSION_STATUS.PLAYING;
+    }
+
     return {
       sessionDoc,
       privateStateDoc,

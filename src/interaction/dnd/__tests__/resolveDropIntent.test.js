@@ -561,6 +561,38 @@ describe('resolveDropIntent', () => {
     expect(result.action.targetZoneKind).toBe(ZONE_KINDS.ACTIVE);
   });
 
+  test('accepts moving occupied stack to empty bench via zone drop payload', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010', 'c_player1_011'] },
+        playerBench: [null, null, null, null, null],
+      })
+    );
+    const dragPayload = buildStackDragPayload({
+      sourceStackKind: STACK_KINDS.ACTIVE,
+      previewCardId: 'c_player1_011',
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-bench-1',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.BENCH,
+      benchIndex: 0,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('swap-stacks-between-zones');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.ACTIVE);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.BENCH);
+    expect(result.action.targetBenchIndex).toBe(0);
+  });
+
   test('accepts moving occupied stack to discard via stack drag payload', () => {
     const boardSnapshot = createBoardSnapshot(
       createSessionDoc({

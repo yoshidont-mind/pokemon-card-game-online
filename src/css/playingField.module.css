@@ -1442,7 +1442,7 @@
 }
 
 .stackDropSurfaceHoverable:hover :global(.pokemon-image:last-child),
-.stackDropSurfaceHoverable:focus-within :global(.pokemon-image:last-child) {
+.stackSingleCardDraggable:focus-visible :global(.pokemon-image:last-child) {
   position: relative;
   z-index: calc(var(--z-overlay) + 6);
   --pokemon-image-hover-lift: -40px;
@@ -1486,7 +1486,7 @@
 }
 
 .stackSingleCardDraggable:hover .stackSingleCardButton,
-.stackSingleCardDraggable:focus-within .stackSingleCardButton {
+.stackSingleCardDraggable:focus-visible .stackSingleCardButton {
   outline-color: #5f8d3d;
   position: relative;
   z-index: 41;

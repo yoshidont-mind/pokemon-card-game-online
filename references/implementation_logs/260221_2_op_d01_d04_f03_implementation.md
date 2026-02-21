@@ -143,3 +143,58 @@ npm test -- --watch=false --runInBand src/components/__tests__/PlayingFieldLayou
 npm run build
 ```
 - PASS（Compiled successfully）
+
+## 9. 追加修正（ベンチ/バトル場の複数カードスタックを空スロットへ移動できない不具合）
+- 事象:
+  - ベンチ/バトル場で複数カードが重なったスタックを丸ごとドラッグできるが、空のベンチ/バトル場へドロップできない。
+- 原因:
+  - `resolveDropIntent()` の `dragType=stack` + `dropType=zone` 分岐で、target が occupied でない場合を `TARGET_NOT_FOUND` として reject していた。
+  - そのため「occupied へのスワップ」は通るが「empty への移動」が不可能だった。
+- 対応:
+  - `src/interaction/dnd/resolveDropIntent.js`
+    - stack drag の zone drop で `active/bench` を target とする場合、occupied 必須判定を撤廃。
+    - 既存どおり同一スロットへの drop は reject 維持。
+  - `src/interaction/dnd/applyDropMutation.js`
+    - `swapStacksBetweenZones()` を拡張し、target stack が空の場合はスワップではなく「source stack を target に移動（source を null 化）」する処理を追加。
+    - target stack が存在する場合は従来どおりスワップ処理を実行。
+
+### 9.1 追加テスト
+- `src/interaction/dnd/__tests__/resolveDropIntent.test.js`
+  - active(複数枚) -> empty bench(zone drop) が accept されることを追加。
+- `src/interaction/dnd/__tests__/applyDropMutation.test.js`
+  - `swap-stacks-between-zones` action で target が empty のとき、source stack が丸ごと移動し source が空になることを追加。
+
+### 9.2 再検証
+```bash
+npm test -- --watch=false --runInBand src/interaction/dnd/__tests__/resolveDropIntent.test.js src/interaction/dnd/__tests__/applyDropMutation.test.js
+```
+- PASS（2 suites / 51 tests）
+
+```bash
+npm test -- --watch=false --runInBand src/components/__tests__/PlayingFieldDnd.test.js src/interaction/dnd/__tests__/useBoardDnd.test.js
+```
+- PASS（2 suites / 7 tests）
+
+## 10. 追加修正（スワップ直後に単枚スタックが勝手に拡大表示される不具合）
+- 事象:
+  - ベンチ/バトル場で「複数枚スタック ↔ 単枚スタック」をスワップした直後、単枚側カードが勝手に拡大表示されたままになる（別クリックで解除）。
+- 原因:
+  - 単枚スタックの拡大CSSに `:focus-within` を使っており、ドラッグ終了時に `useDraggable` 要素へ残るフォーカスでも拡大条件が満たされていた。
+  - そのためマウスホバーしていなくても、フォーカスが外れるまで拡大表示が残留した。
+- 対応:
+  - `src/css/playingField.module.css`
+    - 単枚スタック拡大条件を `:focus-within` から `:focus-visible` ベースに変更。
+    - 具体的に以下を変更:
+      - `.stackDropSurfaceHoverable:focus-within :global(.pokemon-image:last-child)` を削除し、
+        `.stackSingleCardDraggable:focus-visible :global(.pokemon-image:last-child)` に変更。
+      - `.stackSingleCardDraggable:focus-within .stackSingleCardButton` を
+        `.stackSingleCardDraggable:focus-visible .stackSingleCardButton` に変更。
+  - 効果:
+    - マウスD&D終了直後の残留フォーカスでは拡大が発火しない。
+    - キーボード操作時のみ `:focus-visible` として視認性を維持。
+
+### 10.1 再検証
+```bash
+npm test -- --watch=false --runInBand src/components/__tests__/PlayingFieldDnd.test.js src/interaction/dnd/__tests__/useBoardDnd.test.js
+```
+- PASS（2 suites / 7 tests）
