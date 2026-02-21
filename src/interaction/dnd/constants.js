@@ -32,6 +32,7 @@ export const STACK_KINDS = Object.freeze({
 
 export const INTENT_ACTIONS = Object.freeze({
   MOVE_CARD_FROM_HAND_TO_ZONE: 'move-card-from-hand-to-zone',
+  MOVE_STACK_FROM_STACK_TO_ZONE: 'move-stack-from-stack-to-zone',
   MOVE_CARD_TO_DECK_EDGE: 'move-card-to-deck-edge',
   MOVE_CARD_TO_STACK_EDGE: 'move-card-to-stack-edge',
   SWAP_STACKS: 'swap-stacks-between-zones',

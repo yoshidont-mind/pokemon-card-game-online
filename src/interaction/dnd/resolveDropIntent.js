@@ -112,12 +112,37 @@ function buildSwapStacksIntent({
   });
 }
 
+function buildMoveStackToZoneIntent({
+  actorPlayerId,
+  sourceStackKind,
+  sourceBenchIndex = null,
+  targetZoneKind,
+  targetZoneId,
+}) {
+  return accept({
+    action: {
+      kind: INTENT_ACTIONS.MOVE_STACK_FROM_STACK_TO_ZONE,
+      targetPlayerId: actorPlayerId,
+      sourceStackKind,
+      sourceBenchIndex: sourceStackKind === STACK_KINDS.BENCH ? sourceBenchIndex : null,
+      targetZoneKind,
+      targetZoneId,
+    },
+    highlightTarget: {
+      type: DROP_TYPES.ZONE,
+      zoneId: targetZoneId,
+    },
+  });
+}
+
 function isSupportedCardSourceZone(sourceZone) {
   return (
     sourceZone === 'player-hand' ||
     sourceZone === 'player-reveal' ||
     sourceZone === 'player-deck' ||
     sourceZone === 'player-deck-peek' ||
+    sourceZone === 'player-discard' ||
+    sourceZone === 'player-lost' ||
     sourceZone === 'player-stack'
   );
 }
@@ -168,7 +193,12 @@ export function resolveDropIntent({
       if (dropPayload.targetPlayerId !== actorPlayerId) {
         return reject(REJECT_REASONS.PERMISSION_DENIED);
       }
-      if (dropPayload.zoneKind !== ZONE_KINDS.ACTIVE && dropPayload.zoneKind !== ZONE_KINDS.BENCH) {
+      const supportsStackTargetZone =
+        dropPayload.zoneKind === ZONE_KINDS.ACTIVE ||
+        dropPayload.zoneKind === ZONE_KINDS.BENCH ||
+        dropPayload.zoneKind === ZONE_KINDS.DISCARD ||
+        dropPayload.zoneKind === ZONE_KINDS.LOST;
+      if (!supportsStackTargetZone) {
         return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
       }
       if (dropPayload.zoneKind === ZONE_KINDS.BENCH && !isBenchIndexValid(dropPayload.benchIndex)) {
@@ -181,17 +211,6 @@ export function resolveDropIntent({
       }
 
       if (
-        isSameStackLocation({
-          sourceStackKind,
-          sourceBenchIndex: dragPayload.sourceBenchIndex,
-          targetZoneKind: dropPayload.zoneKind,
-          targetBenchIndex: dropPayload.benchIndex,
-        })
-      ) {
-        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
-      }
-
-      if (
         !hasStack(
           boardSnapshot,
           actorPlayerId,
@@ -200,6 +219,27 @@ export function resolveDropIntent({
         )
       ) {
         return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+
+      if (dropPayload.zoneKind === ZONE_KINDS.DISCARD || dropPayload.zoneKind === ZONE_KINDS.LOST) {
+        return buildMoveStackToZoneIntent({
+          actorPlayerId,
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind: dropPayload.zoneKind,
+          targetZoneId: dropPayload.zoneId,
+        });
+      }
+
+      if (
+        isSameStackLocation({
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind: dropPayload.zoneKind,
+          targetBenchIndex: dropPayload.benchIndex,
+        })
+      ) {
+        return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
       }
 
       if (!isZoneOccupied(boardSnapshot, actorPlayerId, dropPayload.zoneKind, dropPayload.benchIndex)) {
@@ -235,7 +275,8 @@ export function resolveDropIntent({
       if (
         dragPayload.sourceZone === 'player-deck' &&
         dropPayload.zoneKind !== ZONE_KINDS.HAND &&
-        dropPayload.zoneKind !== ZONE_KINDS.DISCARD
+        dropPayload.zoneKind !== ZONE_KINDS.DISCARD &&
+        dropPayload.zoneKind !== ZONE_KINDS.PRIZE
       ) {
         return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
       }
@@ -353,6 +394,14 @@ export function resolveDropIntent({
     }
 
     if (dragPayload.sourceZone === 'player-reveal' && dropPayload.zoneKind === ZONE_KINDS.REVEAL) {
+      return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+    }
+
+    if (dragPayload.sourceZone === 'player-discard' && dropPayload.zoneKind === ZONE_KINDS.DISCARD) {
+      return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
+    }
+
+    if (dragPayload.sourceZone === 'player-lost' && dropPayload.zoneKind === ZONE_KINDS.LOST) {
       return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
     }
 

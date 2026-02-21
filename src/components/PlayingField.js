@@ -144,6 +144,20 @@ function toStackCards(stack, cardCatalog = {}) {
     }));
 }
 
+function toZoneCards(cardRefs, cardCatalog = {}) {
+  return [...asArray(cardRefs)]
+    .reverse()
+    .map((ref, index) => {
+      const cardId = ref?.cardId || `zone-card-${index + 1}`;
+      const imageUrl = resolveCardImageUrl(ref, cardCatalog);
+      return {
+        cardId,
+        imageUrl,
+      };
+    })
+    .filter((entry) => Boolean(entry.cardId));
+}
+
 function resolveStackFromBoard(board, stackKind, benchIndex = null) {
   if (stackKind === STACK_KINDS.ACTIVE) {
     return board?.active || null;
@@ -166,6 +180,11 @@ function formatStackModalTitle({ ownerLabel, stackKind, benchIndex, cardCount })
       ? `バトル場（${ownerLabel}）`
       : `ベンチ${Number(benchIndex) + 1}（${ownerLabel}）`;
   return `${locationLabel}を展開（${cardCount}枚）`;
+}
+
+function formatZoneModalTitle({ ownerLabel, zoneKind, cardCount }) {
+  const zoneLabel = zoneKind === ZONE_KINDS.LOST ? 'ロスト' : 'トラッシュ';
+  return `${zoneLabel}（${ownerLabel}）を展開（${cardCount}枚）`;
 }
 
 function buildRenderCardCatalog(privateCardCatalog = {}, publicCardCatalog = {}) {
@@ -996,9 +1015,12 @@ function StackCardsModal({
   cards,
   onClose,
   allowCardDrag = false,
+  dragSourceZone = 'player-stack',
   sourceStackKind = STACK_KINDS.ACTIVE,
   sourceBenchIndex = null,
   initialAnchorRect = null,
+  modalAriaLabel = 'スタック展開モーダル',
+  modalDataZone = 'stack-cards-root',
 }) {
   const normalizedCards = asArray(cards).filter((entry) => Boolean(entry?.cardId));
   const columnCount = Math.max(1, Math.min(10, normalizedCards.length || 1));
@@ -1241,8 +1263,8 @@ function StackCardsModal({
     <aside
       ref={modalRootRef}
       className={styles.deckPeekRoot}
-      data-zone="stack-cards-root"
-      aria-label="スタック展開モーダル"
+      data-zone={modalDataZone}
+      aria-label={modalAriaLabel}
       style={modalRootStyle}
     >
       <div className={styles.deckPeekToolbar}>
@@ -1345,12 +1367,20 @@ function StackCardsModal({
                 <DraggableCard
                   key={`stack-card-${card.cardId}-${index}`}
                   dragId={`stack-card-${card.cardId}-${index}`}
-                  dragPayload={buildCardDragPayload({
-                    cardId: card.cardId,
-                    sourceZone: 'player-stack',
-                    sourceStackKind,
-                    sourceBenchIndex: sourceStackKind === STACK_KINDS.BENCH ? sourceBenchIndex : null,
-                  })}
+                  dragPayload={
+                    dragSourceZone === 'player-stack'
+                      ? buildCardDragPayload({
+                          cardId: card.cardId,
+                          sourceZone: 'player-stack',
+                          sourceStackKind,
+                          sourceBenchIndex:
+                            sourceStackKind === STACK_KINDS.BENCH ? sourceBenchIndex : null,
+                        })
+                      : buildCardDragPayload({
+                          cardId: card.cardId,
+                          sourceZone: dragSourceZone,
+                        })
+                  }
                   className={joinClassNames(
                     styles.revealCardDraggable,
                     styles.popupCardItem,
@@ -1411,6 +1441,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     ownerLabel: '',
     stackKind: STACK_KINDS.ACTIVE,
     benchIndex: null,
+    anchorRect: null,
+    isOpen: false,
+  });
+  const [pileModalState, setPileModalState] = useState({
+    ownerPlayerId: '',
+    ownerLabel: '',
+    zoneKind: ZONE_KINDS.DISCARD,
     anchorRect: null,
     isOpen: false,
   });
@@ -1777,6 +1814,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       benchIndex = null,
       sourceZoneId = '',
     }) => {
+      setPileModalState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
       let anchorRect = null;
       if (typeof document !== 'undefined' && sourceZoneId) {
         const anchorNode = document.querySelector(`[data-zone="${sourceZoneId}"]`);
@@ -1853,6 +1894,80 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     [handleCloseStackCards, handleOpenStackCards, isStackModalForZone]
   );
 
+  const handleOpenPileCards = useCallback(
+    ({
+      ownerPlayerId: targetOwnerPlayerId,
+      ownerLabel,
+      zoneKind,
+      sourceZoneId = '',
+    }) => {
+      if (zoneKind !== ZONE_KINDS.DISCARD && zoneKind !== ZONE_KINDS.LOST) {
+        return;
+      }
+      setStackModalState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
+      let anchorRect = null;
+      if (typeof document !== 'undefined' && sourceZoneId) {
+        const anchorNode = document.querySelector(`[data-zone="${sourceZoneId}"]`);
+        if (anchorNode && typeof anchorNode.getBoundingClientRect === 'function') {
+          const rect = anchorNode.getBoundingClientRect();
+          anchorRect = {
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          };
+        }
+      }
+      setPileModalState({
+        ownerPlayerId: targetOwnerPlayerId,
+        ownerLabel: ownerLabel || '',
+        zoneKind,
+        anchorRect,
+        isOpen: true,
+      });
+    },
+    []
+  );
+
+  const handleClosePileCards = useCallback(() => {
+    setPileModalState((previous) => ({
+      ...previous,
+      isOpen: false,
+    }));
+  }, []);
+
+  const isPileModalForZone = useCallback(
+    ({ ownerPlayerId: targetOwnerPlayerId, zoneKind }) => {
+      if (!pileModalState.isOpen) {
+        return false;
+      }
+      if (pileModalState.ownerPlayerId !== targetOwnerPlayerId) {
+        return false;
+      }
+      return pileModalState.zoneKind === zoneKind;
+    },
+    [pileModalState.isOpen, pileModalState.ownerPlayerId, pileModalState.zoneKind]
+  );
+
+  const handleTogglePileCards = useCallback(
+    (params) => {
+      if (
+        isPileModalForZone({
+          ownerPlayerId: params?.ownerPlayerId,
+          zoneKind: params?.zoneKind,
+        })
+      ) {
+        handleClosePileCards();
+        return;
+      }
+      handleOpenPileCards(params);
+    },
+    [handleClosePileCards, handleOpenPileCards, isPileModalForZone]
+  );
+
   const stackModalBoard = useMemo(() => {
     if (stackModalState.ownerPlayerId === ownerPlayerId) {
       return playerBoard;
@@ -1901,6 +2016,46 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     ]
   );
 
+  const pileModalBoard = useMemo(() => {
+    if (pileModalState.ownerPlayerId === ownerPlayerId) {
+      return playerBoard;
+    }
+    if (pileModalState.ownerPlayerId === opponentPlayerId) {
+      return opponentBoard;
+    }
+    return null;
+  }, [opponentBoard, opponentPlayerId, ownerPlayerId, pileModalState.ownerPlayerId, playerBoard]);
+
+  const pileModalRefs = useMemo(() => {
+    if (pileModalState.zoneKind === ZONE_KINDS.LOST) {
+      return asArray(pileModalBoard?.lostZone);
+    }
+    return asArray(pileModalBoard?.discard);
+  }, [pileModalBoard, pileModalState.zoneKind]);
+
+  const pileModalCards = useMemo(
+    () => toZoneCards(pileModalRefs, renderCardCatalog),
+    [pileModalRefs, renderCardCatalog]
+  );
+
+  const isPileModalOpen =
+    pileModalState.isOpen &&
+    (pileModalState.zoneKind === ZONE_KINDS.DISCARD || pileModalState.zoneKind === ZONE_KINDS.LOST) &&
+    pileModalCards.length > 0;
+
+  const pileModalAllowsDrag = pileModalState.ownerPlayerId === ownerPlayerId;
+  const pileModalDragSourceZone =
+    pileModalState.zoneKind === ZONE_KINDS.LOST ? 'player-lost' : 'player-discard';
+  const pileModalTitle = useMemo(
+    () =>
+      formatZoneModalTitle({
+        ownerLabel: pileModalState.ownerLabel || '不明',
+        zoneKind: pileModalState.zoneKind,
+        cardCount: pileModalCards.length,
+      }),
+    [pileModalCards.length, pileModalState.ownerLabel, pileModalState.zoneKind]
+  );
+
   useEffect(() => {
     if (stackModalState.isOpen && (!stackModalStack || stackModalCards.length <= 0)) {
       setStackModalState((previous) => ({
@@ -1909,6 +2064,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       }));
     }
   }, [stackModalCards.length, stackModalStack, stackModalState.isOpen]);
+
+  useEffect(() => {
+    if (pileModalState.isOpen && pileModalCards.length <= 0) {
+      setPileModalState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
+    }
+  }, [pileModalCards.length, pileModalState.isOpen]);
 
   useEffect(() => {
     if (!lastCoinAt) {
@@ -1981,6 +2145,21 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     setEditingSharedNoteId('');
     setEditingSharedNoteDraft('');
     setOpponentRevealSelectedCardIds([]);
+    setStackModalState({
+      ownerPlayerId: '',
+      ownerLabel: '',
+      stackKind: STACK_KINDS.ACTIVE,
+      benchIndex: null,
+      anchorRect: null,
+      isOpen: false,
+    });
+    setPileModalState({
+      ownerPlayerId: '',
+      ownerLabel: '',
+      zoneKind: ZONE_KINDS.DISCARD,
+      anchorRect: null,
+      isOpen: false,
+    });
     handledDeckShuffleEventAtRef.current = '';
     hasInitializedDeckShuffleEventRef.current = false;
     handledDeckInsertEventAtRef.current = '';
@@ -3020,18 +3199,48 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         <section className={styles.opponentArea} data-zone="opponent-area" data-drop-group="area">
           <div className={styles.sideColumn}>
             <ZoneTile zone="opponent-lost" title="ロスト（相手）">
-              <PublicPilePreview
-                cardRefs={opponentLostRefs}
-                cardCatalog={renderCardCatalog}
-                pileLabel="ロスト（相手）"
-              />
+              <button
+                type="button"
+                className={styles.zonePreviewButton}
+                onClick={() =>
+                  handleTogglePileCards({
+                    ownerPlayerId: opponentPlayerId,
+                    ownerLabel: '相手',
+                    zoneKind: ZONE_KINDS.LOST,
+                    sourceZoneId: 'opponent-lost',
+                  })
+                }
+                disabled={opponentLostRefs.length <= 0}
+                aria-label="相手ロストを展開"
+              >
+                <PublicPilePreview
+                  cardRefs={opponentLostRefs}
+                  cardCatalog={renderCardCatalog}
+                  pileLabel="ロスト（相手）"
+                />
+              </button>
             </ZoneTile>
             <ZoneTile zone="opponent-discard" title="トラッシュ（相手）">
-              <PublicPilePreview
-                cardRefs={opponentDiscardRefs}
-                cardCatalog={renderCardCatalog}
-                pileLabel="トラッシュ（相手）"
-              />
+              <button
+                type="button"
+                className={styles.zonePreviewButton}
+                onClick={() =>
+                  handleTogglePileCards({
+                    ownerPlayerId: opponentPlayerId,
+                    ownerLabel: '相手',
+                    zoneKind: ZONE_KINDS.DISCARD,
+                    sourceZoneId: 'opponent-discard',
+                  })
+                }
+                disabled={opponentDiscardRefs.length <= 0}
+                aria-label="相手トラッシュを展開"
+              >
+                <PublicPilePreview
+                  cardRefs={opponentDiscardRefs}
+                  cardCatalog={renderCardCatalog}
+                  pileLabel="トラッシュ（相手）"
+                />
+              </button>
             </ZoneTile>
             <ZoneTile zone="opponent-deck" title="山札（相手）">
               <DeckPile count={opponentDeckCount} alt="Opponent Deck" />
@@ -3479,11 +3688,26 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               dropPayload={playerDiscardDropPayload}
               isHighlighted={isZoneHighlighted('player-discard')}
             >
-              <PublicPilePreview
-                cardRefs={playerDiscardRefs}
-                cardCatalog={renderCardCatalog}
-                pileLabel="トラッシュ（自分）"
-              />
+              <button
+                type="button"
+                className={styles.zonePreviewButton}
+                onClick={() =>
+                  handleTogglePileCards({
+                    ownerPlayerId,
+                    ownerLabel: '自分',
+                    zoneKind: ZONE_KINDS.DISCARD,
+                    sourceZoneId: 'player-discard',
+                  })
+                }
+                disabled={playerDiscardRefs.length <= 0}
+                aria-label="自分トラッシュを展開"
+              >
+                <PublicPilePreview
+                  cardRefs={playerDiscardRefs}
+                  cardCatalog={renderCardCatalog}
+                  pileLabel="トラッシュ（自分）"
+                />
+              </button>
             </ZoneTile>
             <ZoneTile
               zone="player-lost"
@@ -3491,11 +3715,26 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               dropPayload={playerLostDropPayload}
               isHighlighted={isZoneHighlighted('player-lost')}
             >
-              <PublicPilePreview
-                cardRefs={playerLostRefs}
-                cardCatalog={renderCardCatalog}
-                pileLabel="ロスト（自分）"
-              />
+              <button
+                type="button"
+                className={styles.zonePreviewButton}
+                onClick={() =>
+                  handleTogglePileCards({
+                    ownerPlayerId,
+                    ownerLabel: '自分',
+                    zoneKind: ZONE_KINDS.LOST,
+                    sourceZoneId: 'player-lost',
+                  })
+                }
+                disabled={playerLostRefs.length <= 0}
+                aria-label="自分ロストを展開"
+              >
+                <PublicPilePreview
+                  cardRefs={playerLostRefs}
+                  cardCatalog={renderCardCatalog}
+                  pileLabel="ロスト（自分）"
+                />
+              </button>
             </ZoneTile>
           </div>
         </section>
@@ -3631,6 +3870,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           sourceStackKind={stackModalState.stackKind}
           sourceBenchIndex={stackModalState.benchIndex}
           initialAnchorRect={stackModalState.anchorRect}
+        />
+      ) : null}
+      {isPileModalOpen ? (
+        <StackCardsModal
+          title={pileModalTitle}
+          cards={pileModalCards}
+          onClose={handleClosePileCards}
+          allowCardDrag={pileModalAllowsDrag}
+          dragSourceZone={pileModalDragSourceZone}
+          initialAnchorRect={pileModalState.anchorRect}
+          modalAriaLabel="ゾーン展開モーダル"
+          modalDataZone="zone-cards-root"
         />
       ) : null}
       {!hasBlockingRequest && isOpponentHandRevealOpen ? (

@@ -1088,3 +1088,55 @@ test('opens stack expansion modal for multi-card active stack and shows cards in
   });
   expect(screen.getByRole('button', { name: '自分バトル場を展開' })).toBeInTheDocument();
 });
+
+test('opens discard/lost zone modal and shows cards in top-first order', async () => {
+  renderPlayingField({
+    sessionOverrides: {
+      publicState: {
+        players: {
+          player1: {
+            board: {
+              discard: [{ cardId: 'c_player1_001' }, { cardId: 'c_player1_002' }],
+              lostZone: [{ cardId: 'c_player1_003' }],
+            },
+          },
+        },
+      },
+    },
+    privateStateOverrides: {
+      cardCatalog: {
+        c_player1_001: {
+          cardId: 'c_player1_001',
+          imageUrl: 'https://example.com/discard-1.jpg',
+          ownerPlayerId: 'player1',
+        },
+        c_player1_002: {
+          cardId: 'c_player1_002',
+          imageUrl: 'https://example.com/discard-2.jpg',
+          ownerPlayerId: 'player1',
+        },
+        c_player1_003: {
+          cardId: 'c_player1_003',
+          imageUrl: 'https://example.com/lost-1.jpg',
+          ownerPlayerId: 'player1',
+        },
+      },
+    },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: '自分トラッシュを展開' }));
+  const discardModal = await screen.findByLabelText('ゾーン展開モーダル');
+  expect(within(discardModal).getByText('トラッシュ（自分）を展開（2枚）')).toBeInTheDocument();
+  const discardCardImages = within(discardModal).getAllByRole('img', { name: /展開カード/i });
+  expect(discardCardImages[0].getAttribute('src')).toContain('discard-2.jpg');
+  expect(discardCardImages[1].getAttribute('src')).toContain('discard-1.jpg');
+  fireEvent.click(within(discardModal).getByRole('button', { name: '閉じる' }));
+  await waitFor(() => {
+    expect(screen.queryByLabelText('ゾーン展開モーダル')).not.toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: '自分ロストを展開' }));
+  const lostModal = await screen.findByLabelText('ゾーン展開モーダル');
+  expect(within(lostModal).getByText('ロスト（自分）を展開（1枚）')).toBeInTheDocument();
+  expect(within(lostModal).getByRole('img', { name: '展開カード 1' }).getAttribute('src')).toContain('lost-1.jpg');
+});

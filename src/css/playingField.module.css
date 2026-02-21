@@ -707,6 +707,21 @@
   gap: 4px;
 }
 
+.zonePreviewButton {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  display: inline-grid;
+  justify-items: center;
+  cursor: pointer;
+}
+
+.zonePreviewButton:disabled {
+  cursor: default;
+}
+
 .deckZoneBody {
   width: 100%;
   display: grid;

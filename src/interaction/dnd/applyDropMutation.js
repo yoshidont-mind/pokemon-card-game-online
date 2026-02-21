@@ -177,6 +177,34 @@ function takeCardRefFromSource({
     return sourceCardRef;
   }
 
+  if (sourceZone === 'player-discard') {
+    const discard = asArray(publicBoard?.discard);
+    const discardIndex = discard.findIndex((ref) => ref?.cardId === cardId);
+    if (discardIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in discard zone.`
+      );
+    }
+    const [sourceCardRef] = discard.splice(discardIndex, 1);
+    publicBoard.discard = discard;
+    return sourceCardRef;
+  }
+
+  if (sourceZone === 'player-lost') {
+    const lostZone = asArray(publicBoard?.lostZone);
+    const lostIndex = lostZone.findIndex((ref) => ref?.cardId === cardId);
+    if (lostIndex < 0) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in lost zone.`
+      );
+    }
+    const [sourceCardRef] = lostZone.splice(lostIndex, 1);
+    publicBoard.lostZone = lostZone;
+    return sourceCardRef;
+  }
+
   if (sourceZone === 'player-stack') {
     const normalizedStackKind =
       sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
@@ -339,6 +367,69 @@ function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, actio
 
   if (consumesDeckPeekCard) {
     consumeDeckPeekCount(sessionDoc, playerId, 1);
+  }
+
+  return {
+    sessionDoc,
+    privateStateDoc,
+  };
+}
+
+function moveStackFromStackToZone({ sessionDoc, privateStateDoc, playerId, action }) {
+  const sourceStackKind =
+    action?.sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+  const targetZoneKind = action?.targetZoneKind;
+
+  if (targetZoneKind !== ZONE_KINDS.DISCARD && targetZoneKind !== ZONE_KINDS.LOST) {
+    throw new GameStateError(
+      ERROR_CODES.INVALID_STATE,
+      `Unsupported targetZoneKind for stack move: ${String(targetZoneKind)}`
+    );
+  }
+
+  const board = resolvePlayerBoard(sessionDoc, playerId);
+  const bench = normalizeBenchSlots(board.bench);
+  const sourceBenchIndex =
+    sourceStackKind === STACK_KINDS.BENCH ? Number(action?.sourceBenchIndex) : null;
+
+  if (
+    sourceStackKind === STACK_KINDS.BENCH &&
+    (!Number.isInteger(sourceBenchIndex) || sourceBenchIndex < 0 || sourceBenchIndex >= BENCH_SLOT_COUNT)
+  ) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Invalid source bench index.');
+  }
+
+  const sourceStack =
+    sourceStackKind === STACK_KINDS.ACTIVE ? board.active || null : bench[sourceBenchIndex] || null;
+
+  if (!sourceStack || !Array.isArray(sourceStack.cardIds) || sourceStack.cardIds.length <= 0) {
+    throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Source stack does not exist.');
+  }
+
+  const movingCardRefs = sourceStack.cardIds.map((cardId) =>
+    createPublicCardRef(cardId, {
+      imageUrl: resolveImageUrlFromPrivateState(privateStateDoc, cardId),
+    })
+  );
+
+  if (sourceStackKind === STACK_KINDS.ACTIVE) {
+    board.active = null;
+  } else {
+    bench[sourceBenchIndex] = null;
+    board.bench = bench;
+  }
+
+  if (targetZoneKind === ZONE_KINDS.DISCARD) {
+    board.discard = [...asArray(board.discard), ...movingCardRefs];
+  } else {
+    board.lostZone = [...asArray(board.lostZone), ...movingCardRefs];
+  }
+
+  if (
+    sessionDoc.status === SESSION_STATUS.WAITING ||
+    sessionDoc.status === SESSION_STATUS.READY
+  ) {
+    sessionDoc.status = SESSION_STATUS.PLAYING;
   }
 
   return {
@@ -626,6 +717,13 @@ function moveTopCardFromSourceToZone({
         imageUrl,
       }),
     ];
+  } else if (targetZoneKind === ZONE_KINDS.PRIZE) {
+    board.prize = [
+      ...asArray(board.prize),
+      createPublicCardRef(movingCardId, {
+        isFaceDown: true,
+      }),
+    ];
   } else {
     throw new GameStateError(
       ERROR_CODES.INVALID_STATE,
@@ -705,6 +803,15 @@ export function mutateDocsForDropIntent({ sessionDoc, privateStateDoc, playerId,
 
   if (intent.action.kind === INTENT_ACTIONS.MOVE_CARD_FROM_HAND_TO_ZONE) {
     return moveCardFromSourceToZone({
+      sessionDoc,
+      privateStateDoc,
+      playerId,
+      action: intent.action,
+    });
+  }
+
+  if (intent.action.kind === INTENT_ACTIONS.MOVE_STACK_FROM_STACK_TO_ZONE) {
+    return moveStackFromStackToZone({
       sessionDoc,
       privateStateDoc,
       playerId,
