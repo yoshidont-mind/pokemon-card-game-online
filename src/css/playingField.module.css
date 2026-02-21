@@ -11,12 +11,20 @@
   color: var(--zone-text);
 }
 
-.statusBar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 10px;
-  font-size: 0.86rem;
-  color: #edf5e6;
+.areaDivider {
+  position: relative;
+  height: clamp(8px, 1vw, 12px);
+  margin: clamp(3px, 0.45vw, 7px) 0;
+}
+
+.areaDivider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid rgba(248, 252, 244, 0.9);
+  transform: translateY(-50%);
 }
 
 .mutationBanner {
@@ -689,6 +697,10 @@
   place-items: center;
 }
 
+.playerArea .benchSlot {
+  min-height: clamp(84px, 11vw, 132px);
+}
+
 .benchSlot:hover {
   z-index: 8;
 }
@@ -1152,6 +1164,20 @@
 
 .prizeZoneValue {
   justify-content: stretch;
+}
+
+.playerPrizeZoneTile .zoneQuickActions {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  width: auto;
+  z-index: 2;
+  margin-top: 0;
+}
+
+.playerPrizeZoneTile .zoneWithActions {
+  position: relative;
 }
 
 .prizeFan {

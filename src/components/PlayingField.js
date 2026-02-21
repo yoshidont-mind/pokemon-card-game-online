@@ -3502,10 +3502,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       onDragCancel={handleDragCancel}
     >
       <div className={`container mt-4 ${styles.boardRoot}`}>
-        <div className={styles.statusBar}>
-          状態: {sessionDoc?.status || 'waiting'} / Rev: {sessionDoc?.revision ?? 0}
-          {isMutating ? ' / 更新中...' : ''}
-        </div>
         {mutationNotice.text ? (
           <div
             className={joinClassNames(
@@ -3746,6 +3742,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
+        <div className={styles.areaDivider} aria-hidden />
+
         <section className={styles.playerArea} data-zone="player-area" data-drop-group="area">
           <div className={styles.sideColumn}>
             <ZoneTile
@@ -3753,7 +3751,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               title="サイド（自分）"
               dropPayload={playerPrizeDropPayload}
               isHighlighted={isZoneHighlighted('player-prize')}
-              className={styles.prizeZoneTile}
+              className={joinClassNames(styles.prizeZoneTile, styles.playerPrizeZoneTile)}
               valueClassName={styles.prizeZoneValue}
             >
               <div className={styles.zoneWithActions}>

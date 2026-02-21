@@ -246,3 +246,49 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 18:55 JST (Playmat compactness follow-up UI adjustments)
+- Requirement:
+  1. `サイド（自分）` の縦方向余白を `サイド（相手）` に近づける。
+  2. 自分側ベンチ（1〜5）の縦方向余白を相手側に近づける。
+  3. 自分側と相手側の境界を、少しの隙間 + 白い横線で明確化する。
+  4. 右上の `状態: ... / Rev: ...` 表示を削除する。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - 右上ステータスバー (`状態 / Rev`) の描画を削除。
+    - `opponentArea` と `playerArea` の間に境界用 `areaDivider` を追加。
+    - `サイド（自分）` に `playerPrizeZoneTile`、`サイド（相手）` に `opponentPrizeZoneTile` の識別クラスを追加。
+    - 自分側 `mainColumn` に `playerMainColumn` クラスを追加。
+  - `src/css/playingField.module.css`
+    - `.areaDivider` を追加（小さな縦余白 + 白の横線）。
+    - `.playerMainColumn` で行間ギャップをやや縮小。
+    - `.playerMainColumn .benchRow` と `.playerArea .benchSlot` で自分側ベンチの縦余白を縮小。
+    - `.playerPrizeZoneTile` の `zoneWithActions / prizeFanRows / prizeFanRow / zoneQuickActions` を調整し、`サイド（自分）` の縦方向余白を縮小。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 19:36 JST (Bench height regression rollback)
+- Issue:
+  - ベンチ枠に固定 `height` を入れたことで、縦幅が詰まりすぎ、カードがはみ出して見える回帰が発生。
+  - 相手側ベンチまで変更される副作用が出た。
+- Fix:
+  - `src/css/playingField.module.css`
+    - `.benchSlot` の固定 `height` を削除し、`min-height` のみに戻した。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 19:40 JST (Player-only parity adjustment for bench/prize)
+- Requirement:
+  - 相手側の見た目は変更せず、自分側のベンチ/サイド枠の縦方向サイズ・余白を相手側と同一化。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - 相手サイド枠の余分な識別クラス（`opponentPrizeZoneTile`）を除去し、相手側は既存基準のまま固定。
+  - `src/css/playingField.module.css`
+    - 自分側ベンチに、相手側と同一値の `min-height` を明示指定（同値固定）。
+    - 自分側サイドの `zoneWithActions` から `min-height: 100%` を削除し、相手側と同等の高さ計算に戻した。
+    - 自分側サイドの `1枚取る` ボタン配置（absolute）は維持し、相手側枠には影響しないようにした。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
