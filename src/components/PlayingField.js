@@ -72,6 +72,7 @@ const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できませ�
 const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
+const OPPONENT_COUNT_FLASH_MS = 2000;
 const INTERACTION_GUIDE_MARGIN_PX = 8;
 const INTERACTION_GUIDE_OVERLAP_PADDING_PX = 4;
 const INTERACTION_GUIDE_SCAN_STEP_PX = 8;
@@ -254,6 +255,7 @@ function PublicPilePreview({
   cardRefs,
   cardCatalog,
   pileLabel,
+  countOverlayClassName = '',
 }) {
   const refs = asArray(cardRefs);
   const topCardRef = refs.length > 0 ? refs[refs.length - 1] : null;
@@ -268,7 +270,7 @@ function PublicPilePreview({
             alt={`${pileLabel}上のカード`}
             className={styles.publicPileTopCard}
           />
-          <CardCountOverlay count={refs.length} />
+          <CardCountOverlay count={refs.length} className={countOverlayClassName} />
         </div>
       ) : null}
     </div>
@@ -707,7 +709,7 @@ function ZoneTile({
   );
 }
 
-function DeckPile({ count, alt, onActivate = null }) {
+function DeckPile({ count, alt, onActivate = null, countOverlayClassName = '' }) {
   const normalizedCount = Math.max(0, Number(count) || 0);
   const isInteractive = typeof onActivate === 'function' && normalizedCount > 0;
   const handleKeyDown = (event) => {
@@ -732,7 +734,7 @@ function DeckPile({ count, alt, onActivate = null }) {
       {normalizedCount > 0 ? (
         <div className={styles.pileCardFrame}>
           <img src={CARD_BACK_IMAGE} alt={alt} className={styles.deckCardBack} />
-          <CardCountOverlay count={normalizedCount} />
+          <CardCountOverlay count={normalizedCount} className={countOverlayClassName} />
         </div>
       ) : null}
     </div>
@@ -752,7 +754,7 @@ function CardCountOverlay({ count, className = '' }) {
   );
 }
 
-function PrizeFan({ count = 0 }) {
+function PrizeFan({ count = 0, countOverlayClassName = '' }) {
   const normalizedCount = Math.max(0, Number(count) || 0);
   const displayCount = Math.min(6, normalizedCount);
   const rows = [];
@@ -788,7 +790,10 @@ function PrizeFan({ count = 0 }) {
           </div>
         ))}
       </div>
-      <CardCountOverlay count={normalizedCount} className={styles.prizeFanCountOverlay} />
+      <CardCountOverlay
+        count={normalizedCount}
+        className={joinClassNames(styles.prizeFanCountOverlay, countOverlayClassName)}
+      />
     </div>
   );
 }
@@ -2069,6 +2074,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [opponentActiveSingleHoverShift, setOpponentActiveSingleHoverShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
+  const [opponentCountFlash, setOpponentCountFlash] = useState({
+    lost: false,
+    discard: false,
+    deck: false,
+    prize: false,
+  });
   const [stackModalState, setStackModalState] = useState({
     ownerPlayerId: '',
     ownerLabel: '',
@@ -2104,6 +2115,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const opponentRevealButtonRefs = useRef({});
   const opponentBoardRevealRefs = useRef({});
   const opponentActiveHoverSurfaceRef = useRef(null);
+  const opponentCountPrevRef = useRef({
+    lost: null,
+    discard: null,
+    deck: null,
+    prize: null,
+  });
+  const opponentCountFlashTimeoutsRef = useRef({
+    lost: null,
+    discard: null,
+    deck: null,
+    prize: null,
+  });
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
   const [interactionGuidePosition, setInteractionGuidePosition] = useState({
@@ -2401,6 +2424,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const playerLostRefs = asArray(playerBoard?.lostZone);
   const opponentDiscardRefs = asArray(opponentBoard?.discard);
   const opponentLostRefs = asArray(opponentBoard?.lostZone);
+  const opponentDiscardCount = opponentDiscardRefs.length;
+  const opponentLostCount = opponentLostRefs.length;
   const lastCoinResult = turnContext?.lastCoinResult;
   const lastCoinAt = turnContext?.lastCoinAt || null;
   const lastDeckShuffleEvent = turnContext?.lastDeckShuffleEvent || null;
@@ -2414,6 +2439,50 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   const playerActiveZoneId = 'player-active';
   const opponentActiveZoneId = 'opponent-active';
+
+  useEffect(() => {
+    const zoneCountEntries = [
+      ['lost', opponentLostCount],
+      ['discard', opponentDiscardCount],
+      ['deck', opponentDeckCount],
+      ['prize', opponentPrizeCount],
+    ];
+
+    zoneCountEntries.forEach(([zoneKey, nextCount]) => {
+      const previousCount = opponentCountPrevRef.current[zoneKey];
+      opponentCountPrevRef.current[zoneKey] = nextCount;
+      if (previousCount === null || previousCount === nextCount) {
+        return;
+      }
+
+      setOpponentCountFlash((previous) => ({
+        ...previous,
+        [zoneKey]: true,
+      }));
+
+      const existingTimeoutId = opponentCountFlashTimeoutsRef.current[zoneKey];
+      if (existingTimeoutId) {
+        window.clearTimeout(existingTimeoutId);
+      }
+      opponentCountFlashTimeoutsRef.current[zoneKey] = window.setTimeout(() => {
+        setOpponentCountFlash((previous) => ({
+          ...previous,
+          [zoneKey]: false,
+        }));
+        opponentCountFlashTimeoutsRef.current[zoneKey] = null;
+      }, OPPONENT_COUNT_FLASH_MS);
+    });
+  }, [opponentDeckCount, opponentDiscardCount, opponentLostCount, opponentPrizeCount]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(opponentCountFlashTimeoutsRef.current).forEach((timeoutId) => {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+      });
+    };
+  }, []);
 
   const playerActiveDropPayload = buildZoneDropPayload({
     zoneId: playerActiveZoneId,
@@ -4219,6 +4288,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   cardRefs={opponentLostRefs}
                   cardCatalog={renderCardCatalog}
                   pileLabel="ロスト（相手）"
+                  countOverlayClassName={
+                    opponentCountFlash.lost ? styles.pileCountOverlayAlert : ''
+                  }
                 />
               </button>
             </ZoneTile>
@@ -4241,11 +4313,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   cardRefs={opponentDiscardRefs}
                   cardCatalog={renderCardCatalog}
                   pileLabel="トラッシュ（相手）"
+                  countOverlayClassName={
+                    opponentCountFlash.discard ? styles.pileCountOverlayAlert : ''
+                  }
                 />
               </button>
             </ZoneTile>
             <ZoneTile zone="opponent-deck" title="山札（相手）">
-              <DeckPile count={opponentDeckCount} alt="Opponent Deck" />
+              <DeckPile
+                count={opponentDeckCount}
+                alt="Opponent Deck"
+                countOverlayClassName={opponentCountFlash.deck ? styles.pileCountOverlayAlert : ''}
+              />
             </ZoneTile>
           </div>
 
@@ -4445,7 +4524,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               className={styles.prizeZoneTile}
               valueClassName={styles.prizeZoneValue}
             >
-              <PrizeFan count={opponentPrizeCount} />
+              <PrizeFan
+                count={opponentPrizeCount}
+                countOverlayClassName={opponentCountFlash.prize ? styles.pileCountOverlayAlert : ''}
+              />
             </ZoneTile>
           </div>
         </section>

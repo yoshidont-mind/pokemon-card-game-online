@@ -466,3 +466,22 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-22 00:01 JST (Opponent count overlay flash on change)
+- Requirement:
+  - 相手側のロスト/トラッシュ/山札/サイドで枚数表示が変化した時、
+    黒半透明帯を最大2秒間だけ赤半透明にして、操作変化を視認しやすくする。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - `OPPONENT_COUNT_FLASH_MS = 2000` を追加。
+    - `opponentCountFlash` state（lost/discard/deck/prize）を追加。
+    - 前回値を保持する `opponentCountPrevRef` とタイマー管理 `opponentCountFlashTimeoutsRef` を追加。
+    - `useEffect` で4ゾーンの枚数差分を監視し、変化時のみ該当フラグを `true` にして2秒後自動解除。
+    - `PublicPilePreview` / `DeckPile` / `PrizeFan` に `countOverlayClassName` を渡せるよう拡張。
+    - 相手側4ゾーンの表示のみ `pileCountOverlayAlert` を条件適用。
+  - `src/css/playingField.module.css`
+    - `.pileCountOverlayAlert` を追加（赤半透明背景）。
+    - `.pileCountOverlay` に背景遷移トランジションを追加。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
