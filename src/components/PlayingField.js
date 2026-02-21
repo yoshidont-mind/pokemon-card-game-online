@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowsUpDownLeftRight, faEdit, faTrash } from '@fortawesome/free-solid-svg-icons';
+import {
+  faArrowsUpDownLeftRight,
+  faEdit,
+  faMinus,
+  faPlus,
+  faTrash,
+} from '@fortawesome/free-solid-svg-icons';
 import Pokemon from './Pokemon';
 import HandTray from './HandTray';
 import ToolboxPanel from './ToolboxPanel';
@@ -9,6 +15,7 @@ import OperationPanel from './operation/OperationPanel';
 import DroppableZone from './dnd/DroppableZone';
 import DroppableStack from './dnd/DroppableStack';
 import DraggableCard from './dnd/DraggableCard';
+import DraggableToolItem from './dnd/DraggableToolItem';
 import BoardDragOverlay from './dnd/BoardDragOverlay';
 import '../css/boardLayout.tokens.css';
 import styles from '../css/playingField.module.css';
@@ -28,6 +35,7 @@ import {
   buildCardDragPayload,
   buildPileCardDragPayload,
   buildStackDragPayload,
+  buildStackStatusBadgeDragPayload,
   buildStackDropPayload,
   buildZoneDropPayload,
 } from '../interaction/dnd/buildDragPayload';
@@ -57,6 +65,13 @@ const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
 const EMPTY_OBJECT = Object.freeze({});
+const STATUS_BADGE_DEFINITIONS = Object.freeze([
+  { id: 'poison', label: 'どく', stackKey: 'poisoned' },
+  { id: 'burn', label: 'やけど', stackKey: 'burned' },
+  { id: 'asleep', label: 'ねむり', stackKey: 'asleep' },
+  { id: 'paralyzed', label: 'マヒ', stackKey: 'paralyzed' },
+  { id: 'confused', label: 'こんらん', stackKey: 'confused' },
+]);
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -172,6 +187,10 @@ function resolveStackFromBoard(board, stackKind, benchIndex = null) {
 function countCardsInStack(board, stackKind, benchIndex = null) {
   const stack = resolveStackFromBoard(board, stackKind, benchIndex);
   return asArray(stack?.cardIds).length;
+}
+
+function resolveStackStatusBadges(stack) {
+  return STATUS_BADGE_DEFINITIONS.filter((entry) => Boolean(stack?.specialConditions?.[entry.stackKey]));
 }
 
 function formatStackModalTitle({ ownerLabel, stackKind, benchIndex, cardCount }) {
@@ -522,6 +541,7 @@ function BenchRow({
   isStackHighlighted,
   isStackModalForZone,
   onToggleStackCards,
+  onOpenStackAdjustPopover,
 }) {
   const slots = Array.from({ length: BENCH_SLOTS }, (_, index) => bench[index] || null);
 
@@ -611,7 +631,23 @@ function BenchRow({
                 data-zone={`${zoneId}-stack`}
                 data-drop-group="stack"
               >
-                <div className={joinClassNames(styles.stackDropSurfaceInner, hoverableClassName)}>
+                <div
+                  className={joinClassNames(styles.stackDropSurfaceInner, hoverableClassName)}
+                  onDoubleClick={(event) => {
+                    if (typeof onOpenStackAdjustPopover !== 'function') {
+                      return;
+                    }
+                    if (event.target instanceof Element && event.target.closest('button')) {
+                      return;
+                    }
+                    onOpenStackAdjustPopover({
+                      targetPlayerId: ownerPlayerId,
+                      stackKind: STACK_KINDS.BENCH,
+                      benchIndex: index,
+                      anchorRect: event.currentTarget.getBoundingClientRect(),
+                    });
+                  }}
+                >
                   {allowCardDrop && shouldShowStackInsertTargets ? (
                     <div className={styles.stackInsertTargets}>
                       <DroppableZone
@@ -1401,6 +1437,115 @@ function StackCardsModal({
   );
 }
 
+function StackAdjustPopover({
+  isOpen = false,
+  anchorRect = null,
+  targetPlayerId = '',
+  stackKind = STACK_KINDS.ACTIVE,
+  benchIndex = null,
+  damage = 0,
+  statusBadges = [],
+  isLocked = false,
+  onAdjustDamage = () => {},
+  onClose = () => {},
+}) {
+  const popoverStyle = useMemo(() => {
+    if (!anchorRect || typeof window === 'undefined') {
+      return undefined;
+    }
+    const estimatedWidth = 256;
+    const estimatedHeight = 170;
+    const preferred = clampFloatingPanelPosition({
+      x: anchorRect.right + 10,
+      y: anchorRect.top - 6,
+      width: estimatedWidth,
+      height: estimatedHeight,
+    });
+    return {
+      left: `${preferred.x}px`,
+      top: `${preferred.y}px`,
+    };
+  }, [anchorRect]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <aside
+      className={styles.stackAdjustPopover}
+      style={popoverStyle}
+      data-zone="stack-adjust-popover"
+      role="dialog"
+      aria-modal="false"
+      aria-label="ダメージと状態異常を調整"
+    >
+      <span className={styles.stackAdjustPopoverArrow} aria-hidden="true" />
+      <p className={styles.stackAdjustPopoverTitle}>ダメージ / 状態異常</p>
+      <div className={styles.stackAdjustDamageRow}>
+        <button
+          type="button"
+          className={styles.stackAdjustDamageButton}
+          onClick={() => onAdjustDamage(-10)}
+          disabled={isLocked}
+          aria-label="ダメージを10減らす"
+        >
+          <FontAwesomeIcon icon={faMinus} />
+        </button>
+        <span className={styles.stackAdjustDamageValue}>{Number(damage || 0)}</span>
+        <button
+          type="button"
+          className={styles.stackAdjustDamageButton}
+          onClick={() => onAdjustDamage(10)}
+          disabled={isLocked}
+          aria-label="ダメージを10増やす"
+        >
+          <FontAwesomeIcon icon={faPlus} />
+        </button>
+      </div>
+      <div className={styles.stackAdjustStatusRow}>
+        {statusBadges.length > 0 ? (
+          statusBadges.map((badge) => (
+            <DraggableToolItem
+              key={`stack-status-${targetPlayerId}-${stackKind}-${benchIndex ?? 'active'}-${badge.id}`}
+              dragId={`stack-status-${targetPlayerId}-${stackKind}-${benchIndex ?? 'active'}-${badge.id}`}
+              dragPayload={buildStackStatusBadgeDragPayload({
+                value: badge.id,
+                sourcePlayerId: targetPlayerId,
+                sourceStackKind: stackKind,
+                sourceBenchIndex: stackKind === STACK_KINDS.BENCH ? benchIndex : null,
+              })}
+              className={styles.toolboxDraggable}
+              draggingClassName={styles.draggingSource}
+            >
+              <button
+                type="button"
+                className={styles.toolboxItem}
+                data-tool-type="status-badge"
+                data-tool-value={badge.id}
+                aria-label={`状態異常 ${badge.label} を小道具BOXへ戻す`}
+                disabled={isLocked}
+              >
+                {badge.label}
+              </button>
+            </DraggableToolItem>
+          ))
+        ) : (
+          <span className={styles.zoneValueMuted}>状態異常なし</span>
+        )}
+      </div>
+      <p className={styles.stackAdjustHint}>状態異常バッヂを小道具BOXへドラッグすると回復します。</p>
+      <button
+        type="button"
+        className={styles.stackAdjustCloseButton}
+        onClick={onClose}
+      >
+        閉じる
+      </button>
+    </aside>
+  );
+}
+
 const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const ownerPlayerId = toPlayerKey(playerId);
   const opponentPlayerId = ownerPlayerId === 'player1' ? 'player2' : 'player1';
@@ -1448,6 +1593,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     ownerPlayerId: '',
     ownerLabel: '',
     zoneKind: ZONE_KINDS.DISCARD,
+    anchorRect: null,
+    isOpen: false,
+  });
+  const [stackAdjustPopoverState, setStackAdjustPopoverState] = useState({
+    targetPlayerId: '',
+    stackKind: STACK_KINDS.ACTIVE,
+    benchIndex: null,
     anchorRect: null,
     isOpen: false,
   });
@@ -1779,6 +1931,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         zoneKind: ZONE_KINDS.STADIUM,
       });
 
+  const toolboxDropPayload = buildZoneDropPayload({
+    zoneId: 'toolbox-panel',
+    targetPlayerId: ownerPlayerId,
+    zoneKind: ZONE_KINDS.TOOLBOX,
+  });
+
   const playerActiveStackDropPayload = buildStackDropPayload({
     zoneId: playerActiveZoneId,
     targetPlayerId: ownerPlayerId,
@@ -1841,6 +1999,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       sourceZoneId = '',
     }) => {
       setPileModalState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
+      setStackAdjustPopoverState((previous) => ({
         ...previous,
         isOpen: false,
       }));
@@ -1934,6 +2096,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         ...previous,
         isOpen: false,
       }));
+      setStackAdjustPopoverState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
       let anchorRect = null;
       if (typeof document !== 'undefined' && sourceZoneId) {
         const anchorNode = document.querySelector(`[data-zone="${sourceZoneId}"]`);
@@ -1993,6 +2159,37 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     },
     [handleClosePileCards, handleOpenPileCards, isPileModalForZone]
   );
+
+  const handleOpenStackAdjustPopover = useCallback(
+    ({ targetPlayerId, stackKind, benchIndex = null, anchorRect = null }) => {
+      if (targetPlayerId !== 'player1' && targetPlayerId !== 'player2') {
+        return;
+      }
+      setStackModalState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
+      setPileModalState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
+      setStackAdjustPopoverState({
+        targetPlayerId,
+        stackKind: stackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE,
+        benchIndex: stackKind === STACK_KINDS.BENCH ? Number(benchIndex) : null,
+        anchorRect,
+        isOpen: true,
+      });
+    },
+    []
+  );
+
+  const handleCloseStackAdjustPopover = useCallback(() => {
+    setStackAdjustPopoverState((previous) => ({
+      ...previous,
+      isOpen: false,
+    }));
+  }, []);
 
   const stackModalBoard = useMemo(() => {
     if (stackModalState.ownerPlayerId === ownerPlayerId) {
@@ -2082,6 +2279,49 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     [pileModalCards.length, pileModalState.ownerLabel, pileModalState.zoneKind]
   );
 
+  const stackAdjustPopoverBoard = useMemo(() => {
+    if (stackAdjustPopoverState.targetPlayerId === ownerPlayerId) {
+      return playerBoard;
+    }
+    if (stackAdjustPopoverState.targetPlayerId === opponentPlayerId) {
+      return opponentBoard;
+    }
+    return null;
+  }, [
+    opponentBoard,
+    opponentPlayerId,
+    ownerPlayerId,
+    playerBoard,
+    stackAdjustPopoverState.targetPlayerId,
+  ]);
+
+  const stackAdjustPopoverStack = useMemo(
+    () =>
+      resolveStackFromBoard(
+        stackAdjustPopoverBoard,
+        stackAdjustPopoverState.stackKind,
+        stackAdjustPopoverState.stackKind === STACK_KINDS.BENCH
+          ? stackAdjustPopoverState.benchIndex
+          : null
+      ),
+    [stackAdjustPopoverBoard, stackAdjustPopoverState.benchIndex, stackAdjustPopoverState.stackKind]
+  );
+
+  const stackAdjustPopoverStatusBadges = useMemo(
+    () => resolveStackStatusBadges(stackAdjustPopoverStack),
+    [stackAdjustPopoverStack]
+  );
+
+  const stackAdjustPopoverDamage = Number(stackAdjustPopoverStack?.damage || 0);
+  const isStackAdjustPopoverOpen =
+    stackAdjustPopoverState.isOpen &&
+    Boolean(stackAdjustPopoverStack) &&
+    countCardsInStack(
+      stackAdjustPopoverBoard,
+      stackAdjustPopoverState.stackKind,
+      stackAdjustPopoverState.stackKind === STACK_KINDS.BENCH ? stackAdjustPopoverState.benchIndex : null
+    ) > 0;
+
   useEffect(() => {
     if (stackModalState.isOpen && (!stackModalStack || stackModalCards.length <= 0)) {
       setStackModalState((previous) => ({
@@ -2099,6 +2339,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       }));
     }
   }, [pileModalCards.length, pileModalState.isOpen]);
+
+  useEffect(() => {
+    if (stackAdjustPopoverState.isOpen && !isStackAdjustPopoverOpen) {
+      setStackAdjustPopoverState((previous) => ({
+        ...previous,
+        isOpen: false,
+      }));
+    }
+  }, [isStackAdjustPopoverOpen, stackAdjustPopoverState.isOpen]);
 
   useEffect(() => {
     if (!lastCoinAt) {
@@ -2655,6 +2904,44 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       successMessage: '山札から1枚引きました。',
     });
   }, [executeQuickOperation]);
+
+  const handleAdjustStackDamage = useCallback(
+    (delta) => {
+      const numericDelta = Number(delta);
+      if (!Number.isFinite(numericDelta) || numericDelta === 0) {
+        return;
+      }
+      if (!isStackAdjustPopoverOpen) {
+        return;
+      }
+
+      void executeSessionMutation({
+        mutate: ({ sessionDoc: nextSessionDoc }) => {
+          const board = nextSessionDoc?.publicState?.players?.[stackAdjustPopoverState.targetPlayerId]?.board;
+          const targetStack = resolveStackFromBoard(
+            board,
+            stackAdjustPopoverState.stackKind,
+            stackAdjustPopoverState.stackKind === STACK_KINDS.BENCH
+              ? stackAdjustPopoverState.benchIndex
+              : null
+          );
+          if (!targetStack) {
+            return;
+          }
+          const currentDamage = Number(targetStack.damage || 0);
+          targetStack.damage = currentDamage + numericDelta;
+        },
+        invalidMessage: 'ダメージ調整に失敗しました。再試行してください。',
+      });
+    },
+    [
+      executeSessionMutation,
+      isStackAdjustPopoverOpen,
+      stackAdjustPopoverState.benchIndex,
+      stackAdjustPopoverState.stackKind,
+      stackAdjustPopoverState.targetPlayerId,
+    ]
+  );
 
   const handleDeckShuffle = useCallback(() => {
     void executeQuickOperation({
@@ -3286,6 +3573,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               isStackHighlighted={isStackHighlighted}
               isStackModalForZone={isStackModalForZone}
               onToggleStackCards={handleToggleStackCards}
+              onOpenStackAdjustPopover={handleOpenStackAdjustPopover}
             />
             <div className={`${styles.activeRow} ${styles.battleLineRow}`.trim()}>
               <div className={styles.battleLineRevealOpponent}>
@@ -3335,6 +3623,17 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                         styles.stackDropSurfaceInner,
                         asArray(opponentActive?.cardIds).length === 1 ? styles.stackDropSurfaceHoverable : ''
                       )}
+                      onDoubleClick={(event) => {
+                        if (event.target instanceof Element && event.target.closest('button')) {
+                          return;
+                        }
+                        handleOpenStackAdjustPopover({
+                          targetPlayerId: opponentPlayerId,
+                          stackKind: STACK_KINDS.ACTIVE,
+                          benchIndex: null,
+                          anchorRect: event.currentTarget.getBoundingClientRect(),
+                        });
+                      }}
                     >
                       <Pokemon {...toPokemonProps(opponentActive, renderCardCatalog)} />
                       {asArray(opponentActive?.cardIds).length > 1 ? (
@@ -3507,6 +3806,17 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                         styles.stackDropSurfaceInner,
                         playerActiveCardCount === 1 ? styles.stackDropSurfaceHoverable : ''
                       )}
+                      onDoubleClick={(event) => {
+                        if (event.target instanceof Element && event.target.closest('button')) {
+                          return;
+                        }
+                        handleOpenStackAdjustPopover({
+                          targetPlayerId: ownerPlayerId,
+                          stackKind: STACK_KINDS.ACTIVE,
+                          benchIndex: null,
+                          anchorRect: event.currentTarget.getBoundingClientRect(),
+                        });
+                      }}
                     >
                       {shouldShowStackInsertTargets ? (
                         <div className={styles.stackInsertTargets}>
@@ -3651,6 +3961,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               isStackHighlighted={isStackHighlighted}
               isStackModalForZone={isStackModalForZone}
               onToggleStackCards={handleToggleStackCards}
+              onOpenStackAdjustPopover={handleOpenStackAdjustPopover}
             />
           </div>
 
@@ -3796,7 +4107,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           dropPayload={playerHandDropPayload}
           isDropHighlighted={isZoneHighlighted('player-hand')}
         />
-        <ToolboxPanel isOpen={isToolboxOpen} onToggle={handleToolboxToggle} />
+        <ToolboxPanel
+          isOpen={isToolboxOpen}
+          onToggle={handleToolboxToggle}
+          dropPayload={toolboxDropPayload}
+          isDropHighlighted={isZoneHighlighted('toolbox-panel')}
+        />
         <OperationPanel
           sessionId={sessionId}
           playerId={ownerPlayerId}
@@ -3932,6 +4248,20 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           initialAnchorRect={pileModalState.anchorRect}
           modalAriaLabel="ゾーン展開モーダル"
           modalDataZone="zone-cards-root"
+        />
+      ) : null}
+      {isStackAdjustPopoverOpen ? (
+        <StackAdjustPopover
+          isOpen={isStackAdjustPopoverOpen}
+          anchorRect={stackAdjustPopoverState.anchorRect}
+          targetPlayerId={stackAdjustPopoverState.targetPlayerId}
+          stackKind={stackAdjustPopoverState.stackKind}
+          benchIndex={stackAdjustPopoverState.benchIndex}
+          damage={stackAdjustPopoverDamage}
+          statusBadges={stackAdjustPopoverStatusBadges}
+          isLocked={isUiInteractionBlocked || isMutating}
+          onAdjustDamage={handleAdjustStackDamage}
+          onClose={handleCloseStackAdjustPopover}
         />
       ) : null}
       {!hasBlockingRequest && isOpponentHandRevealOpen ? (

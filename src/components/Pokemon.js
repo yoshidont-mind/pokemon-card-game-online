@@ -47,9 +47,9 @@ const Pokemon = ({
                     );
                 })}
             </div>
-            {damage > 0 && (
+            {Number(damage || 0) !== 0 && (
                 <div className="damage-badge">
-                    <Badge pill bg="danger">{damage}</Badge>
+                    <Badge pill bg={Number(damage || 0) < 0 ? "primary" : "danger"}>{damage}</Badge>
                 </div>
             )}
             <div className="status-badges">

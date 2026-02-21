@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { useDroppable } from '@dnd-kit/core';
 import styles from '../css/playingField.module.css';
 import DraggableToolItem from './dnd/DraggableToolItem';
 import { buildDamageCounterDragPayload, buildStatusBadgeDragPayload } from '../interaction/dnd/buildDragPayload';
@@ -14,9 +15,26 @@ const STATUS_BADGES = [
   { id: 'confused', label: 'こんらん' },
 ];
 
-const ToolboxPanel = ({ isOpen = false, onToggle = () => {} }) => {
+const ToolboxPanel = ({
+  isOpen = false,
+  onToggle = () => {},
+  dropPayload = null,
+  isDropHighlighted = false,
+}) => {
+  const { setNodeRef } = useDroppable({
+    id: 'zone-toolbox-panel',
+    data: {
+      dropPayload,
+    },
+  });
+
   return (
-    <aside className={styles.toolboxRoot} data-zone="toolbox-panel">
+    <aside
+      ref={setNodeRef}
+      className={`${styles.toolboxRoot} ${isDropHighlighted ? styles.toolboxRootDropActive : ''}`.trim()}
+      data-zone="toolbox-panel"
+      data-drop-group="toolbox"
+    >
       <button
         type="button"
         className={styles.panelToggle}
@@ -87,6 +105,12 @@ const ToolboxPanel = ({ isOpen = false, onToggle = () => {} }) => {
 ToolboxPanel.propTypes = {
   isOpen: PropTypes.bool,
   onToggle: PropTypes.func,
+  dropPayload: PropTypes.shape({
+    dropType: PropTypes.string,
+    zoneId: PropTypes.string,
+    zoneKind: PropTypes.string,
+  }),
+  isDropHighlighted: PropTypes.bool,
 };
 
 export default ToolboxPanel;
