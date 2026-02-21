@@ -564,7 +564,7 @@
 
 .battleLineActive:hover,
 .battleLineActive:focus-within {
-  z-index: calc(var(--z-overlay) + 2);
+  z-index: 6;
 }
 
 .battleLineRevealOpponent {
@@ -648,7 +648,7 @@
 
 .benchSlot:hover,
 .benchSlot:focus-within {
-  z-index: calc(var(--z-overlay) + 1);
+  z-index: 5;
 }
 
 .benchPlaceholder {
@@ -1519,6 +1519,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
   position: relative;
   z-index: 5;
+  margin-top: 8px;
 }
 
 .stackExpandButton:hover {
@@ -1575,6 +1576,11 @@
   display: inline-flex;
   justify-content: center;
   align-items: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.dragOverlayToolboxItem {
+  cursor: grabbing;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 

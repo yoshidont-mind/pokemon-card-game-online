@@ -494,7 +494,8 @@ function BenchRow({
   isDraggingCard,
   isZoneHighlighted,
   isStackHighlighted,
-  onOpenStackCards,
+  isStackModalForZone,
+  onToggleStackCards,
 }) {
   const slots = Array.from({ length: BENCH_SLOTS }, (_, index) => bench[index] || null);
 
@@ -544,6 +545,13 @@ function BenchRow({
         const ownerLabel = owner === 'player' ? '自分' : '相手';
         const canDragSingleCard = allowCardDrop && cardCount === 1;
         const singleCardId = canDragSingleCard ? asArray(stack?.cardIds)[0] : null;
+        const isStackExpanded = canExpandStack
+          ? isStackModalForZone({
+              ownerPlayerId,
+              stackKind: STACK_KINDS.BENCH,
+              benchIndex: index,
+            })
+          : false;
 
         return (
           <DroppableZone
@@ -619,7 +627,7 @@ function BenchRow({
                       type="button"
                       className={styles.stackExpandButton}
                       onClick={() =>
-                        onOpenStackCards({
+                        onToggleStackCards({
                           ownerPlayerId,
                           ownerLabel,
                           stackKind: STACK_KINDS.BENCH,
@@ -627,9 +635,13 @@ function BenchRow({
                           sourceZoneId: `${zoneId}-stack`,
                         })
                       }
-                      aria-label={`${ownerLabel}ベンチ${index + 1}を展開`}
+                      aria-label={
+                        isStackExpanded
+                          ? `${ownerLabel}ベンチ${index + 1}の展開を閉じる`
+                          : `${ownerLabel}ベンチ${index + 1}を展開`
+                      }
                     >
-                      展開
+                      {isStackExpanded ? '展開を閉じる' : '展開'}
                     </button>
                   ) : null}
                 </div>
@@ -1771,6 +1783,49 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     }));
   }, []);
 
+  const isStackModalForZone = useCallback(
+    ({ ownerPlayerId: targetOwnerPlayerId, stackKind, benchIndex = null }) => {
+      if (!stackModalState.isOpen) {
+        return false;
+      }
+      if (stackModalState.ownerPlayerId !== targetOwnerPlayerId) {
+        return false;
+      }
+      const normalizedStackKind =
+        stackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
+      if (stackModalState.stackKind !== normalizedStackKind) {
+        return false;
+      }
+      if (normalizedStackKind === STACK_KINDS.BENCH) {
+        return Number(stackModalState.benchIndex) === Number(benchIndex);
+      }
+      return true;
+    },
+    [
+      stackModalState.benchIndex,
+      stackModalState.isOpen,
+      stackModalState.ownerPlayerId,
+      stackModalState.stackKind,
+    ]
+  );
+
+  const handleToggleStackCards = useCallback(
+    (params) => {
+      if (
+        isStackModalForZone({
+          ownerPlayerId: params?.ownerPlayerId,
+          stackKind: params?.stackKind,
+          benchIndex: params?.benchIndex ?? null,
+        })
+      ) {
+        handleCloseStackCards();
+        return;
+      }
+      handleOpenStackCards(params);
+    },
+    [handleCloseStackCards, handleOpenStackCards, isStackModalForZone]
+  );
+
   const stackModalBoard = useMemo(() => {
     if (stackModalState.ownerPlayerId === ownerPlayerId) {
       return playerBoard;
@@ -2825,6 +2880,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       ? Math.max(0, Number(opponentDeckPeekState.count) || 0)
       : 0;
   const isDraggingCard = activeDragPayload?.dragType === 'card';
+  const isOpponentActiveStackExpanded = isStackModalForZone({
+    ownerPlayerId: opponentPlayerId,
+    stackKind: STACK_KINDS.ACTIVE,
+  });
+  const isPlayerActiveStackExpanded = isStackModalForZone({
+    ownerPlayerId,
+    stackKind: STACK_KINDS.ACTIVE,
+  });
   const canShareNote = Boolean(normalizeNoteText(sharedNoteDraft));
   const canDrawFromDeck = playerDeckCount > 0 && !isQuickActionLocked;
   const canShuffleDeck = playerDeckCount > 1 && !isQuickActionLocked;
@@ -2930,7 +2993,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               isDraggingCard={isDraggingCard}
               isZoneHighlighted={isZoneHighlighted}
               isStackHighlighted={isStackHighlighted}
-              onOpenStackCards={handleOpenStackCards}
+              isStackModalForZone={isStackModalForZone}
+              onToggleStackCards={handleToggleStackCards}
             />
             <div className={`${styles.activeRow} ${styles.battleLineRow}`.trim()}>
               <div className={styles.battleLineRevealOpponent}>
@@ -2987,16 +3051,20 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                           type="button"
                           className={styles.stackExpandButton}
                           onClick={() =>
-                            handleOpenStackCards({
+                            handleToggleStackCards({
                               ownerPlayerId: opponentPlayerId,
                               ownerLabel: '相手',
                               stackKind: STACK_KINDS.ACTIVE,
                               sourceZoneId: `${opponentActiveZoneId}-stack`,
                             })
                           }
-                          aria-label="相手バトル場を展開"
+                          aria-label={
+                            isOpponentActiveStackExpanded
+                              ? '相手バトル場の展開を閉じる'
+                              : '相手バトル場を展開'
+                          }
                         >
-                          展開
+                          {isOpponentActiveStackExpanded ? '展開を閉じる' : '展開'}
                         </button>
                       ) : null}
                     </div>
@@ -3183,16 +3251,20 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                           type="button"
                           className={styles.stackExpandButton}
                           onClick={() =>
-                            handleOpenStackCards({
+                            handleToggleStackCards({
                               ownerPlayerId,
                               ownerLabel: '自分',
                               stackKind: STACK_KINDS.ACTIVE,
                               sourceZoneId: `${playerActiveZoneId}-stack`,
                             })
                           }
-                          aria-label="自分バトル場を展開"
+                          aria-label={
+                            isPlayerActiveStackExpanded
+                              ? '自分バトル場の展開を閉じる'
+                              : '自分バトル場を展開'
+                          }
                         >
-                          展開
+                          {isPlayerActiveStackExpanded ? '展開を閉じる' : '展開'}
                         </button>
                       ) : null}
                     </div>
@@ -3246,7 +3318,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               isDraggingCard={isDraggingCard}
               isZoneHighlighted={isZoneHighlighted}
               isStackHighlighted={isStackHighlighted}
-              onOpenStackCards={handleOpenStackCards}
+              isStackModalForZone={isStackModalForZone}
+              onToggleStackCards={handleToggleStackCards}
             />
           </div>
 

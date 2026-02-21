@@ -1069,19 +1069,22 @@ test('opens stack expansion modal for multi-card active stack and shows cards in
     },
   });
 
-  fireEvent.click(screen.getByRole('button', { name: '自分バトル場を展開' }));
+  const expandButton = screen.getByRole('button', { name: '自分バトル場を展開' });
+  fireEvent.click(expandButton);
 
   const modal = await screen.findByLabelText('スタック展開モーダル');
   expect(within(modal).getByText('バトル場（自分）を展開（2枚）')).toBeInTheDocument();
   expect(within(modal).getByRole('img', { name: '展開カード 1' })).toBeInTheDocument();
   expect(within(modal).getByRole('img', { name: '展開カード 2' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '自分バトル場の展開を閉じる' })).toBeInTheDocument();
 
   const cardImages = within(modal).getAllByRole('img', { name: /展開カード/i });
   expect(cardImages[0].getAttribute('src')).toContain('p1_active_energy.jpg');
   expect(cardImages[1].getAttribute('src')).toContain('p1_active_base.jpg');
 
-  fireEvent.click(within(modal).getByRole('button', { name: '閉じる' }));
+  fireEvent.click(screen.getByRole('button', { name: '自分バトル場の展開を閉じる' }));
   await waitFor(() => {
     expect(container.querySelector('[data-zone="stack-cards-root"]')).not.toBeInTheDocument();
   });
+  expect(screen.getByRole('button', { name: '自分バトル場を展開' })).toBeInTheDocument();
 });
