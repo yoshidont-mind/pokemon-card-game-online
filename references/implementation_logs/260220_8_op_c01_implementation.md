@@ -390,3 +390,125 @@ npm run build
 ```
 - PASS（Compiled successfully）
 
+
+## 17. 追加UI修正（手札重なり時のz-index / 展開ボタンUX）
+
+### 17.1 対応内容
+- 手札トレイとベンチが重なる場合に、ベンチホバーが手札より前に出ないよう z-index を調整。
+  - `.benchSlot:hover` を `z-index: 5` に変更（手札トレイ `--z-hand=30` より下）。
+- バトル場ホバー前面化も過剰だったため、必要十分な値へ調整。
+  - `.battleLineActive:hover` を `z-index: 6` に変更。
+- `展開` ボタンの視認性改善。
+  - `.stackExpandButton` に `margin-top: 4px` を追加し、カードとの間隔を確保。
+- `展開` ボタンをトグル化。
+  - モーダル表示中は該当ゾーンのボタン文言を `展開を閉じる` に変更。
+  - 同ボタン押下でモーダルを閉じられるよう実装。
+  - 対象: 自分/相手のバトル場、ベンチ各枠。
+
+### 17.2 実装詳細
+- `src/components/PlayingField.js`
+  - `BenchRow` に `isStackModalForZone` / `onToggleStackCards` を追加。
+  - `isStackModalForZone()` で「現在開いているモーダルがどのゾーンか」を判定。
+  - `handleToggleStackCards()` で開閉をトグル。
+  - バトル場/ベンチの `展開` ボタンをトグル文言・トグル動作へ変更。
+- `src/css/playingField.module.css`
+  - z-index 調整と `stackExpandButton` マージン追加。
+- `src/components/__tests__/PlayingFieldLayout.test.js`
+  - 既存スタック展開テストに、`展開を閉じる` トグル挙動の確認を追加。
+
+### 17.3 検証
+```bash
+npm test -- --watch=false --runInBand src/components/__tests__/PlayingFieldLayout.test.js
+```
+- PASS（1 suite / 29 tests）
+
+```bash
+npm run build
+```
+- PASS（Compiled successfully）
+
+
+## 18. 微調整（展開ボタンのカード間隔）
+
+### 対応
+- `src/css/playingField.module.css`
+  - `.stackExpandButton` の `margin-top` を `4px -> 8px` に調整。
+  - カード画像と展開ボタンの間隔を、山札アクションボタン群に近い体感へ寄せた。
+
+### 検証
+```bash
+npm test -- --watch=false --runInBand src/components/__tests__/PlayingFieldLayout.test.js
+```
+- PASS（1 suite / 29 tests）
+
+
+## 19. 追加修正（手札エリアへのドロップ当たり判定）
+
+### 19.1 事象
+- 他エリアから手札エリアへカードをドラッグした際、手札エリアの内部では赤ハイライト/ドロップが発生せず、外枠付近のみ反応する。
+
+### 19.2 原因
+- `useBoardDnd` の手札パネル遮蔽ガードが、`#hand-tray-panel` 内にポインタが入った時点で一律にドロップ判定をブロックしていた。
+- その結果、手札エリア内部にカードが完全に入っているケースほど `resolveDropIntent` が走らず、赤ハイライトが消える状態になっていた。
+
+### 19.3 対応
+- `src/interaction/dnd/useBoardDnd.js`
+  - 手札パネル内でカードドラッグ中は、`player-hand` へのドロップペイロードを優先解決する補正を追加。
+  - 新規ヘルパーを追加:
+    - `isHandZoneDropPayload(dropPayload)`
+    - `resolveDropPayloadForHandTray({ dragPayload, dropPayload, isPointerInsideHandTray, playerId })`
+  - `handleDragOver` / `handleDragMove` / `handleDragEnd` で共通に、イベントから補正済み `dropPayload` を解決するよう変更。
+  - これにより、手札パネル内部では手札エリアが正しくハイライトされ、ドロップ可能になる。
+- `src/interaction/dnd/__tests__/useBoardDnd.test.js`（新規）
+  - 手札パネル補正ヘルパーのユニットテストを追加（強制 hand 解決、非カード時の据え置き、通常時の据え置き）。
+
+### 19.4 検証
+```bash
+npm test -- --watch=false --runInBand src/interaction/dnd/__tests__/useBoardDnd.test.js src/interaction/dnd/__tests__/dropGuards.test.js
+```
+- PASS（2 suites / 10 tests）
+
+```bash
+npm test -- --watch=false --runInBand src/components/__tests__/PlayingFieldLayout.test.js
+```
+- PASS（1 suite / 29 tests）
+
+```bash
+npm run build
+```
+- PASS（Compiled successfully）
+
+
+## 20. 追加UI修正（小道具ドラッグ中の見た目統一）
+
+### 20.1 事象
+- ダメカン / 状態異常バッヂをドラッグ中、小道具BOX内表示と比べて文言・配色・形状が別デザイン（赤ピル）になっていた。
+
+### 20.2 原因
+- `BoardDragOverlay` が小道具ドラッグ時に `dragOverlayTool`（専用赤スタイル）を描画しており、`toolboxItem` を再利用していなかった。
+
+### 20.3 対応
+- `src/components/dnd/BoardDragOverlay.js`
+  - ダメカン/状態異常のドラッグオーバーレイを `toolboxItem` ベースに変更。
+  - `data-tool-type` / `data-tool-value` を付与し、小道具BOXと同じ色分けルールを適用。
+  - 状態異常の表示文言を小道具BOXと同じ日本語ラベル（どく/やけど/ねむり/マヒ/こんらん）に統一。
+- `src/css/playingField.module.css`
+  - オーバーレイ用補助クラス `dragOverlayToolboxItem` を追加（掴み中カーソル + 影）。
+- `src/components/dnd/__tests__/BoardDragOverlay.test.js`（新規）
+  - ダメカン/状態異常のドラッグ表示が `toolboxItem` を利用し、期待ラベル/属性を持つことを検証。
+
+### 20.4 検証
+```bash
+npm test -- --watch=false --runInBand src/components/dnd/__tests__/BoardDragOverlay.test.js src/components/__tests__/PlayingFieldLayout.test.js
+```
+- PASS
+
+```bash
+npm run build
+```
+- PASS（Compiled successfully）
+
+### 20.5 途中失敗と是正
+- 初回の `BoardDragOverlay.test.js` 実行時、`DragOverlay` がテスト環境で空描画となり要素取得に失敗（FAIL）。
+- `src/components/dnd/__tests__/BoardDragOverlay.test.js` で `@dnd-kit/core` の `DragOverlay` を passthrough モック化して再実行。
+- 再実行後は PASS（2 suites / 31 tests）。

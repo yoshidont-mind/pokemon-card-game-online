@@ -4,6 +4,14 @@ import { DragOverlay } from '@dnd-kit/core';
 import { DRAG_TYPES } from '../../interaction/dnd/constants';
 import styles from '../../css/playingField.module.css';
 
+const STATUS_BADGE_LABEL = Object.freeze({
+  poison: 'どく',
+  burn: 'やけど',
+  asleep: 'ねむり',
+  paralyzed: 'マヒ',
+  confused: 'こんらん',
+});
+
 const BoardDragOverlay = ({ activeDragPayload, cardCatalog = {} }) => {
   if (!activeDragPayload) {
     return <DragOverlay />;
@@ -35,17 +43,32 @@ const BoardDragOverlay = ({ activeDragPayload, cardCatalog = {} }) => {
   }
 
   if (activeDragPayload.dragType === DRAG_TYPES.DAMAGE_COUNTER) {
+    const toolValue = String(activeDragPayload.toolValue || '');
     return (
       <DragOverlay>
-        <div className={styles.dragOverlayTool}>ダメカン {activeDragPayload.toolValue}</div>
+        <div
+          className={`${styles.toolboxItem} ${styles.dragOverlayToolboxItem}`.trim()}
+          data-tool-type="damage-counter"
+          data-tool-value={toolValue}
+        >
+          {toolValue}
+        </div>
       </DragOverlay>
     );
   }
 
   if (activeDragPayload.dragType === DRAG_TYPES.STATUS_BADGE) {
+    const toolValue = String(activeDragPayload.toolValue || '');
+    const label = STATUS_BADGE_LABEL[toolValue] || toolValue;
     return (
       <DragOverlay>
-        <div className={styles.dragOverlayTool}>状態異常 {activeDragPayload.toolValue}</div>
+        <div
+          className={`${styles.toolboxItem} ${styles.dragOverlayToolboxItem}`.trim()}
+          data-tool-type="status-badge"
+          data-tool-value={toolValue}
+        >
+          {label}
+        </div>
       </DragOverlay>
     );
   }
