@@ -103,3 +103,44 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js`
 - Result:
   - PASS (`30 passed, 30 total`)
+
+### 2026-02-21 17:47-17:51 JST (Stack direction and insert-side inversion)
+- Requirement:
+  1. In active/bench stacked cards, reverse offset direction:
+     - bottom cards: right + down
+     - top cards: left + up
+  2. Increase stack offset amount by ~1.5x.
+  3. For deck/active/bench insert targets, invert left/right placement:
+     - left: top-insert (red)
+     - right: bottom-insert (blue)
+- Implemented updates:
+  - `src/components/Pokemon.js`
+    - `STACK_CARD_OFFSET_PX`: `10 -> 15` (1.5x).
+    - Horizontal offset formula reversed:
+      - from `index * offset - spread/2`
+      - to `spread/2 - index * offset`
+  - `src/components/PlayingField.js`
+    - Reordered insert target rendering blocks so left/right visual placement becomes:
+      - left: `上に重ねる / 上に戻す`
+      - right: `下に重ねる / 下に戻す`
+    - Applied consistently for:
+      - bench stack insert targets
+      - player active stack insert targets
+      - player deck insert targets
+
+### 2026-02-21 17:51-17:53 JST (Validation after stack direction/inversion update)
+- Commands:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js`
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldDnd.test.js`
+- Results:
+  - Layout test: PASS (`30 passed, 30 total`)
+  - DnD test: PASS (`2 passed, 2 total`)
+
+### 2026-02-21 17:59 JST (Stack offset fine-tuning)
+- Requirement:
+  - Adjust `STACK_CARD_OFFSET_PX` from `15` to `12`.
+- Update:
+  - `src/components/Pokemon.js`
+    - `STACK_CARD_OFFSET_PX: 15 -> 12`
+- Notes:
+  - No other stack-direction logic was changed.

@@ -723,18 +723,6 @@ function BenchRow({
                   {allowCardDrop && shouldShowStackInsertTargets ? (
                     <div className={styles.stackInsertTargets}>
                       <DroppableZone
-                        dropId={`zone-${stackInsertBottomZoneId}`}
-                        dropPayload={stackInsertBottomDropPayload}
-                        className={joinClassNames(
-                          styles.stackInsertTarget,
-                          styles.stackInsertTargetBottom
-                        )}
-                        activeClassName={styles.stackInsertTargetBottomActive}
-                        isHighlighted={isZoneHighlighted(stackInsertBottomZoneId)}
-                      >
-                        <span className={styles.deckInsertLabel}>下に重ねる</span>
-                      </DroppableZone>
-                      <DroppableZone
                         dropId={`zone-${stackInsertTopZoneId}`}
                         dropPayload={stackInsertTopDropPayload}
                         className={joinClassNames(
@@ -745,6 +733,18 @@ function BenchRow({
                         isHighlighted={isZoneHighlighted(stackInsertTopZoneId)}
                       >
                         <span className={styles.deckInsertLabel}>上に重ねる</span>
+                      </DroppableZone>
+                      <DroppableZone
+                        dropId={`zone-${stackInsertBottomZoneId}`}
+                        dropPayload={stackInsertBottomDropPayload}
+                        className={joinClassNames(
+                          styles.stackInsertTarget,
+                          styles.stackInsertTargetBottom
+                        )}
+                        activeClassName={styles.stackInsertTargetBottomActive}
+                        isHighlighted={isZoneHighlighted(stackInsertBottomZoneId)}
+                      >
+                        <span className={styles.deckInsertLabel}>下に重ねる</span>
                       </DroppableZone>
                     </div>
                   ) : null}
@@ -3927,23 +3927,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                       {shouldShowStackInsertTargets ? (
                         <div className={styles.stackInsertTargets}>
                           <DroppableZone
-                            dropId="zone-player-active-insert-bottom"
-                            dropPayload={buildZoneDropPayload({
-                              zoneId: 'player-active-insert-bottom',
-                              targetPlayerId: ownerPlayerId,
-                              zoneKind: ZONE_KINDS.ACTIVE,
-                              edge: 'bottom',
-                            })}
-                            className={joinClassNames(
-                              styles.stackInsertTarget,
-                              styles.stackInsertTargetBottom
-                            )}
-                            activeClassName={styles.stackInsertTargetBottomActive}
-                            isHighlighted={isZoneHighlighted('player-active-insert-bottom')}
-                          >
-                            <span className={styles.deckInsertLabel}>下に重ねる</span>
-                          </DroppableZone>
-                          <DroppableZone
                             dropId="zone-player-active-insert-top"
                             dropPayload={buildZoneDropPayload({
                               zoneId: 'player-active-insert-top',
@@ -3959,6 +3942,23 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                             isHighlighted={isZoneHighlighted('player-active-insert-top')}
                           >
                             <span className={styles.deckInsertLabel}>上に重ねる</span>
+                          </DroppableZone>
+                          <DroppableZone
+                            dropId="zone-player-active-insert-bottom"
+                            dropPayload={buildZoneDropPayload({
+                              zoneId: 'player-active-insert-bottom',
+                              targetPlayerId: ownerPlayerId,
+                              zoneKind: ZONE_KINDS.ACTIVE,
+                              edge: 'bottom',
+                            })}
+                            className={joinClassNames(
+                              styles.stackInsertTarget,
+                              styles.stackInsertTargetBottom
+                            )}
+                            activeClassName={styles.stackInsertTargetBottomActive}
+                            isHighlighted={isZoneHighlighted('player-active-insert-bottom')}
+                          >
+                            <span className={styles.deckInsertLabel}>下に重ねる</span>
                           </DroppableZone>
                         </div>
                       ) : null}
@@ -4075,18 +4075,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   {isDraggingCard ? (
                     <div className={styles.deckInsertTargets}>
                       <DroppableZone
-                        dropId="zone-player-deck-insert-bottom"
-                        dropPayload={playerDeckBottomDropPayload}
-                        className={joinClassNames(
-                          styles.deckInsertTarget,
-                          styles.deckInsertTargetBottom
-                        )}
-                        activeClassName={styles.deckInsertTargetBottomActive}
-                        isHighlighted={isZoneHighlighted('player-deck-insert-bottom')}
-                      >
-                        <span className={styles.deckInsertLabel}>下に戻す</span>
-                      </DroppableZone>
-                      <DroppableZone
                         dropId="zone-player-deck-insert-top"
                         dropPayload={playerDeckTopDropPayload}
                         className={joinClassNames(
@@ -4097,6 +4085,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                         isHighlighted={isZoneHighlighted('player-deck-insert-top')}
                       >
                         <span className={styles.deckInsertLabel}>上に戻す</span>
+                      </DroppableZone>
+                      <DroppableZone
+                        dropId="zone-player-deck-insert-bottom"
+                        dropPayload={playerDeckBottomDropPayload}
+                        className={joinClassNames(
+                          styles.deckInsertTarget,
+                          styles.deckInsertTargetBottom
+                        )}
+                        activeClassName={styles.deckInsertTargetBottomActive}
+                        isHighlighted={isZoneHighlighted('player-deck-insert-bottom')}
+                      >
+                        <span className={styles.deckInsertLabel}>下に戻す</span>
                       </DroppableZone>
                     </div>
                   ) : null}
