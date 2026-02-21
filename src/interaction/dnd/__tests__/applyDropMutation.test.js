@@ -784,6 +784,46 @@ describe('mutateDocsForDropIntent', () => {
     expect(result.sessionDoc.status).toBe('playing');
   });
 
+  test('moves occupied active stack to empty bench slot when swap action targets empty zone', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    sessionDoc.publicState.players.player1.board.active = {
+      stackId: 's_player1_active',
+      cardIds: ['c_player1_010', 'c_player1_011'],
+      damage: 20,
+      specialConditions: {
+        poisoned: true,
+        burned: false,
+        asleep: false,
+        paralyzed: false,
+        confused: false,
+      },
+      orientation: 'vertical',
+      isFaceDown: false,
+    };
+    sessionDoc.publicState.players.player1.board.bench = [null, null, null, null, null];
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'swap-stacks-between-zones',
+          sourceStackKind: 'active',
+          targetZoneKind: 'bench',
+          targetBenchIndex: 0,
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.active).toBeNull();
+    expect(result.sessionDoc.publicState.players.player1.board.bench[0].cardIds).toEqual([
+      'c_player1_010',
+      'c_player1_011',
+    ]);
+  });
+
   test('swaps occupied bench stacks between slots', () => {
     const { sessionDoc, privateStateDoc } = createDocs();
     sessionDoc.publicState.players.player1.board.bench = [
