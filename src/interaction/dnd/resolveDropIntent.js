@@ -141,6 +141,7 @@ function isSupportedCardSourceZone(sourceZone) {
     sourceZone === 'player-reveal' ||
     sourceZone === 'player-deck' ||
     sourceZone === 'player-deck-peek' ||
+    sourceZone === 'player-stadium' ||
     sourceZone === 'player-discard' ||
     sourceZone === 'player-lost' ||
     sourceZone === 'player-stack'
@@ -149,6 +150,7 @@ function isSupportedCardSourceZone(sourceZone) {
 
 export function createBoardSnapshot(sessionDoc) {
   const players = sessionDoc?.publicState?.players || {};
+  const stadium = sessionDoc?.publicState?.stadium || null;
 
   const toPlayerSnapshot = (playerKey) => {
     const board = players?.[playerKey]?.board || {};
@@ -171,6 +173,11 @@ export function createBoardSnapshot(sessionDoc) {
     players: {
       player1: toPlayerSnapshot('player1'),
       player2: toPlayerSnapshot('player2'),
+    },
+    stadium: {
+      exists: Boolean(stadium?.cardId),
+      cardId: typeof stadium?.cardId === 'string' ? stadium.cardId : null,
+      ownerPlayerId: typeof stadium?.ownerPlayerId === 'string' ? stadium.ownerPlayerId : null,
     },
   };
 }
@@ -303,6 +310,23 @@ export function resolveDropIntent({
     }
     if (dropPayload.targetPlayerId !== actorPlayerId) {
       return reject(REJECT_REASONS.PERMISSION_DENIED);
+    }
+
+    if (dragPayload.sourceZone === 'player-stadium') {
+      const stadiumOwnerPlayerId = boardSnapshot?.stadium?.ownerPlayerId || null;
+      if (!stadiumOwnerPlayerId || !boardSnapshot?.stadium?.exists) {
+        return reject(REJECT_REASONS.TARGET_NOT_FOUND);
+      }
+      if (stadiumOwnerPlayerId !== actorPlayerId) {
+        return reject(REJECT_REASONS.PERMISSION_DENIED);
+      }
+      if (dropPayload.targetPlayerId !== stadiumOwnerPlayerId) {
+        return reject(REJECT_REASONS.PERMISSION_DENIED);
+      }
+    }
+
+    if (dropPayload.zoneKind === ZONE_KINDS.STADIUM && boardSnapshot?.stadium?.exists) {
+      return reject(REJECT_REASONS.TARGET_OCCUPIED);
     }
 
     if (dropPayload.zoneKind === ZONE_KINDS.DECK) {

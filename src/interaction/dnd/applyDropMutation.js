@@ -177,6 +177,26 @@ function takeCardRefFromSource({
     return sourceCardRef;
   }
 
+  if (sourceZone === 'player-stadium') {
+    const stadium = sessionDoc?.publicState?.stadium || null;
+    if (!stadium || stadium.cardId !== cardId) {
+      throw new GameStateError(
+        ERROR_CODES.INVARIANT_VIOLATION,
+        `Card ${cardId} is not in stadium zone.`
+      );
+    }
+    if (stadium.ownerPlayerId !== playerId) {
+      throw new GameStateError(
+        ERROR_CODES.PERMISSION_DENIED,
+        'Only the stadium owner can move this card.'
+      );
+    }
+    sessionDoc.publicState.stadium = null;
+    return createPublicCardRef(cardId, {
+      imageUrl: typeof stadium.imageUrl === 'string' ? stadium.imageUrl : null,
+    });
+  }
+
   if (sourceZone === 'player-discard') {
     const discard = asArray(publicBoard?.discard);
     const discardIndex = discard.findIndex((ref) => ref?.cardId === cardId);
@@ -346,9 +366,13 @@ function moveCardFromSourceToZone({ sessionDoc, privateStateDoc, playerId, actio
     privateStateDoc.zones.hand = hand;
     playerCounters.handCount = hand.length;
   } else if (targetZoneKind === ZONE_KINDS.STADIUM) {
+    if (sessionDoc?.publicState?.stadium?.cardId) {
+      throw new GameStateError(ERROR_CODES.INVALID_STATE, 'Stadium is already occupied.');
+    }
     sessionDoc.publicState.stadium = {
       cardId,
       ownerPlayerId: playerId,
+      imageUrl: sourceImageUrl || undefined,
       placedVia: 'dnd',
     };
   } else {

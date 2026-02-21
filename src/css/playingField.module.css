@@ -646,9 +646,12 @@
   place-items: center;
 }
 
-.benchSlot:hover,
+.benchSlot:hover {
+  z-index: 8;
+}
+
 .benchSlot:focus-within {
-  z-index: 5;
+  z-index: 6;
 }
 
 .benchPlaceholder {
@@ -862,10 +865,37 @@
 
 .centerZone {
   width: min(360px, 100%);
-  min-height: clamp(66px, 8.5vw, 92px);
+  min-height: clamp(150px, 17vw, 210px);
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
   text-align: center;
+}
+
+.stadiumCardDraggable {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.stadiumCardDraggable:active {
+  cursor: grabbing;
+}
+
+.stadiumCardImage {
+  width: var(--card-w);
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+}
+
+.stadiumOwnerLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #506243;
 }
 
 .coinWidget {
