@@ -351,3 +351,27 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 21:26 JST (Modal hover preview viewport clamp rework via portal)
+- User-reported issues:
+  - ロスト/トラッシュ/ベンチ/バトル場展開 + 山札閲覧モーダルで、ホバー拡大カードが画面外にはみ出す。
+  - カードA→Bへホバー移動時に、縮小済みAが拡大中Bより前面に見える回帰が発生。
+- Root-cause analysis:
+  - モーダル内部での拡大描画は、親コンテナの座標系/積層コンテキスト影響を受けやすく、特に固定配置・transform/drag併用時に前後関係と座標クランプが不安定化。
+  - 既存の reveal 用ホバーセレクタがモーダルカードにも誤適用されると、モーダル専用拡大仕様と競合する。
+- Fix approach (reworked):
+  - モーダル内カードの拡大表示を「モーダル内変形」ではなく「viewport基準の固定プレビュー」に統一。
+  - 固定プレビューは `document.body` へ portal 描画し、親モーダルの transform / stacking context 影響から切り離す。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - `createPortal` を導入。
+    - `resolvePopupPreviewPlacement(...)` を利用して viewport クランプ済み座標を算出。
+    - `PopupHoverPreview` コンポーネントを追加し、`document.body` へ固定プレビュー描画。
+    - `DeckPeekModal` / `StackCardsModal` のホバー描画を `PopupHoverPreview` ベースへ統一。
+  - `src/css/playingField.module.css`（既存再実装分を維持）
+    - `modalPopupCardButton` でモーダル内 in-place 拡大を無効化。
+    - `.popupHoverPreview` / `.popupHoverPreviewImage` で固定プレビューの見た目を規定。
+    - `revealCardDraggable` の hover 拡大を `:not(.popupCardItem)` に制限し、モーダルカードとの干渉を防止。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)

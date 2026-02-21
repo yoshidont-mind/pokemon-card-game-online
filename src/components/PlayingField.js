@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { createPortal } from 'react-dom';
 import {
   faArrowsUpDownLeftRight,
   faEdit,
@@ -427,6 +428,70 @@ function resolvePopupCardHoverShift({
   };
 }
 
+function resolvePopupPreviewPlacement({
+  buttonRect,
+  viewportWidth,
+  viewportHeight,
+  scale = POPUP_CARD_HOVER_SCALE,
+  margin = POPUP_CARD_VIEWPORT_MARGIN_PX,
+}) {
+  if (
+    !buttonRect ||
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight)
+  ) {
+    return null;
+  }
+
+  const previewWidth = buttonRect.width * scale;
+  const previewHeight = buttonRect.height * scale;
+
+  let x =
+    buttonRect.left +
+    (buttonRect.width - previewWidth) / 2 +
+    (Number(POPUP_CARD_BASE_SHIFT.x) || 0);
+  let y =
+    buttonRect.bottom -
+    previewHeight +
+    (Number(POPUP_CARD_BASE_SHIFT.y) || 0);
+
+  const maxX = Math.max(margin, viewportWidth - previewWidth - margin);
+  const maxY = Math.max(margin, viewportHeight - previewHeight - margin);
+
+  x = clampValue(x, margin, maxX);
+  y = clampValue(y, margin, maxY);
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(previewWidth),
+  };
+}
+
+function PopupHoverPreview({ preview }) {
+  if (!preview || typeof document === 'undefined') {
+    return null;
+  }
+  return createPortal(
+    <div
+      className={styles.popupHoverPreview}
+      style={{
+        left: `${preview.x}px`,
+        top: `${preview.y}px`,
+        width: `${preview.width}px`,
+      }}
+      aria-hidden
+    >
+      <img
+        src={preview.imageUrl}
+        alt={preview.alt}
+        className={styles.popupHoverPreviewImage}
+      />
+    </div>,
+    document.body
+  );
+}
+
 function formatPendingRequestLabel(request) {
   if (!request || typeof request !== 'object') {
     return '';
@@ -797,7 +862,7 @@ function DeckPeekModal({
   const normalizedCards = asArray(cards).filter((entry) => Boolean(entry?.cardId));
   const deckPeekColumnCount = Math.max(1, Math.min(10, normalizedCards.length || 1));
   const [activeIndex, setActiveIndex] = useState(null);
-  const [activeShift, setActiveShift] = useState(() => ({ ...POPUP_CARD_BASE_SHIFT }));
+  const [hoverPreview, setHoverPreview] = useState(null);
   const [modalPosition, setModalPosition] = useState(() => readStoredPosition(DECK_PEEK_POSITION_STORAGE_KEY));
   const [isModalDragging, setIsModalDragging] = useState(false);
   const cardButtonRefs = useRef({});
@@ -808,58 +873,107 @@ function DeckPeekModal({
   useEffect(() => {
     if (!normalizedCards[activeIndex]) {
       setActiveIndex(null);
+      setHoverPreview(null);
     }
   }, [activeIndex, normalizedCards]);
 
-  const recalcActiveCardShift = useCallback(() => {
-    if (activeIndex === null || typeof window === 'undefined') {
-      setActiveShift((previous) => {
-        if (
-          previous.x === POPUP_CARD_BASE_SHIFT.x &&
-          previous.y === POPUP_CARD_BASE_SHIFT.y
-        ) {
-          return previous;
-        }
-        return { ...POPUP_CARD_BASE_SHIFT };
-      });
+  const updateHoverPreviewForIndex = useCallback((index) => {
+    if (index === null || typeof window === 'undefined') {
+      setHoverPreview(null);
       return;
     }
 
-    const buttonNode = cardButtonRefs.current[activeIndex];
+    const buttonNode = cardButtonRefs.current[index];
+    const card = normalizedCards[index];
     if (!buttonNode) {
+      setHoverPreview(null);
+      return;
+    }
+    if (!card?.imageUrl) {
+      setHoverPreview(null);
       return;
     }
 
-    const next = resolvePopupCardHoverShift({
-      cardRect: buttonNode.getBoundingClientRect(),
+    const placement = resolvePopupPreviewPlacement({
+      buttonRect: buttonNode.getBoundingClientRect(),
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       scale: POPUP_CARD_HOVER_SCALE,
     });
+    if (!placement) {
+      setHoverPreview(null);
+      return;
+    }
+    setHoverPreview({
+      key: `${card.cardId || 'deck-peek'}-${index}`,
+      imageUrl: card.imageUrl,
+      alt: `山札閲覧カード ${index + 1}`,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+    });
+  }, [normalizedCards]);
 
-    setActiveShift((previous) => {
-      if (previous.x === next.x && previous.y === next.y) {
+  const activatePopupCard = useCallback((index, node) => {
+    setActiveIndex(index);
+    if (!node || typeof window === 'undefined') {
+      setHoverPreview(null);
+      return;
+    }
+    const card = normalizedCards[index];
+    if (!card?.imageUrl) {
+      setHoverPreview(null);
+      return;
+    }
+    const placement = resolvePopupPreviewPlacement({
+      buttonRect: node.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      scale: POPUP_CARD_HOVER_SCALE,
+    });
+    if (!placement) {
+      setHoverPreview(null);
+      return;
+    }
+    setHoverPreview({
+      key: `${card.cardId || 'deck-peek'}-${index}`,
+      imageUrl: card.imageUrl,
+      alt: `山札閲覧カード ${index + 1}`,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+    });
+  }, [normalizedCards]);
+
+  const deactivatePopupCard = useCallback((index) => {
+    setActiveIndex((previous) => (previous === index ? null : previous));
+    setHoverPreview((previous) => {
+      if (!previous) {
         return previous;
       }
-      return next;
+      return previous.key.endsWith(`-${index}`) ? null : previous;
     });
-  }, [activeIndex]);
+  }, []);
 
   useEffect(() => {
-    recalcActiveCardShift();
-  }, [recalcActiveCardShift, normalizedCards, modalPosition]);
+    if (activeIndex === null) {
+      setHoverPreview(null);
+      return;
+    }
+    updateHoverPreviewForIndex(activeIndex);
+  }, [activeIndex, modalPosition, normalizedCards, updateHoverPreviewForIndex]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || activeIndex === null) {
       return undefined;
     }
 
     const handleResize = () => {
-      recalcActiveCardShift();
+      updateHoverPreviewForIndex(activeIndex);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [recalcActiveCardShift]);
+  }, [activeIndex, updateHoverPreviewForIndex]);
 
   useEffect(() => {
     if (!modalPosition) {
@@ -1058,22 +1172,14 @@ function DeckPeekModal({
                       type="button"
                       className={joinClassNames(
                         styles.popupCardButton,
+                        styles.modalPopupCardButton,
                         isActive ? styles.popupCardButtonActive : ''
                       )}
-                      style={
-                        isActive
-                          ? {
-                              '--popup-card-shift-x': `${activeShift.x}px`,
-                              '--popup-card-shift-y': `${activeShift.y}px`,
-                              '--popup-card-scale': String(POPUP_CARD_HOVER_SCALE),
-                            }
-                          : undefined
-                      }
                       aria-label={`山札閲覧カード ${index + 1} を拡大表示`}
-                      onMouseEnter={() => setActiveIndex(index)}
-                      onMouseLeave={() => setActiveIndex(null)}
-                      onFocus={() => setActiveIndex(index)}
-                      onBlur={() => setActiveIndex(null)}
+                      onMouseEnter={(event) => activatePopupCard(index, event.currentTarget)}
+                      onMouseLeave={() => deactivatePopupCard(index)}
+                      onFocus={(event) => activatePopupCard(index, event.currentTarget)}
+                      onBlur={() => deactivatePopupCard(index)}
                     >
                       <img
                         src={card.imageUrl}
@@ -1092,6 +1198,7 @@ function DeckPeekModal({
           )}
         </div>
       </div>
+      <PopupHoverPreview preview={hoverPreview} />
     </aside>
   );
 }
@@ -1111,7 +1218,7 @@ function StackCardsModal({
   const normalizedCards = asArray(cards).filter((entry) => Boolean(entry?.cardId));
   const columnCount = Math.max(1, Math.min(10, normalizedCards.length || 1));
   const [activeIndex, setActiveIndex] = useState(null);
-  const [activeShift, setActiveShift] = useState(() => ({ ...POPUP_CARD_BASE_SHIFT }));
+  const [hoverPreview, setHoverPreview] = useState(null);
   const [modalPosition, setModalPosition] = useState(null);
   const [isModalDragging, setIsModalDragging] = useState(false);
   const cardButtonRefs = useRef({});
@@ -1123,58 +1230,107 @@ function StackCardsModal({
   useEffect(() => {
     if (!normalizedCards[activeIndex]) {
       setActiveIndex(null);
+      setHoverPreview(null);
     }
   }, [activeIndex, normalizedCards]);
 
-  const recalcActiveCardShift = useCallback(() => {
-    if (activeIndex === null || typeof window === 'undefined') {
-      setActiveShift((previous) => {
-        if (
-          previous.x === POPUP_CARD_BASE_SHIFT.x &&
-          previous.y === POPUP_CARD_BASE_SHIFT.y
-        ) {
-          return previous;
-        }
-        return { ...POPUP_CARD_BASE_SHIFT };
-      });
+  const updateHoverPreviewForIndex = useCallback((index) => {
+    if (index === null || typeof window === 'undefined') {
+      setHoverPreview(null);
       return;
     }
 
-    const buttonNode = cardButtonRefs.current[activeIndex];
+    const buttonNode = cardButtonRefs.current[index];
+    const card = normalizedCards[index];
     if (!buttonNode) {
+      setHoverPreview(null);
+      return;
+    }
+    if (!card?.imageUrl) {
+      setHoverPreview(null);
       return;
     }
 
-    const next = resolvePopupCardHoverShift({
-      cardRect: buttonNode.getBoundingClientRect(),
+    const placement = resolvePopupPreviewPlacement({
+      buttonRect: buttonNode.getBoundingClientRect(),
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       scale: POPUP_CARD_HOVER_SCALE,
     });
+    if (!placement) {
+      setHoverPreview(null);
+      return;
+    }
+    setHoverPreview({
+      key: `${card.cardId || 'stack-card'}-${index}`,
+      imageUrl: card.imageUrl,
+      alt: `展開カード ${index + 1}`,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+    });
+  }, [normalizedCards]);
 
-    setActiveShift((previous) => {
-      if (previous.x === next.x && previous.y === next.y) {
+  const activatePopupCard = useCallback((index, node) => {
+    setActiveIndex(index);
+    if (!node || typeof window === 'undefined') {
+      setHoverPreview(null);
+      return;
+    }
+    const card = normalizedCards[index];
+    if (!card?.imageUrl) {
+      setHoverPreview(null);
+      return;
+    }
+    const placement = resolvePopupPreviewPlacement({
+      buttonRect: node.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      scale: POPUP_CARD_HOVER_SCALE,
+    });
+    if (!placement) {
+      setHoverPreview(null);
+      return;
+    }
+    setHoverPreview({
+      key: `${card.cardId || 'stack-card'}-${index}`,
+      imageUrl: card.imageUrl,
+      alt: `展開カード ${index + 1}`,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+    });
+  }, [normalizedCards]);
+
+  const deactivatePopupCard = useCallback((index) => {
+    setActiveIndex((previous) => (previous === index ? null : previous));
+    setHoverPreview((previous) => {
+      if (!previous) {
         return previous;
       }
-      return next;
+      return previous.key.endsWith(`-${index}`) ? null : previous;
     });
-  }, [activeIndex]);
+  }, []);
 
   useEffect(() => {
-    recalcActiveCardShift();
-  }, [recalcActiveCardShift, normalizedCards, modalPosition]);
+    if (activeIndex === null) {
+      setHoverPreview(null);
+      return;
+    }
+    updateHoverPreviewForIndex(activeIndex);
+  }, [activeIndex, modalPosition, normalizedCards, updateHoverPreviewForIndex]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || activeIndex === null) {
       return undefined;
     }
 
     const handleResize = () => {
-      recalcActiveCardShift();
+      updateHoverPreviewForIndex(activeIndex);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [recalcActiveCardShift]);
+  }, [activeIndex, updateHoverPreviewForIndex]);
 
   const resolveAnchoredPosition = useCallback(() => {
     if (!initialAnchorRect || typeof window === 'undefined') {
@@ -1405,22 +1561,14 @@ function StackCardsModal({
                   type="button"
                   className={joinClassNames(
                     styles.popupCardButton,
+                    styles.modalPopupCardButton,
                     isActive ? styles.popupCardButtonActive : ''
                   )}
-                  style={
-                    isActive
-                      ? {
-                          '--popup-card-shift-x': `${activeShift.x}px`,
-                          '--popup-card-shift-y': `${activeShift.y}px`,
-                          '--popup-card-scale': String(POPUP_CARD_HOVER_SCALE),
-                        }
-                      : undefined
-                  }
                   aria-label={`展開カード ${index + 1} を拡大表示`}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onMouseLeave={() => setActiveIndex(null)}
-                  onFocus={() => setActiveIndex(index)}
-                  onBlur={() => setActiveIndex(null)}
+                  onMouseEnter={(event) => activatePopupCard(index, event.currentTarget)}
+                  onMouseLeave={() => deactivatePopupCard(index)}
+                  onFocus={(event) => activatePopupCard(index, event.currentTarget)}
+                  onBlur={() => deactivatePopupCard(index)}
                 >
                   {card.imageUrl ? (
                     <img
@@ -1483,6 +1631,7 @@ function StackCardsModal({
           )}
         </div>
       </div>
+      <PopupHoverPreview preview={hoverPreview} />
     </aside>
   );
 }

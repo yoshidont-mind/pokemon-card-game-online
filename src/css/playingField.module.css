@@ -355,6 +355,27 @@
   box-shadow: 0 24px 38px rgba(0, 0, 0, 0.42);
 }
 
+.modalPopupCardButton:hover .popupCardImage,
+.modalPopupCardButton:focus-visible .popupCardImage,
+.modalPopupCardButton.popupCardButtonActive .popupCardImage {
+  transform: none !important;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.26);
+}
+
+.popupHoverPreview {
+  position: fixed;
+  z-index: calc(var(--z-overlay) + 20);
+  pointer-events: none;
+}
+
+.popupHoverPreviewImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.42);
+}
+
 .opponentRevealCardFallback {
   width: var(--card-w);
   min-height: calc(var(--card-w) * 1.4);
@@ -945,8 +966,8 @@
   z-index: 1;
 }
 
-.revealCardDraggable:hover,
-.revealCardDraggable:focus-within,
+.revealCardDraggable:not(.popupCardItem):hover,
+.revealCardDraggable:not(.popupCardItem):focus-within,
 .revealCardItem:hover,
 .revealCardItem:focus-within {
   z-index: calc(var(--z-overlay) + 2);
@@ -963,8 +984,8 @@
   transform-origin: center bottom;
 }
 
-.revealCardDraggable:hover .revealCardImage,
-.revealCardDraggable:focus-within .revealCardImage,
+.revealCardDraggable:not(.popupCardItem):hover .revealCardImage,
+.revealCardDraggable:not(.popupCardItem):focus-within .revealCardImage,
 .revealCardItem:hover .revealCardImage,
 .revealCardItem:focus-within .revealCardImage {
   transform: translateY(var(--reveal-card-lift)) scale(var(--reveal-card-scale));
