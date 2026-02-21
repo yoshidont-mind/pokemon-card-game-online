@@ -936,13 +936,39 @@
 
 .revealCardDraggable {
   flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.revealCardItem {
+  position: relative;
+  z-index: 1;
+}
+
+.revealCardDraggable:hover,
+.revealCardDraggable:focus-within,
+.revealCardItem:hover,
+.revealCardItem:focus-within {
+  z-index: calc(var(--z-overlay) + 2);
 }
 
 .revealCardImage {
+  --reveal-card-scale: 4;
+  --reveal-card-lift: -40px;
   width: var(--card-w);
   height: auto;
   border-radius: var(--radius-sm);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+  transition: transform 130ms ease, box-shadow 130ms ease;
+  transform-origin: center bottom;
+}
+
+.revealCardDraggable:hover .revealCardImage,
+.revealCardDraggable:focus-within .revealCardImage,
+.revealCardItem:hover .revealCardImage,
+.revealCardItem:focus-within .revealCardImage {
+  transform: translateY(var(--reveal-card-lift)) scale(var(--reveal-card-scale));
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.32);
 }
 
 .centerZone {

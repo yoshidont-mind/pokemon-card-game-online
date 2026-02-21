@@ -3633,12 +3633,16 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   {opponentRevealCards.length > 0 ? (
                     <div className={styles.revealCards}>
                       {opponentRevealCards.map((card, index) => (
-                        <img
+                        <div
                           key={`opponent-reveal-${card.cardId}-${index}`}
-                          src={card.imageUrl}
-                          alt={`公開カード（相手）${index + 1}`}
-                          className={styles.revealCardImage}
-                        />
+                          className={styles.revealCardItem}
+                        >
+                          <img
+                            src={card.imageUrl}
+                            alt={`公開カード（相手）${index + 1}`}
+                            className={styles.revealCardImage}
+                          />
+                        </div>
                       ))}
                     </div>
                   ) : (

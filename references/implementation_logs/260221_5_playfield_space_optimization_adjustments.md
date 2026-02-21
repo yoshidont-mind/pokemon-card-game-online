@@ -336,3 +336,18 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
 - Validation:
   - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
   - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 20:05 JST (Reveal-area hover zoom for both players)
+- Requirement:
+  - 公開エリアのカードも、手札等と同様にホバーで拡大表示できるようにする（自分側/相手側）。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - 相手側公開カードを `revealCardItem` ラッパーで描画し、ホバー前面化スタイルを適用可能にした。
+  - `src/css/playingField.module.css`
+    - 公開カード用ホバー拡大スタイルを追加:
+      - `.revealCardDraggable`, `.revealCardItem` に `position`/`z-index` 管理
+      - ホバー/フォーカス時に `z-index` を上げる
+      - `.revealCardImage` に拡大トランジション（`scale(4)`, `translateY(-40px)`）を追加
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
