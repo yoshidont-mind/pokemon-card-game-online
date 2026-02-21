@@ -670,14 +670,6 @@
 .deckPile {
   display: grid;
   justify-items: center;
-  gap: 4px;
-}
-
-.deckPileCount {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #36472b;
-  text-align: center;
 }
 
 .publicPilePreview {
@@ -685,7 +677,34 @@
   display: grid;
   justify-items: center;
   align-items: start;
-  gap: 4px;
+}
+
+.pileCardFrame {
+  position: relative;
+  width: var(--card-w);
+  max-width: 100%;
+  display: inline-grid;
+  place-items: center;
+}
+
+.pileCountOverlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--card-w);
+  max-width: 100%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.56);
+  color: #ffffff;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 4px 6px;
+  border-radius: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42);
 }
 
 .publicPileTopCard {
@@ -694,13 +713,6 @@
   height: auto;
   border-radius: var(--radius-sm);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-}
-
-.publicPileCount {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #36472b;
-  text-align: center;
 }
 
 .zoneWithActions {
@@ -1075,10 +1087,11 @@
 }
 
 .prizeFan {
+  position: relative;
   width: 100%;
   display: grid;
+  justify-items: center;
   align-items: start;
-  gap: 4px;
 }
 
 .prizeFanRows {
@@ -1108,11 +1121,10 @@
   left: calc(var(--card-w) * 0.34);
 }
 
-.prizeFanCount {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #36472b;
-  text-align: center;
+.prizeFanCountOverlay {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .panelToggle {

@@ -251,13 +251,15 @@ function PublicPilePreview({
   return (
     <div className={styles.publicPilePreview}>
       {topCardImageUrl ? (
-        <img
-          src={topCardImageUrl}
-          alt={`${pileLabel}上のカード`}
-          className={styles.publicPileTopCard}
-        />
+        <div className={styles.pileCardFrame}>
+          <img
+            src={topCardImageUrl}
+            alt={`${pileLabel}上のカード`}
+            className={styles.publicPileTopCard}
+          />
+          <CardCountOverlay count={refs.length} />
+        </div>
       ) : null}
-      <span className={styles.publicPileCount}>{refs.length} 枚</span>
     </div>
   );
 }
@@ -481,10 +483,25 @@ function DeckPile({ count, alt }) {
   return (
     <div className={styles.deckPile}>
       {normalizedCount > 0 ? (
-        <img src={CARD_BACK_IMAGE} alt={alt} className={styles.deckCardBack} />
+        <div className={styles.pileCardFrame}>
+          <img src={CARD_BACK_IMAGE} alt={alt} className={styles.deckCardBack} />
+          <CardCountOverlay count={normalizedCount} />
+        </div>
       ) : null}
-      <span className={styles.deckPileCount}>{normalizedCount} 枚</span>
     </div>
+  );
+}
+
+function CardCountOverlay({ count, className = '' }) {
+  const normalizedCount = Math.max(0, Number(count) || 0);
+  if (normalizedCount <= 0) {
+    return null;
+  }
+
+  return (
+    <span className={joinClassNames(styles.pileCountOverlay, className)}>
+      {normalizedCount} 枚
+    </span>
   );
 }
 
@@ -524,7 +541,7 @@ function PrizeFan({ count = 0 }) {
           </div>
         ))}
       </div>
-      <span className={styles.prizeFanCount}>{normalizedCount} 枚</span>
+      <CardCountOverlay count={normalizedCount} className={styles.prizeFanCountOverlay} />
     </div>
   );
 }
