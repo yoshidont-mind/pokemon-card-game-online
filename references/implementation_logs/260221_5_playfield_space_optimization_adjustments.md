@@ -429,3 +429,40 @@ at Object.<anonymous> (src/components/PlayingField.js:550:10)
     - `DECK_INSERT_NOTICE_AUTO_DISMISS_MS` を `10000` から `5000` へ変更。
 - Result:
   - シャッフル通知・山札戻し通知ともに最大 5 秒で自動消去。
+
+### 2026-02-21 23:34 JST (Playmat operation hint overlay)
+- Requirement:
+  - 初見で気づきにくい操作方法（山札/トラッシュ/ロスト/ベンチ/バトル場/相手手札）をプレイマット上に明示。
+  - プレイマットや各枠のサイズ・デザインには影響を与えない。
+  - どの状態でも枠に重ならない配置を優先。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - `boardRootRef` / `interactionGuideRef` / `interactionGuidePosition` を追加。
+    - 枠群（`.zoneTile`, `.activeZone`, `.benchSlot`, `.centerZone`）の矩形を取得し、
+      それらに重ならない座標を走査して案内パネル位置を自動決定する処理を追加。
+    - `useLayoutEffect` で初回描画・リサイズ・状態更新（`sessionDoc.revision`）時に再計算。
+    - プレイマット内に絶対配置の操作ヒントパネルを追加。
+  - `src/css/playingField.module.css`
+    - `interactionGuide*` 系スタイルを追加。
+    - 黒半透明背景 + 白文字、`position:absolute`、`pointer-events:none`。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)
+
+### 2026-02-21 23:10 JST (Interaction hint placement/style refinement)
+- Requirement update:
+  - 操作ヒントを「公開エリア（自分）の真下・ベンチ4/5の間」に寄せる。
+  - ヒント欄を横幅最小化。
+  - 背景を黒半透明からプレイマットと同系色の半透明へ変更。
+  - 文字サイズを「1枚引く / シャッフル」ボタン相当へ拡大。
+- Applied changes:
+  - `src/components/PlayingField.js`
+    - ヒント配置の優先アンカーを `player-reveal` + `player-bench-4/5` に変更。
+    - ベンチ4/5中心Xと公開エリア下方帯域を優先するよう `preferredX / preferredY` を調整。
+  - `src/css/playingField.module.css`
+    - `.interactionGuide` を `width: fit-content` + `max-width` に変更（余白最小化）。
+    - 背景を `rgba(143, 181, 111, 0.78)` に変更（プレイマット同系色）。
+    - `.interactionGuideLine` の `font-size` を `0.7rem` に変更（`zoneQuickActionButton` と同等）。
+- Validation:
+  - `CI=true npm test -- --runInBand src/components/__tests__/PlayingFieldLayout.test.js src/components/__tests__/PlayingFieldDnd.test.js`
+  - PASS (`32 passed, 32 total`)

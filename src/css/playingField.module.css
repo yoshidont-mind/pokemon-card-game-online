@@ -11,6 +11,41 @@
   color: var(--zone-text);
 }
 
+.interactionGuide {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  border: 1px solid rgba(236, 247, 229, 0.45);
+  border-radius: 10px;
+  background: rgba(143, 181, 111, 0.78);
+  color: #ffffff;
+  padding: 6px 8px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.interactionGuideTitle {
+  margin: 0 0 3px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.interactionGuideLine {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.interactionGuideLine + .interactionGuideLine {
+  margin-top: 2px;
+}
+
 .areaDivider {
   position: relative;
   height: clamp(8px, 1vw, 12px);

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { createPortal } from 'react-dom';
@@ -72,6 +72,9 @@ const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できませ�
 const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
+const INTERACTION_GUIDE_MARGIN_PX = 8;
+const INTERACTION_GUIDE_OVERLAP_PADDING_PX = 4;
+const INTERACTION_GUIDE_SCAN_STEP_PX = 8;
 const EMPTY_OBJECT = Object.freeze({});
 const STATUS_BADGE_DEFINITIONS = Object.freeze([
   { id: 'poison', label: 'どく', stackKey: 'poisoned' },
@@ -278,6 +281,123 @@ function joinClassNames(...classNames) {
 
 function clampValue(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function toLocalRect(rect, baseRect) {
+  if (!rect || !baseRect) {
+    return null;
+  }
+  return {
+    left: rect.left - baseRect.left,
+    top: rect.top - baseRect.top,
+    right: rect.right - baseRect.left,
+    bottom: rect.bottom - baseRect.top,
+  };
+}
+
+function doRectsOverlap(a, b, padding = 0) {
+  if (!a || !b) {
+    return false;
+  }
+  return !(
+    a.right <= b.left - padding ||
+    a.left >= b.right + padding ||
+    a.bottom <= b.top - padding ||
+    a.top >= b.bottom + padding
+  );
+}
+
+function resolveInteractionGuidePosition({ boardNode, guideNode }) {
+  if (!boardNode || !guideNode) {
+    return null;
+  }
+
+  const boardRect = boardNode.getBoundingClientRect();
+  const guideRect = guideNode.getBoundingClientRect();
+  if (!Number.isFinite(boardRect.width) || !Number.isFinite(boardRect.height)) {
+    return null;
+  }
+  if (!Number.isFinite(guideRect.width) || !Number.isFinite(guideRect.height)) {
+    return null;
+  }
+
+  const panelWidth = Math.max(1, guideRect.width);
+  const panelHeight = Math.max(1, guideRect.height);
+  const minX = INTERACTION_GUIDE_MARGIN_PX;
+  const minY = INTERACTION_GUIDE_MARGIN_PX;
+  const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
+  const maxY = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
+
+  let preferredX = clampValue(boardRect.width * 0.68 - panelWidth / 2, minX, maxX);
+  let preferredY = clampValue(boardRect.height * 0.5 - panelHeight / 2, minY, maxY);
+
+  const playerRevealNode = boardNode.querySelector('[data-zone="player-reveal"]');
+  const playerBench4Node = boardNode.querySelector('[data-zone="player-bench-4"]');
+  const playerBench5Node = boardNode.querySelector('[data-zone="player-bench-5"]');
+  if (playerRevealNode && playerBench4Node && playerBench5Node) {
+    const revealRect = toLocalRect(playerRevealNode.getBoundingClientRect(), boardRect);
+    const bench4Rect = toLocalRect(playerBench4Node.getBoundingClientRect(), boardRect);
+    const bench5Rect = toLocalRect(playerBench5Node.getBoundingClientRect(), boardRect);
+    if (revealRect && bench4Rect && bench5Rect) {
+      const benchCenterX =
+        (bench4Rect.left + bench4Rect.right + bench5Rect.left + bench5Rect.right) / 4;
+      preferredX = clampValue(benchCenterX - panelWidth / 2, minX, maxX);
+
+      const upperBound = revealRect.bottom + INTERACTION_GUIDE_MARGIN_PX;
+      const lowerBound =
+        Math.min(bench4Rect.top, bench5Rect.top) - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
+      if (lowerBound >= upperBound) {
+        preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
+      } else {
+        preferredY = clampValue(upperBound, minY, maxY);
+      }
+    }
+  }
+
+  const obstacleSelector = [
+    `.${styles.zoneTile}`,
+    `.${styles.activeZone}`,
+    `.${styles.benchSlot}`,
+    `.${styles.centerZone}`,
+  ].join(', ');
+  const obstacles = Array.from(boardNode.querySelectorAll(obstacleSelector))
+    .map((node) => toLocalRect(node.getBoundingClientRect(), boardRect))
+    .filter(Boolean);
+
+  let bestCandidate = null;
+  for (let y = minY; y <= maxY; y += INTERACTION_GUIDE_SCAN_STEP_PX) {
+    for (let x = minX; x <= maxX; x += INTERACTION_GUIDE_SCAN_STEP_PX) {
+      const candidate = {
+        left: x,
+        top: y,
+        right: x + panelWidth,
+        bottom: y + panelHeight,
+      };
+      const hasOverlap = obstacles.some((obstacle) =>
+        doRectsOverlap(candidate, obstacle, INTERACTION_GUIDE_OVERLAP_PADDING_PX)
+      );
+      if (hasOverlap) {
+        continue;
+      }
+
+      const score = Math.abs(x - preferredX) + Math.abs(y - preferredY);
+      if (!bestCandidate || score < bestCandidate.score) {
+        bestCandidate = { x, y, score };
+      }
+    }
+  }
+
+  if (!bestCandidate) {
+    return {
+      left: Math.round(preferredX),
+      top: Math.round(preferredY),
+    };
+  }
+
+  return {
+    left: Math.round(bestCandidate.x),
+    top: Math.round(bestCandidate.y),
+  };
 }
 
 function clampPositiveInt(value, max) {
@@ -1984,6 +2104,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const opponentRevealButtonRefs = useRef({});
   const opponentBoardRevealRefs = useRef({});
   const opponentActiveHoverSurfaceRef = useRef(null);
+  const boardRootRef = useRef(null);
+  const interactionGuideRef = useRef(null);
+  const [interactionGuidePosition, setInteractionGuidePosition] = useState({
+    left: 0,
+    top: 0,
+    isReady: false,
+  });
 
   const clearMutationNotice = useCallback(() => {
     setMutationNotice((previous) => {
@@ -2218,6 +2345,53 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     isOpponentHandRevealOpen ||
     isRandomDiscardConfigOpen ||
     isDeckPeekConfigOpen;
+
+  const updateInteractionGuidePosition = useCallback(() => {
+    const boardNode = boardRootRef.current;
+    const guideNode = interactionGuideRef.current;
+    const nextPosition = resolveInteractionGuidePosition({
+      boardNode,
+      guideNode,
+    });
+    if (!nextPosition) {
+      return;
+    }
+    setInteractionGuidePosition((previous) => {
+      if (
+        previous.isReady &&
+        previous.left === nextPosition.left &&
+        previous.top === nextPosition.top
+      ) {
+        return previous;
+      }
+      return {
+        left: nextPosition.left,
+        top: nextPosition.top,
+        isReady: true,
+      };
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    updateInteractionGuidePosition();
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    const frameId = window.requestAnimationFrame(updateInteractionGuidePosition);
+    const handleResize = () => {
+      updateInteractionGuidePosition();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [
+    updateInteractionGuidePosition,
+    sessionDoc?.revision,
+    isHandOpen,
+    isToolboxOpen,
+  ]);
 
   const playerActive = playerBoard?.active;
   const opponentActive = opponentBoard?.active;
@@ -3949,6 +4123,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const canDrawFromDeck = playerDeckCount > 0 && !isQuickActionLocked;
   const canShuffleDeck = playerDeckCount > 1 && !isQuickActionLocked;
   const canTakePrize = playerPrizeCount > 0 && !isQuickActionLocked;
+  const interactionGuideStyle = interactionGuidePosition.isReady
+    ? {
+        left: `${interactionGuidePosition.left}px`,
+        top: `${interactionGuidePosition.top}px`,
+        visibility: 'visible',
+      }
+    : {
+        visibility: 'hidden',
+      };
 
   return (
     <DndContext
@@ -3960,7 +4143,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className={`container mt-4 ${styles.boardRoot}`}>
+      <div ref={boardRootRef} className={`container mt-4 ${styles.boardRoot}`}>
         {mutationNotice.text ? (
           <div
             className={joinClassNames(
@@ -4701,6 +4884,19 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             </ZoneTile>
           </div>
         </section>
+
+        <aside
+          ref={interactionGuideRef}
+          className={styles.interactionGuide}
+          style={interactionGuideStyle}
+          aria-label="操作ヒント"
+        >
+          <p className={styles.interactionGuideTitle}>操作ヒント</p>
+          <p className={styles.interactionGuideLine}>山札: クリックで閲覧</p>
+          <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
+          <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
+          <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
+        </aside>
 
         <HandTray
           cards={playerHandCards}
