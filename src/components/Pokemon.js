@@ -4,7 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'; // index.jsで一括bootstrap読�
 import { Badge } from "react-bootstrap";
 import '../css/pokemon.css'; // Ensure this line is present to import the CSS file
 
-const STACK_CARD_OFFSET_PX = 10;
+const STACK_CARD_OFFSET_PX = 12;
 
 const Pokemon = ({
                            images = [],
@@ -30,7 +30,7 @@ const Pokemon = ({
             <div className="card-images">
                 {images.map((image, index) => {
                     const stackSpread = (images.length - 1) * STACK_CARD_OFFSET_PX;
-                    const horizontalOffset = index * STACK_CARD_OFFSET_PX - stackSpread / 2;
+                    const horizontalOffset = stackSpread / 2 - index * STACK_CARD_OFFSET_PX;
                     const verticalOffset = (images.length - 1 - index) * STACK_CARD_OFFSET_PX;
                     return (
                         <img

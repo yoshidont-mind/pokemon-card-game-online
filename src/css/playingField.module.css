@@ -11,12 +11,55 @@
   color: var(--zone-text);
 }
 
-.statusBar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 10px;
-  font-size: 0.86rem;
-  color: #edf5e6;
+.interactionGuide {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  border: 1px solid rgba(236, 247, 229, 0.45);
+  border-radius: 10px;
+  background: rgba(143, 181, 111, 0.78);
+  color: #ffffff;
+  padding: 6px 8px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.interactionGuideTitle {
+  margin: 0 0 3px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.interactionGuideLine {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.interactionGuideLine + .interactionGuideLine {
+  margin-top: 2px;
+}
+
+.areaDivider {
+  position: relative;
+  height: clamp(8px, 1vw, 12px);
+  margin: clamp(3px, 0.45vw, 7px) 0;
+}
+
+.areaDivider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid rgba(248, 252, 244, 0.9);
+  transform: translateY(-50%);
 }
 
 .mutationBanner {
@@ -144,21 +187,27 @@
 .playerArea {
   --side-column-size: clamp(150px, 14vw, 180px);
   display: grid;
-  grid-template-columns: var(--side-column-size) 1fr var(--side-column-size);
   gap: var(--card-gap);
   align-items: stretch;
 }
 
-.centerArea {
-  margin: clamp(8px, 1.6vw, 18px) 0;
+.opponentArea {
+  grid-template-columns: var(--side-column-size) 1fr var(--side-column-size);
+}
+
+.playerArea {
+  grid-template-columns: var(--side-column-size) 1fr var(--side-column-size);
+}
+
+.playerBattleAux {
   display: flex;
+  align-items: flex-start;
   justify-content: center;
 }
 
-.centerAreaInner {
+.stadiumCoinRow {
   display: flex;
-  align-items: stretch;
-  justify-content: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -339,6 +388,27 @@
   transform: translate(var(--popup-card-shift-x), var(--popup-card-shift-y))
     scale(var(--popup-card-scale));
   box-shadow: 0 24px 38px rgba(0, 0, 0, 0.42);
+}
+
+.modalPopupCardButton:hover .popupCardImage,
+.modalPopupCardButton:focus-visible .popupCardImage,
+.modalPopupCardButton.popupCardButtonActive .popupCardImage {
+  transform: none !important;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.26);
+}
+
+.popupHoverPreview {
+  position: fixed;
+  z-index: calc(var(--z-overlay) + 20);
+  pointer-events: none;
+}
+
+.popupHoverPreviewImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.42);
 }
 
 .opponentRevealCardFallback {
@@ -550,11 +620,38 @@
   position: relative;
   width: 100%;
   display: flex;
-  --reveal-line-width: var(--side-column-size);
-  --active-zone-width: min(320px, 100%);
+  --reveal-line-width: clamp(176px, 18.5vw, 212px);
+  --active-zone-width: min(var(--side-column-size), 100%);
   min-height: clamp(112px, 16vw, 170px);
   justify-content: center;
   align-items: start;
+}
+
+.battleLineRowWithAux {
+  --player-line-base-gap: var(--card-gap);
+  --stadium-inline-width: clamp(122px, 11vw, 146px);
+  --coin-widget-width: clamp(88px, 8.4vw, 102px);
+  --stadium-coin-gap: 10px;
+  --aux-line-width: calc(var(--stadium-inline-width) + var(--stadium-coin-gap) + var(--coin-widget-width));
+  --player-active-axis-shift: calc((var(--reveal-line-width) - var(--aux-line-width)) / 2);
+  --player-line-inner-gap-raw: calc(
+    (100% - var(--aux-line-width) - var(--active-zone-width) - var(--reveal-line-width) + (2 * var(--player-line-base-gap)))
+      / 4
+  );
+  --player-line-inner-gap: max(var(--player-line-base-gap), var(--player-line-inner-gap-raw));
+  --player-line-outer-gap: max(0px, calc(var(--player-line-inner-gap) - var(--player-line-base-gap)));
+  display: grid;
+  grid-template-columns:
+    var(--player-line-outer-gap)
+    var(--aux-line-width)
+    var(--player-line-inner-gap)
+    var(--active-zone-width)
+    var(--player-line-inner-gap)
+    var(--reveal-line-width)
+    var(--player-line-outer-gap);
+  justify-content: stretch;
+  align-items: start;
+  column-gap: 0;
 }
 
 .battleLineActive {
@@ -585,6 +682,19 @@
     75% + (var(--card-gap) / 2) + (var(--active-zone-width) / 4) - (var(--reveal-line-width) / 2)
   );
   z-index: 2;
+}
+
+.battleLineRowWithAux .battleLineActive {
+  grid-column: 4;
+  justify-self: center;
+  transform: translateX(var(--player-active-axis-shift));
+}
+
+.battleLineRowWithAux .battleLineRevealPlayer {
+  grid-column: 6;
+  position: static;
+  width: var(--reveal-line-width);
+  transform: translateX(calc(var(--player-active-axis-shift) / 2));
 }
 
 .zoneTile,
@@ -646,6 +756,10 @@
   place-items: center;
 }
 
+.playerArea .benchSlot {
+  min-height: clamp(84px, 11vw, 132px);
+}
+
 .benchSlot:hover {
   z-index: 8;
 }
@@ -670,14 +784,16 @@
 .deckPile {
   display: grid;
   justify-items: center;
-  gap: 4px;
 }
 
-.deckPileCount {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #36472b;
-  text-align: center;
+.deckPileInteractive {
+  cursor: pointer;
+}
+
+.deckPileInteractive:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 
 .publicPilePreview {
@@ -685,7 +801,39 @@
   display: grid;
   justify-items: center;
   align-items: start;
-  gap: 4px;
+}
+
+.pileCardFrame {
+  position: relative;
+  width: var(--card-w);
+  max-width: 100%;
+  display: inline-grid;
+  place-items: center;
+}
+
+.pileCountOverlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--card-w);
+  max-width: 100%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.56);
+  color: #ffffff;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 4px 6px;
+  border-radius: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42);
+  transition: background-color 120ms ease;
+}
+
+.pileCountOverlayAlert {
+  background: rgba(207, 54, 54, 0.72);
 }
 
 .publicPileTopCard {
@@ -694,13 +842,6 @@
   height: auto;
   border-radius: var(--radius-sm);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-}
-
-.publicPileCount {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #36472b;
-  text-align: center;
 }
 
 .zoneWithActions {
@@ -841,26 +982,65 @@
 
 .revealZoneValue {
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .revealCards {
-  width: 100%;
+  width: min(100%, calc((var(--card-w) * 2) + 6px));
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  justify-content: flex-start;
+  justify-content: center;
+  align-content: flex-start;
+  margin-inline: auto;
 }
 
 .revealCardDraggable {
   flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.revealCardItem {
+  position: relative;
+  z-index: 1;
+  --reveal-card-shift-x: 0px;
+  --reveal-card-shift-y: 0px;
+}
+
+.revealCardItemActive {
+  z-index: calc(var(--z-overlay) + 2);
+}
+
+.revealCardDraggable:not(.popupCardItem):hover,
+.revealCardDraggable:not(.popupCardItem):focus-within,
+.revealCardItem:hover,
+.revealCardItem:focus-within {
+  z-index: calc(var(--z-overlay) + 2);
 }
 
 .revealCardImage {
+  --reveal-card-scale: 4;
+  --reveal-card-lift: -40px;
   width: var(--card-w);
   height: auto;
   border-radius: var(--radius-sm);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+  transition: transform 130ms ease, box-shadow 130ms ease;
+  transform-origin: center bottom;
+}
+
+.revealCardDraggable:not(.popupCardItem):hover .revealCardImage,
+.revealCardDraggable:not(.popupCardItem):focus-within .revealCardImage,
+.revealCardItem:hover .revealCardImage,
+.revealCardItem:focus-within .revealCardImage,
+.revealCardItemActive .revealCardImage {
+  transform: translate(
+      var(--reveal-card-shift-x),
+      calc(var(--reveal-card-lift) + var(--reveal-card-shift-y))
+    )
+    scale(var(--reveal-card-scale));
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.32);
 }
 
 .centerZone {
@@ -871,6 +1051,11 @@
   align-content: start;
   gap: 4px;
   text-align: center;
+}
+
+.inlineStadiumZone {
+  width: var(--stadium-inline-width, clamp(122px, 11vw, 146px));
+  min-height: clamp(104px, 11.5vw, 138px);
 }
 
 .stadiumCardDraggable {
@@ -998,6 +1183,8 @@
 
 .coinWidget {
   display: grid;
+  width: var(--coin-widget-width, auto);
+  box-sizing: border-box;
   justify-items: center;
   gap: 2px;
   border: 1px solid #d6dfcb;
@@ -1005,6 +1192,19 @@
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
   padding: 8px 10px;
+}
+
+.battleLineRowWithAux .playerBattleAux {
+  --shared-center-overlap: clamp(28px, 3.2vw, 40px);
+  grid-column: 2;
+  width: var(--aux-line-width);
+  justify-self: center;
+  position: relative;
+  z-index: 3;
+  transform: translate(
+    calc(var(--player-active-axis-shift) / 2),
+    calc(-1 * var(--shared-center-overlap))
+  );
 }
 
 .coinWidgetTitle {
@@ -1074,11 +1274,26 @@
   justify-content: stretch;
 }
 
+.playerPrizeZoneTile .zoneQuickActions {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  width: auto;
+  z-index: 2;
+  margin-top: 0;
+}
+
+.playerPrizeZoneTile .zoneWithActions {
+  position: relative;
+}
+
 .prizeFan {
+  position: relative;
   width: 100%;
   display: grid;
+  justify-items: center;
   align-items: start;
-  gap: 4px;
 }
 
 .prizeFanRows {
@@ -1108,11 +1323,10 @@
   left: calc(var(--card-w) * 0.34);
 }
 
-.prizeFanCount {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #36472b;
-  text-align: center;
+.prizeFanCountOverlay {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .panelToggle {
@@ -1577,10 +1791,13 @@
 }
 
 .stackDropSurfaceHoverable:hover :global(.pokemon-image:last-child),
+.stackDropSurfaceHoverable:focus-within :global(.pokemon-image:last-child),
 .stackSingleCardDraggable:focus-visible :global(.pokemon-image:last-child) {
   position: relative;
   z-index: calc(var(--z-overlay) + 6);
-  --pokemon-image-hover-lift: -40px;
+  --pokemon-image-hover-lift: 0px;
+  --pokemon-image-hover-shift-x: var(--stack-hover-shift-x, 0px);
+  --pokemon-image-hover-shift-y: var(--stack-hover-shift-y, -40px);
   --pokemon-image-scale: 5;
   box-shadow: 0 24px 38px rgba(0, 0, 0, 0.42);
 }
@@ -1905,7 +2122,7 @@
     grid-template-columns: 1fr;
   }
 
-  .centerAreaInner {
+  .stadiumCoinRow {
     flex-direction: column;
     width: min(96vw, 420px);
   }
