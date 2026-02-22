@@ -2262,6 +2262,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [opponentBoardRevealActiveShift, setOpponentBoardRevealActiveShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
+  const [playerBoardRevealActiveIndex, setPlayerBoardRevealActiveIndex] = useState(null);
+  const [playerBoardRevealActiveShift, setPlayerBoardRevealActiveShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
   const [isOpponentActiveSingleHovering, setIsOpponentActiveSingleHovering] = useState(false);
   const [opponentActiveSingleHoverShift, setOpponentActiveSingleHoverShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
@@ -2308,6 +2312,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const previousBattleSetupCompleteRef = useRef(false);
   const opponentRevealButtonRefs = useRef({});
   const opponentBoardRevealRefs = useRef({});
+  const playerBoardRevealRefs = useRef({});
   const opponentActiveHoverSurfaceRef = useRef(null);
   const opponentCountPrevRef = useRef({
     lost: null,
@@ -3752,6 +3757,19 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, []);
 
+  const clearPlayerBoardRevealHover = useCallback(() => {
+    setPlayerBoardRevealActiveIndex(null);
+    setPlayerBoardRevealActiveShift((previous) => {
+      if (
+        previous.x === POPUP_CARD_BASE_SHIFT.x &&
+        previous.y === POPUP_CARD_BASE_SHIFT.y
+      ) {
+        return previous;
+      }
+      return { ...POPUP_CARD_BASE_SHIFT };
+    });
+  }, []);
+
   const recalcOpponentBoardRevealCardShift = useCallback(() => {
     if (opponentBoardRevealActiveIndex === null || typeof window === 'undefined') {
       setOpponentBoardRevealActiveShift((previous) => {
@@ -3784,6 +3802,38 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, [opponentBoardRevealActiveIndex]);
 
+  const recalcPlayerBoardRevealCardShift = useCallback(() => {
+    if (playerBoardRevealActiveIndex === null || typeof window === 'undefined') {
+      setPlayerBoardRevealActiveShift((previous) => {
+        if (
+          previous.x === POPUP_CARD_BASE_SHIFT.x &&
+          previous.y === POPUP_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...POPUP_CARD_BASE_SHIFT };
+      });
+      return;
+    }
+
+    const cardNode = playerBoardRevealRefs.current[playerBoardRevealActiveIndex];
+    if (!cardNode) {
+      return;
+    }
+    const next = resolvePopupCardHoverShift({
+      cardRect: cardNode.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      scale: POPUP_CARD_HOVER_SCALE,
+    });
+    setPlayerBoardRevealActiveShift((previous) => {
+      if (previous.x === next.x && previous.y === next.y) {
+        return previous;
+      }
+      return next;
+    });
+  }, [playerBoardRevealActiveIndex]);
+
   useEffect(() => {
     if (!opponentRevealCards[opponentBoardRevealActiveIndex]) {
       clearOpponentBoardRevealHover();
@@ -3791,8 +3841,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [clearOpponentBoardRevealHover, opponentBoardRevealActiveIndex, opponentRevealCards]);
 
   useEffect(() => {
+    if (!playerRevealCards[playerBoardRevealActiveIndex]) {
+      clearPlayerBoardRevealHover();
+    }
+  }, [clearPlayerBoardRevealHover, playerBoardRevealActiveIndex, playerRevealCards]);
+
+  useEffect(() => {
     recalcOpponentBoardRevealCardShift();
   }, [opponentBoardRevealActiveIndex, opponentRevealCards, recalcOpponentBoardRevealCardShift]);
+
+  useEffect(() => {
+    recalcPlayerBoardRevealCardShift();
+  }, [playerBoardRevealActiveIndex, playerRevealCards, recalcPlayerBoardRevealCardShift]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || opponentBoardRevealActiveIndex === null) {
@@ -3805,6 +3865,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [opponentBoardRevealActiveIndex, recalcOpponentBoardRevealCardShift]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || playerBoardRevealActiveIndex === null) {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      recalcPlayerBoardRevealCardShift();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [playerBoardRevealActiveIndex, recalcPlayerBoardRevealCardShift]);
 
   const clearOpponentActiveSingleHover = useCallback(() => {
     setIsOpponentActiveSingleHovering(false);
@@ -5679,24 +5751,63 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 >
                   {playerRevealCards.length > 0 ? (
                     <div className={styles.revealCards}>
-                      {playerRevealCards.map((card, index) => (
-                        <DraggableCard
-                          key={`player-reveal-${card.cardId}-${index}`}
-                          dragId={`player-reveal-card-${card.cardId}-${index}`}
-                          dragPayload={buildCardDragPayload({
-                            cardId: card.cardId,
-                            sourceZone: 'player-reveal',
-                          })}
-                          className={styles.revealCardDraggable}
-                          draggingClassName={styles.draggingSource}
-                        >
-                          <img
-                            src={card.imageUrl}
-                            alt={`公開カード（自分）${index + 1}`}
-                            className={styles.revealCardImage}
-                          />
-                        </DraggableCard>
-                      ))}
+                      {playerRevealCards.map((card, index) => {
+                        const isActive = playerBoardRevealActiveIndex === index;
+                        return (
+                          <div
+                            key={`player-reveal-${card.cardId}-${index}`}
+                            ref={(node) => {
+                              if (node) {
+                                playerBoardRevealRefs.current[index] = node;
+                              } else {
+                                delete playerBoardRevealRefs.current[index];
+                              }
+                            }}
+                            className={joinClassNames(
+                              styles.revealCardItem,
+                              isActive ? styles.revealCardItemActive : ''
+                            )}
+                            style={
+                              isActive
+                                ? {
+                                    '--reveal-card-shift-x': `${playerBoardRevealActiveShift.x}px`,
+                                    '--reveal-card-shift-y': `${playerBoardRevealActiveShift.y}px`,
+                                  }
+                                : undefined
+                            }
+                            tabIndex={0}
+                            aria-label={`公開カード（自分）${index + 1}を拡大表示`}
+                            onMouseEnter={() => setPlayerBoardRevealActiveIndex(index)}
+                            onMouseLeave={() => {
+                              setPlayerBoardRevealActiveIndex((previous) =>
+                                previous === index ? null : previous
+                              );
+                            }}
+                            onFocus={() => setPlayerBoardRevealActiveIndex(index)}
+                            onBlur={() => {
+                              setPlayerBoardRevealActiveIndex((previous) =>
+                                previous === index ? null : previous
+                              );
+                            }}
+                          >
+                            <DraggableCard
+                              dragId={`player-reveal-card-${card.cardId}-${index}`}
+                              dragPayload={buildCardDragPayload({
+                                cardId: card.cardId,
+                                sourceZone: 'player-reveal',
+                              })}
+                              className={styles.revealCardDraggable}
+                              draggingClassName={styles.draggingSource}
+                            >
+                              <img
+                                src={card.imageUrl}
+                                alt={`公開カード（自分）${index + 1}`}
+                                className={styles.revealCardImage}
+                              />
+                            </DraggableCard>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <span className={styles.zoneValueMuted}>ここに置く</span>
