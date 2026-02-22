@@ -26,7 +26,7 @@
   --floating-tilt: 0deg;
   --floating-spin: 0deg;
   --floating-scale: 1;
-  --floating-opacity: 0.8;
+  --floating-opacity: 1;
   position: absolute;
   left: 0;
   top: 0;
@@ -81,7 +81,7 @@
 
 @keyframes preplay-floating-card {
   0% {
-    opacity: 0;
+    opacity: var(--floating-opacity);
     transform: translate3d(var(--floating-start-x), var(--floating-start-y), 0)
       rotate(var(--floating-tilt))
       scale(var(--floating-scale));

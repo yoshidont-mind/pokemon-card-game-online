@@ -28,7 +28,7 @@ export function createFloatingCardSpecs(count = DEFAULT_BACKGROUND_CARD_COUNT) {
     const tiltDeg = -24 + Math.random() * 48;
     const spinDeg = -22 + Math.random() * 44;
     const scale = 0.78 + Math.random() * 0.58;
-    const opacity = 0.7 + Math.random() * 0.25;
+    const opacity = 1;
     const startX = -22 + Math.random() * 144;
     const startY = -26 + Math.random() * 152;
     return {
