@@ -212,6 +212,9 @@
   position: fixed;
   pointer-events: none;
   z-index: 1400;
+  background: var(--board-bg, #8fb56f);
+  border-radius: calc(var(--radius-sm, 8px) * 5);
+  overflow: hidden;
 }
 
 .deckCardPreviewImage {
@@ -219,7 +222,8 @@
   width: auto;
   height: auto;
   max-width: none;
-  border-radius: 12px;
+  background: transparent;
+  border-radius: 0;
   border: 1px solid #c9d5e2;
   box-shadow: 0 22px 36px rgba(21, 35, 51, 0.36);
 }
