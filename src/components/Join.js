@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { ensureSignedIn } from '../auth/authClient';
 import { ERROR_CODES, isGameStateError } from '../game-state/errors';
 import { claimPlayerSlot } from '../game-state/sessionParticipation';
+import PreplayShell from './layout/PreplayShell';
+import styles from '../css/preplayScreens.module.css';
 
 const Join = () => {
     const [sessionId, setSessionId] = useState('');
@@ -69,17 +71,39 @@ const Join = () => {
     };
 
     return (
-        <div className="container mt-5">
-            <input
-                type="text"
-                className="form-control me-3"
-                value={sessionId}
-                onChange={(e) => setSessionId(e.target.value)}
-                placeholder="セッションIDを入力"
-            />
-            <button className="btn btn-primary" onClick={joinSession} disabled={!isAuthReady}>参加</button>
-            {!isAuthReady && <div className="mt-3 text-muted">認証を初期化中...</div>}
-        </div>
+        <PreplayShell>
+            <section className={styles.header}>
+                <p className={styles.eyebrow}>Pokémon Trading Card Game Online Simulator</p>
+                <h1 className={styles.title}>セッションに参加</h1>
+                <p className={styles.subtitle}>受け取ったセッションIDを入力してプレイ画面へ進みます。</p>
+            </section>
+
+            <section className={styles.fieldGroup}>
+                <label htmlFor="join-session-id" className={styles.label}>
+                    セッションID
+                </label>
+                <div className={styles.inputRow}>
+                    <input
+                        id="join-session-id"
+                        type="text"
+                        className={styles.textInput}
+                        value={sessionId}
+                        onChange={(event) => setSessionId(event.target.value)}
+                        placeholder="セッションIDを入力"
+                    />
+                    <button
+                        type="button"
+                        className={styles.buttonPrimary}
+                        onClick={joinSession}
+                        disabled={!isAuthReady}
+                    >
+                        参加
+                    </button>
+                </div>
+            </section>
+
+            {!isAuthReady ? <p className={styles.statusMessage}>認証を初期化中...</p> : null}
+        </PreplayShell>
     );
 };
 

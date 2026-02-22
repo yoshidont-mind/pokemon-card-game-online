@@ -121,6 +121,9 @@ const HandTray = ({
   onToggle = () => {},
   dropPayload = null,
   isDropHighlighted = false,
+  onRequestDiscardAll = () => {},
+  onRequestReturnAllToDeck = () => {},
+  isBulkActionDisabled = false,
 }) => {
   const normalizedCards = useMemo(
     () =>
@@ -374,6 +377,7 @@ const HandTray = ({
     }),
     [handColumnCount]
   );
+  const areBulkActionButtonsDisabled = cardCount <= 0 || isBulkActionDisabled;
 
   return (
     <aside
@@ -472,6 +476,24 @@ const HandTray = ({
           ) : (
             <div className={styles.panelEmptyText}>手札はありません</div>
           )}
+          <div className={styles.handTrayActions}>
+            <button
+              type="button"
+              className={styles.handTrayDangerButton}
+              onClick={onRequestDiscardAll}
+              disabled={areBulkActionButtonsDisabled}
+            >
+              全てトラッシュ
+            </button>
+            <button
+              type="button"
+              className={styles.handTrayDangerButton}
+              onClick={onRequestReturnAllToDeck}
+              disabled={areBulkActionButtonsDisabled}
+            >
+              全て山札に戻す
+            </button>
+          </div>
         </div>
       )}
     </aside>
@@ -495,6 +517,9 @@ HandTray.propTypes = {
     zoneId: PropTypes.string,
   }),
   isDropHighlighted: PropTypes.bool,
+  onRequestDiscardAll: PropTypes.func,
+  onRequestReturnAllToDeck: PropTypes.func,
+  isBulkActionDisabled: PropTypes.bool,
 };
 
 export default HandTray;

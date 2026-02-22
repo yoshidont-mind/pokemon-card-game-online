@@ -1,0 +1,269 @@
+.header {
+  display: grid;
+  gap: 6px;
+}
+
+.sessionDeckModal {
+  width: min(1440px, calc(100vw - 16px));
+  padding: clamp(14px, 2.1vw, 22px);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5f7084;
+  font-weight: 700;
+}
+
+.title {
+  margin: 0;
+  color: #13243a;
+  font-size: clamp(1.3rem, 3vw, 1.95rem);
+  font-weight: 850;
+  line-height: 1.14;
+}
+
+.subtitle {
+  margin: 0;
+  color: #4f6278;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.statusMessage {
+  margin: 0;
+  border: 1px solid #d8e1e9;
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #385068;
+  background: rgba(242, 247, 252, 0.9);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.statusMessageDanger {
+  border-color: #e2b4b4;
+  background: rgba(255, 240, 240, 0.9);
+  color: #8b2b2b;
+}
+
+.fieldGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.label {
+  margin: 0;
+  color: #273a52;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.inputRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.textInput {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b9cbdd;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  color: #18304b;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.textInput:focus {
+  outline: 2px solid rgba(56, 111, 187, 0.28);
+  border-color: #3f77be;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.singleAction {
+  grid-template-columns: 1fr;
+}
+
+.buttonPrimary,
+.buttonSecondary,
+.buttonGhost {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  line-height: 1;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.buttonPrimary {
+  color: #ffffff;
+  background: linear-gradient(135deg, #3075ce, #2d58a8);
+  box-shadow: 0 12px 18px rgba(45, 88, 168, 0.28);
+}
+
+.buttonPrimary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 22px rgba(45, 88, 168, 0.34);
+}
+
+.buttonSecondary {
+  color: #2a4563;
+  background: #ffffff;
+  border-color: #c7d2df;
+  box-shadow: 0 8px 14px rgba(42, 69, 99, 0.12);
+}
+
+.buttonSecondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #b2c2d4;
+  box-shadow: 0 10px 16px rgba(42, 69, 99, 0.16);
+}
+
+.buttonGhost {
+  color: #315472;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: #c4d2df;
+}
+
+.buttonGhost:hover:not(:disabled) {
+  border-color: #a9bfd3;
+  background: rgba(247, 251, 255, 0.95);
+}
+
+.buttonPrimary:disabled,
+.buttonSecondary:disabled,
+.buttonGhost:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.deckPreview {
+  border: 1px solid #d8e1e9;
+  border-radius: 14px;
+  padding: 8px;
+  background: rgba(248, 252, 255, 0.88);
+  overflow: visible;
+}
+
+.deckGrid {
+  display: grid;
+  grid-template-columns: repeat(15, var(--card-w));
+  justify-content: center;
+  gap: 4px;
+}
+
+.deckCardCell {
+  position: relative;
+  z-index: 1;
+}
+
+.deckCardCell:hover,
+.deckCardCell:focus-within {
+  z-index: 2;
+}
+
+.deckCardButton {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.deckCardButton:focus-visible {
+  outline: 2px solid rgba(53, 106, 176, 0.45);
+  outline-offset: 2px;
+}
+
+.deckCard {
+  width: var(--card-w);
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid #c9d5e2;
+  box-shadow: 0 6px 14px rgba(38, 58, 80, 0.16);
+  transition: box-shadow 120ms ease;
+}
+
+.deckCardButton:hover .deckCard,
+.deckCardButton:focus-visible .deckCard {
+  box-shadow: 0 18px 30px rgba(21, 35, 51, 0.32);
+}
+
+.deckCardPreview {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1400;
+  background: var(--board-bg, #8fb56f);
+  border-radius: calc(var(--radius-sm, 8px) * 5);
+  overflow: hidden;
+}
+
+.deckCardPreviewImage {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  background: transparent;
+  border-radius: 0;
+  border: 1px solid #c9d5e2;
+  box-shadow: 0 22px 36px rgba(21, 35, 51, 0.36);
+}
+
+.sessionIdRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sessionIdLabel {
+  margin: 0;
+  color: #223955;
+  font-size: 0.92rem;
+  font-weight: 780;
+}
+
+.sessionIdValue {
+  margin: 0;
+  color: #1f3350;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.86rem;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid #cad7e3;
+  background: rgba(246, 250, 255, 0.94);
+}
+
+@media (max-width: 720px) {
+  .actions {
+    grid-template-columns: 1fr;
+  }
+
+  .inputRow {
+    grid-template-columns: 1fr;
+  }
+
+  .deckGrid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 5px;
+  }
+}

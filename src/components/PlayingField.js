@@ -54,11 +54,18 @@ const POPUP_CARD_BASE_SHIFT = Object.freeze({
 const POPUP_CARD_VIEWPORT_MARGIN_PX = 6;
 const SHUFFLE_NOTICE_AUTO_DISMISS_MS = 5000;
 const DECK_INSERT_NOTICE_AUTO_DISMISS_MS = 5000;
+const HAND_BULK_ACTION_NOTICE_AUTO_DISMISS_MS = 5000;
 const SHUFFLE_NOTICE_MESSAGES = new Set([
   '山札がシャッフルされました。',
   '相手プレイヤーの山札がシャッフルされました。',
 ]);
 const DECK_INSERT_NOTICE_PATTERN = /^(?:相手が)?カードを山札の(?:上|下)に戻しました。$/;
+const HAND_BULK_ACTION_NOTICE_MESSAGES = new Set([
+  '手札を全てトラッシュしました。',
+  '相手が手札を全てトラッシュしました。',
+  '手札を全て山札に戻しました。',
+  '相手が手札を全て山札に戻しました。',
+]);
 const COIN_RESULT_LABEL = Object.freeze({
   heads: 'オモテ',
   tails: 'ウラ',
@@ -116,6 +123,10 @@ const GUIDE_VISIBILITY_DEFAULTS = Object.freeze({
   battleStart: true,
   turnActions: true,
   condition: true,
+});
+const HAND_BULK_ACTION = Object.freeze({
+  DISCARD_ALL: 'discard-all',
+  RETURN_ALL_TO_DECK: 'return-all-to-deck',
 });
 
 function asArray(value) {
@@ -784,8 +795,10 @@ function resolveStackCardHoverShift({
     return { ...POPUP_CARD_BASE_SHIFT };
   }
 
-  const imageNode = containerNode.querySelector('.pokemon-image:last-child');
-  const anchorRect = imageNode?.getBoundingClientRect?.() || containerNode.getBoundingClientRect();
+  // Use an unscaled anchor rect. The hovered image may already be transformed by CSS
+  // when this function runs, and using that scaled rect causes over-correction.
+  const baseCardNode = containerNode.querySelector('.pokemon-card');
+  const anchorRect = baseCardNode?.getBoundingClientRect?.() || containerNode.getBoundingClientRect();
   return resolvePopupCardHoverShift({
     cardRect: anchorRect,
     viewportWidth,
@@ -852,6 +865,9 @@ function resolveMutationNoticeTimeoutMs(message) {
   }
   if (DECK_INSERT_NOTICE_PATTERN.test(message)) {
     return DECK_INSERT_NOTICE_AUTO_DISMISS_MS;
+  }
+  if (HAND_BULK_ACTION_NOTICE_MESSAGES.has(message)) {
+    return HAND_BULK_ACTION_NOTICE_AUTO_DISMISS_MS;
   }
   return null;
 }
@@ -2241,6 +2257,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [isRandomDiscardConfigOpen, setIsRandomDiscardConfigOpen] = useState(false);
   const [randomDiscardCount, setRandomDiscardCount] = useState(1);
   const [isDeckPeekConfigOpen, setIsDeckPeekConfigOpen] = useState(false);
+  const [pendingHandBulkAction, setPendingHandBulkAction] = useState(null);
   const [deckPeekCount, setDeckPeekCount] = useState(1);
   const [isDeckPeekSelectAll, setIsDeckPeekSelectAll] = useState(false);
   const [isDeckPeekOpen, setIsDeckPeekOpen] = useState(false);
@@ -2260,8 +2277,16 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [opponentBoardRevealActiveShift, setOpponentBoardRevealActiveShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
+  const [playerBoardRevealActiveIndex, setPlayerBoardRevealActiveIndex] = useState(null);
+  const [playerBoardRevealActiveShift, setPlayerBoardRevealActiveShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
   const [isOpponentActiveSingleHovering, setIsOpponentActiveSingleHovering] = useState(false);
   const [opponentActiveSingleHoverShift, setOpponentActiveSingleHoverShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
+  const [isStadiumCardHovering, setIsStadiumCardHovering] = useState(false);
+  const [stadiumCardHoverShift, setStadiumCardHoverShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
   const [opponentCountFlash, setOpponentCountFlash] = useState({
@@ -2302,11 +2327,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const hasInitializedDeckShuffleEventRef = useRef(false);
   const handledDeckInsertEventAtRef = useRef('');
   const hasInitializedDeckInsertEventRef = useRef(false);
+  const handledHandBulkActionEventAtRef = useRef('');
+  const hasInitializedHandBulkActionEventRef = useRef(false);
   const opponentSetupFlipTimeoutRef = useRef(null);
   const previousBattleSetupCompleteRef = useRef(false);
   const opponentRevealButtonRefs = useRef({});
   const opponentBoardRevealRefs = useRef({});
+  const playerBoardRevealRefs = useRef({});
   const opponentActiveHoverSurfaceRef = useRef(null);
+  const stadiumHoverSurfaceRef = useRef(null);
   const opponentCountPrevRef = useRef({
     lost: null,
     discard: null,
@@ -2599,11 +2628,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   );
   const hasBlockingRequest = Boolean(blockingRequest);
   const isOpponentHandRevealOpen = Boolean(opponentHandRevealState.requestId);
+  const isHandBulkActionConfirmOpen = Boolean(pendingHandBulkAction);
   const isUiInteractionBlocked =
     hasBlockingRequest ||
     isOpponentHandRevealOpen ||
     isRandomDiscardConfigOpen ||
-    isDeckPeekConfigOpen;
+    isDeckPeekConfigOpen ||
+    isHandBulkActionConfirmOpen;
 
   const setConditionGuidePositionFromPointer = useCallback((clientX, clientY) => {
     const offset = conditionGuideDragOffsetRef.current;
@@ -3031,6 +3062,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const lastCoinAt = turnContext?.lastCoinAt || null;
   const lastDeckShuffleEvent = turnContext?.lastDeckShuffleEvent || null;
   const lastDeckInsertEvent = turnContext?.lastDeckInsertEvent || null;
+  const lastHandBulkActionEvent = turnContext?.lastHandBulkActionEvent || null;
   const coinImageSrc = lastCoinResult === 'tails' ? COIN_BACK_IMAGE : COIN_FRONT_IMAGE;
   const coinResultLabel = COIN_RESULT_LABEL[lastCoinResult] || '未実行';
   const coinImageClassName = joinClassNames(
@@ -3750,6 +3782,19 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, []);
 
+  const clearPlayerBoardRevealHover = useCallback(() => {
+    setPlayerBoardRevealActiveIndex(null);
+    setPlayerBoardRevealActiveShift((previous) => {
+      if (
+        previous.x === POPUP_CARD_BASE_SHIFT.x &&
+        previous.y === POPUP_CARD_BASE_SHIFT.y
+      ) {
+        return previous;
+      }
+      return { ...POPUP_CARD_BASE_SHIFT };
+    });
+  }, []);
+
   const recalcOpponentBoardRevealCardShift = useCallback(() => {
     if (opponentBoardRevealActiveIndex === null || typeof window === 'undefined') {
       setOpponentBoardRevealActiveShift((previous) => {
@@ -3782,6 +3827,38 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, [opponentBoardRevealActiveIndex]);
 
+  const recalcPlayerBoardRevealCardShift = useCallback(() => {
+    if (playerBoardRevealActiveIndex === null || typeof window === 'undefined') {
+      setPlayerBoardRevealActiveShift((previous) => {
+        if (
+          previous.x === POPUP_CARD_BASE_SHIFT.x &&
+          previous.y === POPUP_CARD_BASE_SHIFT.y
+        ) {
+          return previous;
+        }
+        return { ...POPUP_CARD_BASE_SHIFT };
+      });
+      return;
+    }
+
+    const cardNode = playerBoardRevealRefs.current[playerBoardRevealActiveIndex];
+    if (!cardNode) {
+      return;
+    }
+    const next = resolvePopupCardHoverShift({
+      cardRect: cardNode.getBoundingClientRect(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      scale: POPUP_CARD_HOVER_SCALE,
+    });
+    setPlayerBoardRevealActiveShift((previous) => {
+      if (previous.x === next.x && previous.y === next.y) {
+        return previous;
+      }
+      return next;
+    });
+  }, [playerBoardRevealActiveIndex]);
+
   useEffect(() => {
     if (!opponentRevealCards[opponentBoardRevealActiveIndex]) {
       clearOpponentBoardRevealHover();
@@ -3789,8 +3866,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [clearOpponentBoardRevealHover, opponentBoardRevealActiveIndex, opponentRevealCards]);
 
   useEffect(() => {
+    if (!playerRevealCards[playerBoardRevealActiveIndex]) {
+      clearPlayerBoardRevealHover();
+    }
+  }, [clearPlayerBoardRevealHover, playerBoardRevealActiveIndex, playerRevealCards]);
+
+  useEffect(() => {
     recalcOpponentBoardRevealCardShift();
   }, [opponentBoardRevealActiveIndex, opponentRevealCards, recalcOpponentBoardRevealCardShift]);
+
+  useEffect(() => {
+    recalcPlayerBoardRevealCardShift();
+  }, [playerBoardRevealActiveIndex, playerRevealCards, recalcPlayerBoardRevealCardShift]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || opponentBoardRevealActiveIndex === null) {
@@ -3804,6 +3891,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, [opponentBoardRevealActiveIndex, recalcOpponentBoardRevealCardShift]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || playerBoardRevealActiveIndex === null) {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      recalcPlayerBoardRevealCardShift();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [playerBoardRevealActiveIndex, recalcPlayerBoardRevealCardShift]);
+
   const clearOpponentActiveSingleHover = useCallback(() => {
     setIsOpponentActiveSingleHovering(false);
     setOpponentActiveSingleHoverShift((previous) => {
@@ -3816,6 +3915,47 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       return { ...POPUP_CARD_BASE_SHIFT };
     });
   }, []);
+
+  const clearStadiumCardHover = useCallback(() => {
+    setIsStadiumCardHovering(false);
+    setStadiumCardHoverShift((previous) => {
+      if (
+        previous.x === POPUP_CARD_BASE_SHIFT.x &&
+        previous.y === POPUP_CARD_BASE_SHIFT.y
+      ) {
+        return previous;
+      }
+      return { ...POPUP_CARD_BASE_SHIFT };
+    });
+  }, []);
+
+  const activateStadiumCardHover = useCallback(
+    (containerNode) => {
+      if (!containerNode || typeof window === 'undefined') {
+        clearStadiumCardHover();
+        return;
+      }
+      const imageNode = containerNode.querySelector('img');
+      const anchorRect =
+        imageNode?.getBoundingClientRect?.() || containerNode.getBoundingClientRect();
+
+      stadiumHoverSurfaceRef.current = containerNode;
+      setIsStadiumCardHovering(true);
+      const next = resolvePopupCardHoverShift({
+        cardRect: anchorRect,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        scale: POPUP_CARD_HOVER_SCALE,
+      });
+      setStadiumCardHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    },
+    [clearStadiumCardHover]
+  );
 
   const activateOpponentActiveSingleHover = useCallback(
     (containerNode) => {
@@ -3852,6 +3992,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [clearOpponentActiveSingleHover, opponentActive]);
 
   useEffect(() => {
+    if (!stadiumCardId || !stadiumCardImageUrl) {
+      clearStadiumCardHover();
+    }
+  }, [clearStadiumCardHover, stadiumCardId, stadiumCardImageUrl]);
+
+  useEffect(() => {
     if (!isOpponentActiveSingleHovering || typeof window === 'undefined') {
       return undefined;
     }
@@ -3877,6 +4023,36 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isOpponentActiveSingleHovering]);
+
+  useEffect(() => {
+    if (!isStadiumCardHovering || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const node = stadiumHoverSurfaceRef.current;
+      if (!node) {
+        return;
+      }
+      const imageNode = node.querySelector('img');
+      const anchorRect = imageNode?.getBoundingClientRect?.() || node.getBoundingClientRect();
+      const next = resolvePopupCardHoverShift({
+        cardRect: anchorRect,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        scale: POPUP_CARD_HOVER_SCALE,
+      });
+      setStadiumCardHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isStadiumCardHovering]);
 
   useEffect(() => {
     const revealRequestsForActor = operationRequests.filter(
@@ -4048,6 +4224,33 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     }
     pushSuccessNotice(`相手がカードを山札の${position}に戻しました。`);
   }, [lastDeckInsertEvent, ownerPlayerId, pushSuccessNotice]);
+
+  useEffect(() => {
+    const eventAt =
+      typeof lastHandBulkActionEvent?.at === 'string' ? lastHandBulkActionEvent.at : '';
+    if (!hasInitializedHandBulkActionEventRef.current) {
+      handledHandBulkActionEventAtRef.current = eventAt;
+      hasInitializedHandBulkActionEventRef.current = true;
+      return;
+    }
+    if (!eventAt || handledHandBulkActionEventAtRef.current === eventAt) {
+      return;
+    }
+    handledHandBulkActionEventAtRef.current = eventAt;
+
+    const isSelf = lastHandBulkActionEvent?.byPlayerId === ownerPlayerId;
+    if (lastHandBulkActionEvent?.action === HAND_BULK_ACTION.DISCARD_ALL) {
+      pushSuccessNotice(
+        isSelf ? '手札を全てトラッシュしました。' : '相手が手札を全てトラッシュしました。'
+      );
+      return;
+    }
+    if (lastHandBulkActionEvent?.action === HAND_BULK_ACTION.RETURN_ALL_TO_DECK) {
+      pushSuccessNotice(
+        isSelf ? '手札を全て山札に戻しました。' : '相手が手札を全て山札に戻しました。'
+      );
+    }
+  }, [lastHandBulkActionEvent, ownerPlayerId, pushSuccessNotice]);
 
   useEffect(() => {
     if (previousBattleSetupCompleteRef.current === isBattleSetupComplete) {
@@ -4546,6 +4749,64 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       successMessage: 'サイドから1枚取りました。',
     });
   }, [executeQuickOperation]);
+
+  const isHandBulkActionInteractionLocked =
+    isMutating ||
+    isCoinSubmitting ||
+    isQuickActionSubmitting ||
+    isUiInteractionBlocked ||
+    isDeckPeekOpen;
+
+  const handleOpenDiscardAllHandConfirm = useCallback(() => {
+    if (isHandBulkActionInteractionLocked || playerHandCards.length <= 0) {
+      return;
+    }
+    setPendingHandBulkAction(HAND_BULK_ACTION.DISCARD_ALL);
+  }, [isHandBulkActionInteractionLocked, playerHandCards.length]);
+
+  const handleOpenReturnAllHandToDeckConfirm = useCallback(() => {
+    if (isHandBulkActionInteractionLocked || playerHandCards.length <= 0) {
+      return;
+    }
+    setPendingHandBulkAction(HAND_BULK_ACTION.RETURN_ALL_TO_DECK);
+  }, [isHandBulkActionInteractionLocked, playerHandCards.length]);
+
+  const handleCloseHandBulkActionConfirm = useCallback(() => {
+    setPendingHandBulkAction(null);
+  }, []);
+
+  const handleConfirmHandBulkAction = useCallback(async () => {
+    if (!pendingHandBulkAction) {
+      return;
+    }
+
+    const action = pendingHandBulkAction;
+    setPendingHandBulkAction(null);
+
+    if (playerHandCards.length <= 0) {
+      pushAlertNotice('手札が0枚のため実行できません。');
+      return;
+    }
+
+    if (action === HAND_BULK_ACTION.DISCARD_ALL) {
+      await executeQuickOperation({
+        opId: OPERATION_IDS.OP_B09,
+        payload: {
+          count: Math.max(1, playerHandCards.length),
+        },
+        invalidMessage: '手札一括トラッシュを実行できませんでした。状態を確認してください。',
+      });
+      return;
+    }
+
+    if (action === HAND_BULK_ACTION.RETURN_ALL_TO_DECK) {
+      await executeQuickOperation({
+        opId: OPERATION_IDS.OP_B10,
+        payload: {},
+        invalidMessage: '手札一括山札戻しを実行できませんでした。状態を確認してください。',
+      });
+    }
+  }, [executeQuickOperation, pendingHandBulkAction, playerHandCards.length, pushAlertNotice]);
 
   const handleToggleOpponentHandMenu = useCallback(() => {
     if (isUiInteractionBlocked || isMutating || isQuickActionSubmitting || isCoinSubmitting) {
@@ -5457,7 +5718,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
           <div className={styles.mainColumn}>
             <div className={`${styles.activeRow} ${styles.battleLineRow} ${styles.battleLineRowWithAux}`.trim()}>
-              <div className={styles.playerBattleAux}>
+              <div
+                className={joinClassNames(
+                  styles.playerBattleAux,
+                  isStadiumCardHovering ? styles.playerBattleAuxHovering : ''
+                )}
+              >
                 <div className={styles.stadiumCoinRow}>
                   <DroppableZone
                     dropId="zone-center-stadium"
@@ -5470,26 +5736,54 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   >
                     <p className={styles.zoneTitle}>スタジアム</p>
                     {stadiumCardId && stadiumCardImageUrl ? (
-                      canDragStadiumCard ? (
-                        <DraggableCard
-                          dragId={`stadium-card-${stadiumCardId}`}
-                          dragPayload={stadiumCardDragPayload}
-                          className={styles.stadiumCardDraggable}
-                          draggingClassName={styles.draggingSource}
-                        >
+                      <div
+                        ref={(node) => {
+                          if (node) {
+                            stadiumHoverSurfaceRef.current = node;
+                          } else {
+                            stadiumHoverSurfaceRef.current = null;
+                          }
+                        }}
+                        className={joinClassNames(
+                          styles.stadiumCardHoverable,
+                          isStadiumCardHovering ? styles.stadiumCardHoverableActive : ''
+                        )}
+                        style={
+                          isStadiumCardHovering
+                            ? {
+                                '--stadium-card-shift-x': `${stadiumCardHoverShift.x}px`,
+                                '--stadium-card-shift-y': `${stadiumCardHoverShift.y}px`,
+                              }
+                            : undefined
+                        }
+                        tabIndex={0}
+                        aria-label="スタジアムカードを拡大表示"
+                        onMouseEnter={(event) => activateStadiumCardHover(event.currentTarget)}
+                        onMouseLeave={clearStadiumCardHover}
+                        onFocus={(event) => activateStadiumCardHover(event.currentTarget)}
+                        onBlur={clearStadiumCardHover}
+                      >
+                        {canDragStadiumCard ? (
+                          <DraggableCard
+                            dragId={`stadium-card-${stadiumCardId}`}
+                            dragPayload={stadiumCardDragPayload}
+                            className={styles.stadiumCardDraggable}
+                            draggingClassName={styles.draggingSource}
+                          >
+                            <img
+                              src={stadiumCardImageUrl}
+                              alt="場に出ているスタジアムカード"
+                              className={styles.stadiumCardImage}
+                            />
+                          </DraggableCard>
+                        ) : (
                           <img
                             src={stadiumCardImageUrl}
                             alt="場に出ているスタジアムカード"
                             className={styles.stadiumCardImage}
                           />
-                        </DraggableCard>
-                      ) : (
-                        <img
-                          src={stadiumCardImageUrl}
-                          alt="場に出ているスタジアムカード"
-                          className={styles.stadiumCardImage}
-                        />
-                      )
+                        )}
+                      </div>
                     ) : (
                       <span className={styles.zoneValueMuted}>なし</span>
                     )}
@@ -5677,24 +5971,63 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 >
                   {playerRevealCards.length > 0 ? (
                     <div className={styles.revealCards}>
-                      {playerRevealCards.map((card, index) => (
-                        <DraggableCard
-                          key={`player-reveal-${card.cardId}-${index}`}
-                          dragId={`player-reveal-card-${card.cardId}-${index}`}
-                          dragPayload={buildCardDragPayload({
-                            cardId: card.cardId,
-                            sourceZone: 'player-reveal',
-                          })}
-                          className={styles.revealCardDraggable}
-                          draggingClassName={styles.draggingSource}
-                        >
-                          <img
-                            src={card.imageUrl}
-                            alt={`公開カード（自分）${index + 1}`}
-                            className={styles.revealCardImage}
-                          />
-                        </DraggableCard>
-                      ))}
+                      {playerRevealCards.map((card, index) => {
+                        const isActive = playerBoardRevealActiveIndex === index;
+                        return (
+                          <div
+                            key={`player-reveal-${card.cardId}-${index}`}
+                            ref={(node) => {
+                              if (node) {
+                                playerBoardRevealRefs.current[index] = node;
+                              } else {
+                                delete playerBoardRevealRefs.current[index];
+                              }
+                            }}
+                            className={joinClassNames(
+                              styles.revealCardItem,
+                              isActive ? styles.revealCardItemActive : ''
+                            )}
+                            style={
+                              isActive
+                                ? {
+                                    '--reveal-card-shift-x': `${playerBoardRevealActiveShift.x}px`,
+                                    '--reveal-card-shift-y': `${playerBoardRevealActiveShift.y}px`,
+                                  }
+                                : undefined
+                            }
+                            tabIndex={0}
+                            aria-label={`公開カード（自分）${index + 1}を拡大表示`}
+                            onMouseEnter={() => setPlayerBoardRevealActiveIndex(index)}
+                            onMouseLeave={() => {
+                              setPlayerBoardRevealActiveIndex((previous) =>
+                                previous === index ? null : previous
+                              );
+                            }}
+                            onFocus={() => setPlayerBoardRevealActiveIndex(index)}
+                            onBlur={() => {
+                              setPlayerBoardRevealActiveIndex((previous) =>
+                                previous === index ? null : previous
+                              );
+                            }}
+                          >
+                            <DraggableCard
+                              dragId={`player-reveal-card-${card.cardId}-${index}`}
+                              dragPayload={buildCardDragPayload({
+                                cardId: card.cardId,
+                                sourceZone: 'player-reveal',
+                              })}
+                              className={styles.revealCardDraggable}
+                              draggingClassName={styles.draggingSource}
+                            >
+                              <img
+                                src={card.imageUrl}
+                                alt={`公開カード（自分）${index + 1}`}
+                                className={styles.revealCardImage}
+                              />
+                            </DraggableCard>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <span className={styles.zoneValueMuted}>ここに置く</span>
@@ -6025,6 +6358,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           onToggle={handleHandToggle}
           dropPayload={playerHandDropPayload}
           isDropHighlighted={isZoneHighlighted('player-hand')}
+          onRequestDiscardAll={handleOpenDiscardAllHandConfirm}
+          onRequestReturnAllToDeck={handleOpenReturnAllHandToDeckConfirm}
+          isBulkActionDisabled={isQuickActionLocked}
         />
         <ToolboxPanel
           isOpen={isToolboxOpen}
@@ -6407,6 +6743,36 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 disabled={isQuickActionSubmitting || isMutating || isCoinSubmitting}
               >
                 キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {!hasBlockingRequest && isHandBulkActionConfirmOpen ? (
+        <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">
+          <div className={styles.randomDiscardConfigCard}>
+            <p className={styles.requestBlockingTitle}>
+              {pendingHandBulkAction === HAND_BULK_ACTION.DISCARD_ALL
+                ? '手札を全てトラッシュしますか？'
+                : '手札を全て山札に戻しますか？'}
+            </p>
+            <p className={styles.requestBlockingMeta}>この操作は元に戻せません。</p>
+            <div className={styles.requestBlockingActions}>
+              <button
+                type="button"
+                className={styles.requestRejectButton}
+                onClick={handleConfirmHandBulkAction}
+                disabled={isQuickActionSubmitting || isMutating || isCoinSubmitting}
+              >
+                はい / 操作を確定
+              </button>
+              <button
+                type="button"
+                className={styles.requestApproveButton}
+                onClick={handleCloseHandBulkActionConfirm}
+                disabled={isQuickActionSubmitting || isMutating || isCoinSubmitting}
+              >
+                いいえ / キャンセル
               </button>
             </div>
           </div>

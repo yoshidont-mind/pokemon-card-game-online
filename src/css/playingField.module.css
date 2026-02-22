@@ -775,13 +775,17 @@
   position: fixed;
   z-index: calc(var(--z-overlay) + 20);
   pointer-events: none;
+  background: var(--board-bg, #8fb56f);
+  border-radius: calc(var(--radius-sm) * 5);
+  overflow: hidden;
 }
 
 .popupHoverPreviewImage {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border-radius: 0;
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.42);
 }
 
@@ -1056,6 +1060,13 @@
     75% + (var(--card-gap) / 2) + (var(--active-zone-width) / 4) - (var(--reveal-line-width) / 2)
   );
   z-index: 2;
+}
+
+.battleLineRevealOpponent:hover,
+.battleLineRevealOpponent:focus-within,
+.battleLineRevealPlayer:hover,
+.battleLineRevealPlayer:focus-within {
+  z-index: calc(var(--z-overlay) + 2);
 }
 
 .battleLineRowWithAux .battleLineActive {
@@ -1444,11 +1455,45 @@
   cursor: grabbing;
 }
 
+.stadiumCardHoverable {
+  --stadium-card-shift-x: 0px;
+  --stadium-card-shift-y: -40px;
+  --stadium-card-scale: 5;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.stadiumCardHoverableActive,
+.stadiumCardHoverable:hover,
+.stadiumCardHoverable:focus-within {
+  z-index: calc(var(--z-overlay) + 2);
+}
+
+.stadiumCardHoverable:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
 .stadiumCardImage {
   width: var(--card-w);
   height: auto;
   border-radius: var(--radius-sm);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+  transform-origin: center bottom;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.stadiumCardHoverableActive .stadiumCardImage,
+.stadiumCardHoverable:hover .stadiumCardImage,
+.stadiumCardHoverable:focus-within .stadiumCardImage {
+  transform: translate(var(--stadium-card-shift-x), var(--stadium-card-shift-y))
+    scale(var(--stadium-card-scale));
+  box-shadow: 0 24px 38px rgba(0, 0, 0, 0.42);
 }
 
 .stadiumOwnerLabel {
@@ -1579,6 +1624,10 @@
     calc(var(--player-active-axis-shift) / 2),
     calc(-1 * var(--shared-center-overlap))
   );
+}
+
+.battleLineRowWithAux .playerBattleAuxHovering {
+  z-index: calc(var(--z-overlay) + 2);
 }
 
 .coinWidgetTitle {
@@ -1803,6 +1852,41 @@
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
   padding: 8px 10px;
+}
+
+.handTrayActions {
+  width: 100%;
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.handTrayDangerButton {
+  border: 1px solid #c98787;
+  border-radius: 999px;
+  background: #ffecec;
+  color: #7a2424;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.handTrayDangerButton:hover {
+  background: #ffdede;
+}
+
+.handTrayDangerButton:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 1px;
+}
+
+.handTrayDangerButton:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
 }
 
 .handCardsScroller {

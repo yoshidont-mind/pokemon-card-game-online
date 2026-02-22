@@ -1,0 +1,97 @@
+.page {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #ffffff;
+  padding: 32px 16px;
+}
+
+.backgroundLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.backgroundCard {
+  --floating-start-x: 0vw;
+  --floating-start-y: 0vh;
+  --floating-move-x: 40vw;
+  --floating-move-y: 10vh;
+  --floating-duration: 56s;
+  --floating-delay: 0s;
+  --floating-tilt: 0deg;
+  --floating-spin: 0deg;
+  --floating-scale: 1;
+  --floating-opacity: 1;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: clamp(74px, 8.2vw, 114px);
+  height: auto;
+  border-radius: 10px;
+  opacity: var(--floating-opacity);
+  filter: saturate(0.86) contrast(0.95);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  transform: translate3d(var(--floating-start-x), var(--floating-start-y), 0)
+    rotate(var(--floating-tilt))
+    scale(var(--floating-scale));
+  animation: preplay-floating-card var(--floating-duration) linear infinite;
+  animation-delay: var(--floating-delay);
+  will-change: transform, opacity;
+}
+
+.backgroundFade {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.modal {
+  position: relative;
+  z-index: 2;
+  width: min(700px, calc(100vw - 28px));
+  border-radius: 24px;
+  border: 1px solid rgba(209, 220, 228, 0.72);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 32px 60px rgba(9, 20, 31, 0.16),
+    0 8px 20px rgba(9, 20, 31, 0.08);
+  backdrop-filter: blur(6px);
+  padding: clamp(20px, 4vw, 34px);
+  display: grid;
+  gap: 14px;
+}
+
+.modal > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@keyframes preplay-floating-card {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--floating-start-x), var(--floating-start-y), 0)
+      rotate(var(--floating-tilt))
+      scale(var(--floating-scale));
+  }
+  14% {
+    opacity: var(--floating-opacity);
+  }
+  86% {
+    opacity: var(--floating-opacity);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(
+        calc(var(--floating-start-x) + var(--floating-move-x)),
+        calc(var(--floating-start-y) + var(--floating-move-y)),
+        0
+      )
+      rotate(calc(var(--floating-tilt) + var(--floating-spin)))
+      scale(var(--floating-scale));
+  }
+}

@@ -1,5 +1,5 @@
 // src/components/Home.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import db from '../firebase';
@@ -11,11 +11,23 @@ import {
     normalizeInitialPrizeCount,
 } from '../game-state/setupUtils';
 import { ensureSignedIn } from '../auth/authClient';
+import styles from '../css/home.module.css';
+import { createFloatingCardSpecs } from '../utils/floatingBackgroundCards';
+
+const BACKGROUND_CARD_COUNT = 120;
+const HERO_TITLE_LINES = Object.freeze([
+    'Pokémon Trading Card Game',
+    'Online Simulator',
+]);
 
 const Home = () => {
     const navigate = useNavigate();
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [initialPrizeCount, setInitialPrizeCount] = useState(INITIAL_PRIZE_COUNT_DEFAULT);
+    const floatingBackgroundCards = useMemo(
+        () => createFloatingCardSpecs(BACKGROUND_CARD_COUNT),
+        []
+    );
 
     useEffect(() => {
         let isMounted = true;
@@ -80,33 +92,82 @@ const Home = () => {
     };
 
     return (
-        <div className="container mt-5">
-            <div className="mb-4" style={{ maxWidth: '480px' }}>
-                <label htmlFor="initial-prize-count" className="form-label fw-bold">
-                    初期サイド枚数: {initialPrizeCount} 枚
-                </label>
-                <input
-                    id="initial-prize-count"
-                    type="range"
-                    className="form-range"
-                    min={INITIAL_PRIZE_COUNT_MIN}
-                    max={INITIAL_PRIZE_COUNT_MAX}
-                    step="1"
-                    value={initialPrizeCount}
-                    onChange={(event) =>
-                        setInitialPrizeCount(normalizeInitialPrizeCount(event.target.value))
-                    }
-                />
-                <div className="d-flex justify-content-between small text-muted">
-                    <span>{INITIAL_PRIZE_COUNT_MIN}枚</span>
-                    <span>{INITIAL_PRIZE_COUNT_MAX}枚</span>
-                </div>
+        <div className={styles.page}>
+            <div className={styles.backgroundLayer} aria-hidden>
+                {floatingBackgroundCards.map((card) => (
+                    <img
+                        key={card.key}
+                        src={card.imageUrl}
+                        alt=""
+                        className={styles.backgroundCard}
+                        style={card.style}
+                        loading="lazy"
+                        decoding="async"
+                    />
+                ))}
+                <div className={styles.backgroundFade} />
             </div>
-            <button className="btn btn-primary me-3" onClick={createSession} disabled={!isAuthReady}>
-                セッションを開始
-            </button>
-            <button className="btn btn-secondary" onClick={() => navigate('/join')}>セッションに参加</button>
-            {!isAuthReady && <div className="mt-3 text-muted">認証を初期化中...</div>}
+
+            <main className={styles.modal}>
+                <h1
+                    className={styles.heroTitle}
+                    aria-label="Pokémon Trading Card Game Online Simulator"
+                >
+                    {HERO_TITLE_LINES.map((line, lineIndex) => (
+                        <span key={line} className={styles.heroTitleLine}>
+                            {[...line].map((char, charIndex) => (
+                                <span
+                                    key={`${line}-${char}-${charIndex}`}
+                                    className={styles.heroTitleChar}
+                                    style={{
+                                        '--char-index': charIndex,
+                                        '--line-index': lineIndex,
+                                    }}
+                                >
+                                    {char === ' ' ? '\u00A0' : char}
+                                </span>
+                            ))}
+                        </span>
+                    ))}
+                </h1>
+
+                <section className={styles.setupSection}>
+                    <label htmlFor="initial-prize-count" className={styles.sliderLabel}>
+                        初期サイド枚数: <strong>{initialPrizeCount} 枚</strong>
+                    </label>
+                    <input
+                        id="initial-prize-count"
+                        type="range"
+                        className={styles.slider}
+                        min={INITIAL_PRIZE_COUNT_MIN}
+                        max={INITIAL_PRIZE_COUNT_MAX}
+                        step="1"
+                        value={initialPrizeCount}
+                        onChange={(event) =>
+                            setInitialPrizeCount(normalizeInitialPrizeCount(event.target.value))
+                        }
+                    />
+                    <div className={styles.sliderScale}>
+                        <span>{INITIAL_PRIZE_COUNT_MIN}枚</span>
+                        <span>{INITIAL_PRIZE_COUNT_MAX}枚</span>
+                    </div>
+                </section>
+
+                <div className={styles.actions}>
+                    <button
+                        className={styles.primaryButton}
+                        onClick={createSession}
+                        disabled={!isAuthReady}
+                    >
+                        セッションを開始
+                    </button>
+                    <button className={styles.secondaryButton} onClick={() => navigate('/join')}>
+                        セッションに参加
+                    </button>
+                </div>
+
+                {!isAuthReady ? <div className={styles.authHint}>認証を初期化中...</div> : null}
+            </main>
         </div>
     );
 };
