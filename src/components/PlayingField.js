@@ -6308,7 +6308,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <section className={styles.turnActionsSection}>
             <p className={styles.turnActionsSectionBadge}>最初にすること</p>
             <p className={styles.turnActionsMainLine}>自分の山札からカードを1枚引く</p>
-            <p className={styles.turnActionsSubLine}>これは必ずしてください。</p>
           </section>
 
           <p className={styles.turnActionsArrow} aria-hidden="true">
@@ -6322,14 +6321,32 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 <p className={styles.turnActionsColumnTitle}>何回でもできる</p>
                 <p className={styles.turnActionsActionItem}>ベンチにたねポケモンを出す</p>
                 <p className={styles.turnActionsActionItem}>グッズを使う</p>
-                <p className={styles.turnActionsActionItem}>ポケモンを進化させる</p>
+                <p className={styles.turnActionsActionItem}>
+                  <span className={styles.turnActionsActionMain}>ポケモンを進化させる</span>
+                  <span className={styles.turnActionsActionNote}>※ 最初の番は進化できない</span>
+                  <span className={styles.turnActionsActionNote}>
+                    ※ 出したばかり/進化したばかりのポケモンもその番は進化できない
+                  </span>
+                </p>
+                <p className={styles.turnActionsActionItem}>
+                  <span className={styles.turnActionsActionMain}>ポケモンのどうぐをつける</span>
+                  <span className={styles.turnActionsActionNote}>※ 1匹1枚まで / つけ替え不可</span>
+                </p>
               </div>
               <div className={styles.turnActionsColumn}>
                 <p className={styles.turnActionsColumnTitle}>1回だけできる</p>
                 <p className={styles.turnActionsActionItem}>ポケモンにエネルギーを1枚つける</p>
-                <p className={styles.turnActionsActionItem}>サポートを使う</p>
+                <p className={styles.turnActionsActionItem}>
+                  <span className={styles.turnActionsActionMain}>サポートを使う</span>
+                  <span className={styles.turnActionsActionNote}>※ 先攻の最初の番は使えない</span>
+                </p>
                 <p className={styles.turnActionsActionItem}>バトルポケモンの「にげる」を使う</p>
+                <p className={styles.turnActionsActionItem}>スタジアムを出す</p>
               </div>
+            </div>
+            <div className={styles.turnActionsColumn}>
+              <p className={styles.turnActionsColumnTitle}>回数はカード文言次第</p>
+              <p className={styles.turnActionsActionItem}>特性を使う</p>
             </div>
             <p className={styles.turnActionsSubLine}>※ やることの順番は自由です</p>
           </section>
@@ -6341,7 +6358,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <section className={styles.turnActionsSection}>
             <p className={styles.turnActionsSectionBadge}>最後にすること</p>
             <p className={styles.turnActionsMainLine}>バトルポケモンのワザを使う</p>
-            <p className={styles.turnActionsSubLine}>※ ワザは自分の番に1つしか使えません。</p>
+            <p className={styles.turnActionsSubLine}>※ 自分の番に1つだけ使えます。使わなくてもOK。</p>
             <p className={styles.turnActionsSubLine}>※ 先攻プレイヤーの最初の番は、ワザを使えません。</p>
             <p className={styles.turnActionsArrow} aria-hidden="true">
               ↓
