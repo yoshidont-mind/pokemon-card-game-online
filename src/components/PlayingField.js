@@ -73,6 +73,7 @@ const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
 const TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY = 'pcgo:turn-actions-guide-position:v1';
+const CONDITION_GUIDE_POSITION_STORAGE_KEY = 'pcgo:condition-guide-position:v1';
 const OPPONENT_COUNT_FLASH_MS = 2000;
 const INTERACTION_GUIDE_MARGIN_PX = 8;
 const INTERACTION_GUIDE_OVERLAP_PADDING_PX = 4;
@@ -84,6 +85,28 @@ const STATUS_BADGE_DEFINITIONS = Object.freeze([
   { id: 'asleep', label: 'ねむり', stackKey: 'asleep' },
   { id: 'paralyzed', label: 'マヒ', stackKey: 'paralyzed' },
   { id: 'confused', label: 'こんらん', stackKey: 'confused' },
+]);
+const CONDITION_GUIDE_ROWS = Object.freeze([
+  {
+    status: 'どく',
+    effect: 'ターン終了後にダメカンを1個置く',
+  },
+  {
+    status: 'やけど',
+    effect: 'ポケモンチェックで20ダメージ、その後コイン。オモテなら治る',
+  },
+  {
+    status: 'ねむり',
+    effect: '攻撃も逃げるも不可。チェックでコイン、オモテで起きる',
+  },
+  {
+    status: 'マヒ',
+    effect: '攻撃も逃げるも不可。自分の次ターン終了時に自動で治る',
+  },
+  {
+    status: 'こんらん',
+    effect: 'ワザ使用時にコイン。ウラなら自分に30ダメージでワザ失敗',
+  },
 ]);
 
 function asArray(value) {
@@ -2238,6 +2261,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
   const battleStartGuideRef = useRef(null);
+  const conditionGuideRef = useRef(null);
+  const conditionGuideDragOffsetRef = useRef({ x: 0, y: 0 });
+  const conditionGuideDragSizeRef = useRef({ width: 0, height: 0 });
   const turnActionsGuideRef = useRef(null);
   const turnActionsGuideDragOffsetRef = useRef({ x: 0, y: 0 });
   const turnActionsGuideDragSizeRef = useRef({ width: 0, height: 0 });
@@ -2252,6 +2278,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     top: 0,
     isReady: false,
   });
+  const [conditionGuideManualPosition, setConditionGuideManualPosition] = useState(() =>
+    readStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY)
+  );
+  const [isConditionGuideDragging, setIsConditionGuideDragging] = useState(false);
   const [turnActionsGuideManualPosition, setTurnActionsGuideManualPosition] = useState(() =>
     readStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY)
   );
@@ -2490,6 +2520,123 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     isOpponentHandRevealOpen ||
     isRandomDiscardConfigOpen ||
     isDeckPeekConfigOpen;
+
+  const setConditionGuidePositionFromPointer = useCallback((clientX, clientY) => {
+    const offset = conditionGuideDragOffsetRef.current;
+    const size = conditionGuideDragSizeRef.current;
+    if (
+      !Number.isFinite(clientX) ||
+      !Number.isFinite(clientY) ||
+      !Number.isFinite(size.width) ||
+      !Number.isFinite(size.height) ||
+      size.width <= 0 ||
+      size.height <= 0
+    ) {
+      return;
+    }
+
+    const next = clampFloatingPanelPosition({
+      x: clientX - offset.x,
+      y: clientY - offset.y,
+      width: size.width,
+      height: size.height,
+    });
+    const nextRounded = {
+      x: Math.round(next.x),
+      y: Math.round(next.y),
+    };
+
+    setConditionGuideManualPosition((previous) => {
+      if (previous && previous.x === nextRounded.x && previous.y === nextRounded.y) {
+        return previous;
+      }
+      return nextRounded;
+    });
+  }, []);
+
+  const handleConditionGuideDragStart = useCallback(
+    (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
+      const guideNode = conditionGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const guideRect = guideNode.getBoundingClientRect();
+      conditionGuideDragOffsetRef.current = {
+        x: event.clientX - guideRect.left,
+        y: event.clientY - guideRect.top,
+      };
+      conditionGuideDragSizeRef.current = {
+        width: guideRect.width,
+        height: guideRect.height,
+      };
+      setConditionGuidePositionFromPointer(event.clientX, event.clientY);
+      setIsConditionGuideDragging(true);
+      event.preventDefault();
+    },
+    [setConditionGuidePositionFromPointer]
+  );
+
+  useEffect(() => {
+    if (!conditionGuideManualPosition) {
+      return;
+    }
+    writeStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY, conditionGuideManualPosition);
+  }, [conditionGuideManualPosition]);
+
+  useEffect(() => {
+    if (!conditionGuideManualPosition || typeof window === 'undefined') {
+      return undefined;
+    }
+    const handleResize = () => {
+      const guideNode = conditionGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const rect = guideNode.getBoundingClientRect();
+      const next = clampFloatingPanelPosition({
+        x: conditionGuideManualPosition.x,
+        y: conditionGuideManualPosition.y,
+        width: rect.width,
+        height: rect.height,
+      });
+      const nextRounded = {
+        x: Math.round(next.x),
+        y: Math.round(next.y),
+      };
+      if (
+        nextRounded.x !== conditionGuideManualPosition.x ||
+        nextRounded.y !== conditionGuideManualPosition.y
+      ) {
+        setConditionGuideManualPosition(nextRounded);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [conditionGuideManualPosition]);
+
+  useEffect(() => {
+    if (!isConditionGuideDragging || typeof window === 'undefined') {
+      return undefined;
+    }
+    const handlePointerMove = (event) => {
+      setConditionGuidePositionFromPointer(event.clientX, event.clientY);
+    };
+    const handlePointerUp = () => {
+      setIsConditionGuideDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [isConditionGuideDragging, setConditionGuidePositionFromPointer]);
 
   const setTurnActionsGuidePositionFromPointer = useCallback((clientX, clientY) => {
     const offset = turnActionsGuideDragOffsetRef.current;
@@ -4500,6 +4647,27 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     : {
         visibility: 'hidden',
       };
+  const conditionGuideStyle = conditionGuideManualPosition
+    ? {
+        position: 'fixed',
+        left: `${conditionGuideManualPosition.x}px`,
+        top: `${conditionGuideManualPosition.y}px`,
+        transform: 'none',
+        zIndex: isConditionGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 3)',
+        visibility: 'visible',
+      }
+    : {
+        position: 'fixed',
+        right: '10px',
+        top: '10px',
+        transform: 'none',
+        zIndex: isConditionGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 3)',
+        visibility: 'visible',
+      };
   const turnActionsGuideStyle = turnActionsGuideManualPosition
     ? {
         position: 'fixed',
@@ -5317,6 +5485,48 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
             3. 手札にまだ「たねポケモン」がいれば、5枚までベンチに配置できます。完了したら、「対戦スタート！」
           </p>
+        </aside>
+        <aside
+          ref={conditionGuideRef}
+          className={joinClassNames(styles.interactionGuide, styles.conditionGuide)}
+          style={conditionGuideStyle}
+          data-zone="condition-guide"
+          aria-label="状態異常の効果"
+        >
+          <div className={styles.turnActionsGuideHeader}>
+            <p className={styles.turnActionsGuideTitle}>状態異常の効果</p>
+            <button
+              type="button"
+              className={joinClassNames(
+                styles.turnActionsGuideHandle,
+                isConditionGuideDragging ? styles.turnActionsGuideHandleActive : ''
+              )}
+              onPointerDown={handleConditionGuideDragStart}
+              aria-label="状態異常の効果を移動"
+            >
+              <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+            </button>
+          </div>
+          <div className={styles.conditionGuideTable} role="table" aria-label="状態異常の説明表">
+            <div className={styles.conditionGuideRow} role="row">
+              <p className={styles.conditionGuideHeadCell} role="columnheader">
+                状態
+              </p>
+              <p className={styles.conditionGuideHeadCell} role="columnheader">
+                効果
+              </p>
+            </div>
+            {CONDITION_GUIDE_ROWS.map((row) => (
+              <div key={row.status} className={styles.conditionGuideRow} role="row">
+                <p className={styles.conditionGuideStatusCell} role="cell">
+                  {row.status}
+                </p>
+                <p className={styles.conditionGuideEffectCell} role="cell">
+                  {row.effect}
+                </p>
+              </div>
+            ))}
+          </div>
         </aside>
         <aside
           ref={turnActionsGuideRef}
