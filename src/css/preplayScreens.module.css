@@ -4,7 +4,8 @@
 }
 
 .sessionDeckModal {
-  width: min(1260px, calc(100vw - 28px));
+  width: min(1440px, calc(100vw - 16px));
+  padding: clamp(14px, 2.1vw, 22px);
 }
 
 .eyebrow {
@@ -155,15 +156,16 @@
 .deckPreview {
   border: 1px solid #d8e1e9;
   border-radius: 14px;
-  padding: 10px;
+  padding: 8px;
   background: rgba(248, 252, 255, 0.88);
   overflow: visible;
 }
 
 .deckGrid {
   display: grid;
-  grid-template-columns: repeat(15, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(15, var(--card-w));
+  justify-content: center;
+  gap: 4px;
 }
 
 .deckCardCell {
@@ -173,23 +175,53 @@
 
 .deckCardCell:hover,
 .deckCardCell:focus-within {
-  z-index: 18;
+  z-index: 2;
+}
+
+.deckCardButton {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.deckCardButton:focus-visible {
+  outline: 2px solid rgba(53, 106, 176, 0.45);
+  outline-offset: 2px;
 }
 
 .deckCard {
-  width: 100%;
+  width: var(--card-w);
   height: auto;
   border-radius: 8px;
   border: 1px solid #c9d5e2;
   box-shadow: 0 6px 14px rgba(38, 58, 80, 0.16);
-  transition: transform 120ms ease, box-shadow 120ms ease;
-  transform-origin: center bottom;
+  transition: box-shadow 120ms ease;
 }
 
-.deckCardCell:hover .deckCard,
-.deckCardCell:focus-within .deckCard {
-  transform: translateY(-20px) scale(2.6);
-  box-shadow: 0 16px 28px rgba(21, 35, 51, 0.28);
+.deckCardButton:hover .deckCard,
+.deckCardButton:focus-visible .deckCard {
+  box-shadow: 0 18px 30px rgba(21, 35, 51, 0.32);
+}
+
+.deckCardPreview {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1400;
+}
+
+.deckCardPreviewImage {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  border-radius: 12px;
+  border: 1px solid #c9d5e2;
+  box-shadow: 0 22px 36px rgba(21, 35, 51, 0.36);
 }
 
 .sessionIdRow {

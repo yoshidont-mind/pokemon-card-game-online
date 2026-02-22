@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { doc, onSnapshot } from 'firebase/firestore';
 import db from '../firebase';
@@ -19,6 +20,65 @@ import { INITIAL_PRIZE_COUNT_DEFAULT, normalizeInitialPrizeCount, takeInitialPri
 import { applySessionMutation } from '../game-state/transactionRunner';
 
 const INITIAL_HAND_SIZE = 7;
+const DECK_PREVIEW_HOVER_SCALE = 5;
+const DECK_PREVIEW_VIEWPORT_MARGIN_PX = 6;
+const DECK_PREVIEW_BASE_SHIFT = Object.freeze({
+  x: 0,
+  y: -40,
+});
+
+function clampValue(value, min, max) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
+function resolveDeckPreviewPlacement({
+  buttonRect,
+  viewportWidth,
+  viewportHeight,
+  scale = DECK_PREVIEW_HOVER_SCALE,
+  margin = DECK_PREVIEW_VIEWPORT_MARGIN_PX,
+}) {
+  if (
+    !buttonRect ||
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight)
+  ) {
+    return null;
+  }
+
+  const previewWidth = buttonRect.width * scale;
+  const previewHeight = buttonRect.height * scale;
+
+  let x =
+    buttonRect.left +
+    (buttonRect.width - previewWidth) / 2 +
+    (Number(DECK_PREVIEW_BASE_SHIFT.x) || 0);
+  let y =
+    buttonRect.bottom -
+    previewHeight +
+    (Number(DECK_PREVIEW_BASE_SHIFT.y) || 0);
+
+  const maxX = Math.max(margin, viewportWidth - previewWidth - margin);
+  const maxY = Math.max(margin, viewportHeight - previewHeight - margin);
+
+  x = clampValue(x, margin, maxX);
+  y = clampValue(y, margin, maxY);
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(previewWidth),
+  };
+}
 
 function mergeOwnedCardsIntoPublicCatalog({ sessionDoc, ownerPlayerId, privateCardCatalog }) {
   const nextPublicCardCatalog =
@@ -57,7 +117,9 @@ const Session = () => {
   const [isPlayerSlotReady, setIsPlayerSlotReady] = useState(false);
   const [slotErrorMessage, setSlotErrorMessage] = useState('');
   const [mutationMessage, setMutationMessage] = useState('');
+  const [deckHoverPreview, setDeckHoverPreview] = useState(null);
   const latestRevisionRef = useRef(null);
+  const deckCardRefs = useRef({});
 
   const ownerPlayerId = useMemo(() => {
     try {
@@ -486,6 +548,42 @@ const Session = () => {
     }
   };
 
+  const updateDeckHoverPreview = (index) => {
+    if (!Number.isInteger(index) || index < 0) {
+      setDeckHoverPreview(null);
+      return;
+    }
+    const previewImageUrl = selectedDeckCards[index];
+    const buttonNode = deckCardRefs.current[index];
+    if (!previewImageUrl || !buttonNode || typeof window === 'undefined') {
+      setDeckHoverPreview(null);
+      return;
+    }
+
+    const buttonRect = buttonNode.getBoundingClientRect();
+    const placement = resolveDeckPreviewPlacement({
+      buttonRect,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    });
+    if (!placement) {
+      setDeckHoverPreview(null);
+      return;
+    }
+
+    setDeckHoverPreview({
+      imageUrl: previewImageUrl,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+      index,
+    });
+  };
+
+  const clearDeckHoverPreview = () => {
+    setDeckHoverPreview(null);
+  };
+
   const renderPreplayShell = ({
     title,
     subtitle = '',
@@ -611,11 +709,29 @@ const Session = () => {
             <div className={styles.deckGrid}>
               {selectedDeckCards.map((card, index) => (
                 <div key={`${card}-${index}`} className={styles.deckCardCell}>
-                  <img
-                    src={card}
-                    alt={`Card ${index}`}
-                    className={styles.deckCard}
-                  />
+                  <button
+                    type="button"
+                    className={styles.deckCardButton}
+                    ref={(node) => {
+                      if (node) {
+                        deckCardRefs.current[index] = node;
+                      } else {
+                        delete deckCardRefs.current[index];
+                      }
+                    }}
+                    onMouseEnter={() => updateDeckHoverPreview(index)}
+                    onMouseMove={() => updateDeckHoverPreview(index)}
+                    onFocus={() => updateDeckHoverPreview(index)}
+                    onBlur={clearDeckHoverPreview}
+                    onMouseLeave={clearDeckHoverPreview}
+                    aria-label={`デッキカード ${index + 1}`}
+                  >
+                    <img
+                      src={card}
+                      alt={`Card ${index}`}
+                      className={styles.deckCard}
+                    />
+                  </button>
                 </div>
               ))}
             </div>
@@ -636,6 +752,26 @@ const Session = () => {
             </button>
           </div>
         ) : null}
+
+        {deckHoverPreview && typeof document !== 'undefined'
+          ? createPortal(
+              <div
+                className={styles.deckCardPreview}
+                style={{
+                  left: `${deckHoverPreview.x}px`,
+                  top: `${deckHoverPreview.y}px`,
+                }}
+              >
+                <img
+                  src={deckHoverPreview.imageUrl}
+                  alt="デッキカード拡大表示"
+                  className={styles.deckCardPreviewImage}
+                  style={{ width: `${deckHoverPreview.width}px` }}
+                />
+              </div>,
+              document.body
+            )
+          : null}
       </>
     ),
   });
