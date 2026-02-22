@@ -374,8 +374,10 @@
   position: relative;
   height: clamp(8px, 1vw, 12px);
   margin: clamp(3px, 0.45vw, 7px) 0;
-  display: grid;
-  place-items: center;
+}
+
+.areaDividerWithBattleStart {
+  height: clamp(30px, 3.4vw, 42px);
 }
 
 .areaDivider::before {
@@ -390,7 +392,10 @@
 }
 
 .battleStartButton {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 1;
   border: 1px solid #6f8659;
   border-radius: 999px;

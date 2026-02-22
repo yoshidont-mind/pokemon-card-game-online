@@ -5391,7 +5391,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
-        <div className={styles.areaDivider}>
+        <div
+          className={joinClassNames(
+            styles.areaDivider,
+            !isPlayerBattleStartCommitted ? styles.areaDividerWithBattleStart : ''
+          )}
+        >
           {!isPlayerBattleStartCommitted ? (
             <button
               type="button"
