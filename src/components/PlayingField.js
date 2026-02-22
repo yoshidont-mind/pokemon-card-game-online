@@ -784,8 +784,10 @@ function resolveStackCardHoverShift({
     return { ...POPUP_CARD_BASE_SHIFT };
   }
 
-  const imageNode = containerNode.querySelector('.pokemon-image:last-child');
-  const anchorRect = imageNode?.getBoundingClientRect?.() || containerNode.getBoundingClientRect();
+  // Use an unscaled anchor rect. The hovered image may already be transformed by CSS
+  // when this function runs, and using that scaled rect causes over-correction.
+  const baseCardNode = containerNode.querySelector('.pokemon-card');
+  const anchorRect = baseCardNode?.getBoundingClientRect?.() || containerNode.getBoundingClientRect();
   return resolvePopupCardHoverShift({
     cardRect: anchorRect,
     viewportWidth,
