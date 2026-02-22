@@ -446,6 +446,10 @@ const Session = () => {
             deckCount: nextPrivateState.zones.deck.length,
             handCount: nextPrivateState.zones.hand.length,
           };
+          sessionDoc.publicState.battleStartReadyByPlayer = {
+            player1: false,
+            player2: false,
+          };
 
           if (sessionDoc.status !== SESSION_STATUS.PLAYING) {
             sessionDoc.status =
@@ -558,7 +562,7 @@ const Session = () => {
           onClick={saveDeck}
           disabled={!isAuthReady || !isPlayerSlotReady}
         >
-          このデッキを保存
+          このデッキを使う
         </Button>
       )}
     </div>

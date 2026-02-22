@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { createPortal } from 'react-dom';
 import {
   faArrowsUpDownLeftRight,
+  faCog,
   faEdit,
   faMinus,
   faPlus,
@@ -12,7 +13,6 @@ import {
 import Pokemon from './Pokemon';
 import HandTray from './HandTray';
 import ToolboxPanel from './ToolboxPanel';
-import OperationPanel from './operation/OperationPanel';
 import DroppableZone from './dnd/DroppableZone';
 import DroppableStack from './dnd/DroppableStack';
 import DraggableCard from './dnd/DraggableCard';
@@ -71,7 +71,12 @@ const MUTATION_NOTICE_TONE = Object.freeze({
 const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できません|見つかりません|不正|invalid|error|denied|not found/i;
 const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
+const FLOATING_PANEL_GUIDE_GAP_PX = 10;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
+const TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY = 'pcgo:turn-actions-guide-position:v1';
+const CONDITION_GUIDE_POSITION_STORAGE_KEY = 'pcgo:condition-guide-position:v1';
+const OPPONENT_SETUP_FLIP_ANIMATION_MS = 520;
+const OPPONENT_SETUP_FLIP_IMAGE_CLASS = 'pokemon-image-opponent-setup-flip';
 const OPPONENT_COUNT_FLASH_MS = 2000;
 const INTERACTION_GUIDE_MARGIN_PX = 8;
 const INTERACTION_GUIDE_OVERLAP_PADDING_PX = 4;
@@ -84,6 +89,34 @@ const STATUS_BADGE_DEFINITIONS = Object.freeze([
   { id: 'paralyzed', label: 'マヒ', stackKey: 'paralyzed' },
   { id: 'confused', label: 'こんらん', stackKey: 'confused' },
 ]);
+const CONDITION_GUIDE_ROWS = Object.freeze([
+  {
+    status: 'どく',
+    effect: 'ターン終了後にダメカンを1個置く',
+  },
+  {
+    status: 'やけど',
+    effect: 'ポケモンチェックで20ダメージ、その後コイン。オモテなら治る',
+  },
+  {
+    status: 'ねむり',
+    effect: '攻撃も逃げるも不可。チェックでコイン、オモテで起きる',
+  },
+  {
+    status: 'マヒ',
+    effect: '攻撃も逃げるも不可。自分の次ターン終了時に自動で治る',
+  },
+  {
+    status: 'こんらん',
+    effect: 'ワザ使用時にコイン。ウラなら自分に30ダメージでワザ失敗',
+  },
+]);
+const GUIDE_VISIBILITY_DEFAULTS = Object.freeze({
+  interaction: true,
+  battleStart: true,
+  turnActions: true,
+  condition: true,
+});
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -107,15 +140,24 @@ function getStackImages(stack, cardCatalog) {
     .filter(Boolean);
 }
 
-function toPokemonProps(stack, cardCatalog) {
+function toPokemonProps(stack, cardCatalog, options = {}) {
+  const forceFaceDown = Boolean(options?.forceFaceDown);
+  const imageClassName =
+    typeof options?.imageClassName === 'string' ? options.imageClassName : '';
+  const cardIds = asArray(stack?.cardIds).filter(Boolean);
+  const images = forceFaceDown
+    ? cardIds.map(() => CARD_BACK_IMAGE)
+    : getStackImages(stack, cardCatalog);
+
   return {
-    images: getStackImages(stack, cardCatalog),
+    images,
     damage: Number(stack?.damage || 0),
     isPoisoned: Boolean(stack?.specialConditions?.poisoned),
     isBurned: Boolean(stack?.specialConditions?.burned),
     isAsleep: Boolean(stack?.specialConditions?.asleep),
     isParalyzed: Boolean(stack?.specialConditions?.paralyzed),
     isConfused: Boolean(stack?.specialConditions?.confused),
+    imageClassName,
   };
 }
 
@@ -402,6 +444,113 @@ function resolveInteractionGuidePosition({ boardNode, guideNode }) {
   };
 }
 
+function resolveBattleStartGuidePosition({ boardNode, guideNode, interactionGuideNode = null }) {
+  if (!boardNode || !guideNode) {
+    return null;
+  }
+
+  const boardRect = boardNode.getBoundingClientRect();
+  const guideRect = guideNode.getBoundingClientRect();
+  if (!Number.isFinite(boardRect.width) || !Number.isFinite(boardRect.height)) {
+    return null;
+  }
+  if (!Number.isFinite(guideRect.width) || !Number.isFinite(guideRect.height)) {
+    return null;
+  }
+
+  const panelWidth = Math.max(1, guideRect.width);
+  const panelHeight = Math.max(1, guideRect.height);
+  const minX = INTERACTION_GUIDE_MARGIN_PX;
+  const minY = INTERACTION_GUIDE_MARGIN_PX;
+  const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
+  const maxYDefault = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
+
+  let preferredX = clampValue(boardRect.width * 0.74 - panelWidth / 2, minX, maxX);
+  let preferredY = clampValue(boardRect.height * 0.32 - panelHeight / 2, minY, maxYDefault);
+  let maxY = maxYDefault;
+
+  const opponentBench4Node = boardNode.querySelector('[data-zone="opponent-bench-4"]');
+  const opponentBench5Node = boardNode.querySelector('[data-zone="opponent-bench-5"]');
+  const dividerNode = boardNode.querySelector(`.${styles.areaDivider}`);
+  if (opponentBench4Node && opponentBench5Node) {
+    const bench4Rect = toLocalRect(opponentBench4Node.getBoundingClientRect(), boardRect);
+    const bench5Rect = toLocalRect(opponentBench5Node.getBoundingClientRect(), boardRect);
+    const dividerRect = dividerNode ? toLocalRect(dividerNode.getBoundingClientRect(), boardRect) : null;
+    if (bench4Rect && bench5Rect) {
+      const benchCenterX =
+        (bench4Rect.left + bench4Rect.right + bench5Rect.left + bench5Rect.right) / 4;
+      preferredX = clampValue(benchCenterX - panelWidth / 2, minX, maxX);
+
+      const upperBound = Math.max(bench4Rect.bottom, bench5Rect.bottom) + INTERACTION_GUIDE_MARGIN_PX;
+      if (dividerRect) {
+        const lowerBound = dividerRect.top - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
+        if (Number.isFinite(lowerBound)) {
+          maxY = clampValue(lowerBound, minY, maxYDefault);
+          if (lowerBound >= upperBound) {
+            preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
+          } else {
+            preferredY = clampValue(Math.max(minY, lowerBound), minY, maxY);
+          }
+        }
+      } else {
+        preferredY = clampValue(upperBound, minY, maxY);
+      }
+    }
+  }
+
+  const obstacleSelector = [
+    `.${styles.zoneTile}`,
+    `.${styles.activeZone}`,
+    `.${styles.benchSlot}`,
+    `.${styles.centerZone}`,
+  ].join(', ');
+  const obstacles = Array.from(boardNode.querySelectorAll(obstacleSelector))
+    .map((node) => toLocalRect(node.getBoundingClientRect(), boardRect))
+    .filter(Boolean);
+
+  if (interactionGuideNode) {
+    const interactionRect = toLocalRect(interactionGuideNode.getBoundingClientRect(), boardRect);
+    if (interactionRect) {
+      obstacles.push(interactionRect);
+    }
+  }
+
+  let bestCandidate = null;
+  for (let y = minY; y <= maxY; y += INTERACTION_GUIDE_SCAN_STEP_PX) {
+    for (let x = minX; x <= maxX; x += INTERACTION_GUIDE_SCAN_STEP_PX) {
+      const candidate = {
+        left: x,
+        top: y,
+        right: x + panelWidth,
+        bottom: y + panelHeight,
+      };
+      const hasOverlap = obstacles.some((obstacle) =>
+        doRectsOverlap(candidate, obstacle, INTERACTION_GUIDE_OVERLAP_PADDING_PX)
+      );
+      if (hasOverlap) {
+        continue;
+      }
+
+      const score = Math.abs(x - preferredX) + Math.abs(y - preferredY);
+      if (!bestCandidate || score < bestCandidate.score) {
+        bestCandidate = { x, y, score };
+      }
+    }
+  }
+
+  if (!bestCandidate) {
+    return {
+      left: Math.round(preferredX),
+      top: Math.round(preferredY),
+    };
+  }
+
+  return {
+    left: Math.round(bestCandidate.x),
+    top: Math.round(bestCandidate.y),
+  };
+}
+
 function clampPositiveInt(value, max) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -513,6 +662,30 @@ function detectMutationNoticeTone(message) {
   return ALERT_MESSAGE_PATTERN.test(normalizedMessage)
     ? MUTATION_NOTICE_TONE.ALERT
     : MUTATION_NOTICE_TONE.SUCCESS;
+}
+
+function resolveBattleStartReadyByPlayer(sessionDoc) {
+  const source = sessionDoc?.publicState?.battleStartReadyByPlayer;
+  if (!source || typeof source !== 'object') {
+    return {
+      player1: true,
+      player2: true,
+    };
+  }
+  return {
+    player1: Boolean(source?.player1),
+    player2: Boolean(source?.player2),
+  };
+}
+
+function ensureBattleStartReadyByPlayer(sessionDoc) {
+  if (!sessionDoc?.publicState || typeof sessionDoc.publicState !== 'object') {
+    sessionDoc.publicState = {};
+  }
+
+  const normalized = resolveBattleStartReadyByPlayer(sessionDoc);
+  sessionDoc.publicState.battleStartReadyByPlayer = normalized;
+  return normalized;
 }
 
 function resolvePopupCardHoverShift({
@@ -803,6 +976,8 @@ function BenchRow({
   ownerPlayerId,
   bench,
   cardCatalog,
+  forceFaceDownCards = false,
+  stackImageClassName = '',
   allowCardDrop,
   shouldShowStackInsertTargets,
   isDraggingStackSwapCandidate,
@@ -1112,7 +1287,12 @@ function BenchRow({
                       draggingClassName={styles.draggingSource}
                     >
                       <div className={styles.stackSingleCardButton}>
-                        <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                        <Pokemon
+                          {...toPokemonProps(stack, cardCatalog, {
+                            forceFaceDown: forceFaceDownCards,
+                            imageClassName: stackImageClassName,
+                          })}
+                        />
                       </div>
                     </DraggableCard>
                   ) : canDragStackGroup && stackGroupDragPayload ? (
@@ -1122,10 +1302,20 @@ function BenchRow({
                       className={styles.stackGroupDraggable}
                       draggingClassName={styles.draggingSource}
                     >
-                      <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                      <Pokemon
+                        {...toPokemonProps(stack, cardCatalog, {
+                          forceFaceDown: forceFaceDownCards,
+                          imageClassName: stackImageClassName,
+                        })}
+                      />
                     </DraggableCard>
                   ) : (
-                    <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                    <Pokemon
+                      {...toPokemonProps(stack, cardCatalog, {
+                        forceFaceDown: forceFaceDownCards,
+                        imageClassName: stackImageClassName,
+                      })}
+                    />
                   )}
                 </div>
               </DroppableStack>
@@ -2112,6 +2302,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const hasInitializedDeckShuffleEventRef = useRef(false);
   const handledDeckInsertEventAtRef = useRef('');
   const hasInitializedDeckInsertEventRef = useRef(false);
+  const opponentSetupFlipTimeoutRef = useRef(null);
+  const previousBattleSetupCompleteRef = useRef(false);
   const opponentRevealButtonRefs = useRef({});
   const opponentBoardRevealRefs = useRef({});
   const opponentActiveHoverSurfaceRef = useRef(null);
@@ -2129,11 +2321,37 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   });
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
+  const battleStartGuideRef = useRef(null);
+  const conditionGuideRef = useRef(null);
+  const conditionGuideDragOffsetRef = useRef({ x: 0, y: 0 });
+  const conditionGuideDragSizeRef = useRef({ width: 0, height: 0 });
+  const turnActionsGuideRef = useRef(null);
+  const turnActionsGuideDragOffsetRef = useRef({ x: 0, y: 0 });
+  const turnActionsGuideDragSizeRef = useRef({ width: 0, height: 0 });
   const [interactionGuidePosition, setInteractionGuidePosition] = useState({
     left: 0,
     top: 0,
     isReady: false,
   });
+  const [interactionGuideWidth, setInteractionGuideWidth] = useState(null);
+  const [battleStartGuidePosition, setBattleStartGuidePosition] = useState({
+    left: 0,
+    top: 0,
+    isReady: false,
+  });
+  const [isOpponentSetupFlipAnimating, setIsOpponentSetupFlipAnimating] = useState(false);
+  const [isBattleStartSubmitting, setIsBattleStartSubmitting] = useState(false);
+  const [isGuideSettingsOpen, setIsGuideSettingsOpen] = useState(false);
+  const [guideVisibility, setGuideVisibility] = useState(GUIDE_VISIBILITY_DEFAULTS);
+  const [conditionGuideManualPosition, setConditionGuideManualPosition] = useState(() =>
+    readStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY)
+  );
+  const [conditionGuideAutoPosition, setConditionGuideAutoPosition] = useState(null);
+  const [isConditionGuideDragging, setIsConditionGuideDragging] = useState(false);
+  const [turnActionsGuideManualPosition, setTurnActionsGuideManualPosition] = useState(() =>
+    readStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY)
+  );
+  const [isTurnActionsGuideDragging, setIsTurnActionsGuideDragging] = useState(false);
 
   const clearMutationNotice = useCallback(() => {
     setMutationNotice((previous) => {
@@ -2266,8 +2484,26 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, [persistUiPrefs]);
 
+  const handleGuideSettingsToggle = useCallback(() => {
+    setIsGuideSettingsOpen((previous) => !previous);
+  }, []);
+
+  const handleGuideVisibilityToggle = useCallback((key) => {
+    setGuideVisibility((previous) => ({
+      ...previous,
+      [key]: !Boolean(previous?.[key]),
+    }));
+  }, []);
+
   const publicPlayers = sessionDoc?.publicState?.players || {};
   const turnContext = sessionDoc?.publicState?.turnContext || {};
+  const battleStartReadyByPlayer = resolveBattleStartReadyByPlayer(sessionDoc);
+  const isPlayerBattleStartReady = Boolean(battleStartReadyByPlayer?.[ownerPlayerId]);
+  const isOpponentBattleStartReady = Boolean(battleStartReadyByPlayer?.[opponentPlayerId]);
+  const isPlayerBattleStartCommitted = isPlayerBattleStartReady || isBattleStartSubmitting;
+  const isBattleSetupComplete = isPlayerBattleStartReady && isOpponentBattleStartReady;
+  const isWaitingForOpponentBattleStart =
+    isPlayerBattleStartCommitted && !isOpponentBattleStartReady;
   const playerBoard = publicPlayers?.[ownerPlayerId]?.board || EMPTY_OBJECT;
   const opponentBoard = publicPlayers?.[opponentPlayerId]?.board || EMPTY_OBJECT;
   const playerCounters = publicPlayers?.[ownerPlayerId]?.counters || EMPTY_OBJECT;
@@ -2369,6 +2605,330 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     isRandomDiscardConfigOpen ||
     isDeckPeekConfigOpen;
 
+  const setConditionGuidePositionFromPointer = useCallback((clientX, clientY) => {
+    const offset = conditionGuideDragOffsetRef.current;
+    const size = conditionGuideDragSizeRef.current;
+    if (
+      !Number.isFinite(clientX) ||
+      !Number.isFinite(clientY) ||
+      !Number.isFinite(size.width) ||
+      !Number.isFinite(size.height) ||
+      size.width <= 0 ||
+      size.height <= 0
+    ) {
+      return;
+    }
+
+    const next = clampFloatingPanelPosition({
+      x: clientX - offset.x,
+      y: clientY - offset.y,
+      width: size.width,
+      height: size.height,
+    });
+    const nextRounded = {
+      x: Math.round(next.x),
+      y: Math.round(next.y),
+    };
+
+    setConditionGuideManualPosition((previous) => {
+      if (previous && previous.x === nextRounded.x && previous.y === nextRounded.y) {
+        return previous;
+      }
+      return nextRounded;
+    });
+  }, []);
+
+  const handleConditionGuideDragStart = useCallback(
+    (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
+      const guideNode = conditionGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const guideRect = guideNode.getBoundingClientRect();
+      conditionGuideDragOffsetRef.current = {
+        x: event.clientX - guideRect.left,
+        y: event.clientY - guideRect.top,
+      };
+      conditionGuideDragSizeRef.current = {
+        width: guideRect.width,
+        height: guideRect.height,
+      };
+      setConditionGuidePositionFromPointer(event.clientX, event.clientY);
+      setIsConditionGuideDragging(true);
+      event.preventDefault();
+    },
+    [setConditionGuidePositionFromPointer]
+  );
+
+  const handleConditionGuideResetPosition = useCallback(() => {
+    setIsConditionGuideDragging(false);
+    setConditionGuideManualPosition(null);
+    clearStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY);
+  }, []);
+
+  useEffect(() => {
+    if (!conditionGuideManualPosition) {
+      clearStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY);
+      return;
+    }
+    writeStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY, conditionGuideManualPosition);
+  }, [conditionGuideManualPosition]);
+
+  useEffect(() => {
+    if (!conditionGuideManualPosition || typeof window === 'undefined') {
+      return undefined;
+    }
+    const handleResize = () => {
+      const guideNode = conditionGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const rect = guideNode.getBoundingClientRect();
+      const next = clampFloatingPanelPosition({
+        x: conditionGuideManualPosition.x,
+        y: conditionGuideManualPosition.y,
+        width: rect.width,
+        height: rect.height,
+      });
+      const nextRounded = {
+        x: Math.round(next.x),
+        y: Math.round(next.y),
+      };
+      if (
+        nextRounded.x !== conditionGuideManualPosition.x ||
+        nextRounded.y !== conditionGuideManualPosition.y
+      ) {
+        setConditionGuideManualPosition(nextRounded);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [conditionGuideManualPosition]);
+
+  useEffect(() => {
+    if (!isConditionGuideDragging || typeof window === 'undefined') {
+      return undefined;
+    }
+    const handlePointerMove = (event) => {
+      setConditionGuidePositionFromPointer(event.clientX, event.clientY);
+    };
+    const handlePointerUp = () => {
+      setIsConditionGuideDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [isConditionGuideDragging, setConditionGuidePositionFromPointer]);
+
+  const updateConditionGuideAutoPosition = useCallback(() => {
+    if (
+      conditionGuideManualPosition ||
+      !guideVisibility.condition ||
+      !guideVisibility.turnActions
+    ) {
+      return;
+    }
+    const conditionNode = conditionGuideRef.current;
+    const turnActionsNode = turnActionsGuideRef.current;
+    if (!conditionNode || !turnActionsNode) {
+      return;
+    }
+    const conditionRect = conditionNode.getBoundingClientRect();
+    const turnActionsRect = turnActionsNode.getBoundingClientRect();
+    if (
+      !Number.isFinite(conditionRect.width) ||
+      !Number.isFinite(conditionRect.height) ||
+      conditionRect.width <= 0 ||
+      conditionRect.height <= 0 ||
+      !Number.isFinite(turnActionsRect.left) ||
+      !Number.isFinite(turnActionsRect.top)
+    ) {
+      return;
+    }
+
+    const next = clampFloatingPanelPosition({
+      x: turnActionsRect.left,
+      y: turnActionsRect.top - conditionRect.height - FLOATING_PANEL_GUIDE_GAP_PX,
+      width: conditionRect.width,
+      height: conditionRect.height,
+    });
+    const nextRounded = {
+      x: Math.round(next.x),
+      y: Math.round(next.y),
+    };
+    setConditionGuideAutoPosition((previous) => {
+      if (previous && previous.x === nextRounded.x && previous.y === nextRounded.y) {
+        return previous;
+      }
+      return nextRounded;
+    });
+  }, [conditionGuideManualPosition, guideVisibility.condition, guideVisibility.turnActions]);
+
+  useLayoutEffect(() => {
+    if (
+      conditionGuideManualPosition ||
+      !guideVisibility.condition ||
+      !guideVisibility.turnActions ||
+      typeof window === 'undefined'
+    ) {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      updateConditionGuideAutoPosition();
+    };
+
+    updateConditionGuideAutoPosition();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [
+    conditionGuideManualPosition,
+    guideVisibility.condition,
+    guideVisibility.turnActions,
+    updateConditionGuideAutoPosition,
+  ]);
+
+  const setTurnActionsGuidePositionFromPointer = useCallback((clientX, clientY) => {
+    const offset = turnActionsGuideDragOffsetRef.current;
+    const size = turnActionsGuideDragSizeRef.current;
+    if (
+      !Number.isFinite(clientX) ||
+      !Number.isFinite(clientY) ||
+      !Number.isFinite(size.width) ||
+      !Number.isFinite(size.height) ||
+      size.width <= 0 ||
+      size.height <= 0
+    ) {
+      return;
+    }
+
+    const next = clampFloatingPanelPosition({
+      x: clientX - offset.x,
+      y: clientY - offset.y,
+      width: size.width,
+      height: size.height,
+    });
+
+    const nextRounded = {
+      x: Math.round(next.x),
+      y: Math.round(next.y),
+    };
+
+    setTurnActionsGuideManualPosition((previous) => {
+      if (
+        previous &&
+        previous.x === nextRounded.x &&
+        previous.y === nextRounded.y
+      ) {
+        return previous;
+      }
+      return nextRounded;
+    });
+  }, []);
+
+  const handleTurnActionsGuideDragStart = useCallback(
+    (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
+      const guideNode = turnActionsGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+
+      const guideRect = guideNode.getBoundingClientRect();
+      turnActionsGuideDragOffsetRef.current = {
+        x: event.clientX - guideRect.left,
+        y: event.clientY - guideRect.top,
+      };
+      turnActionsGuideDragSizeRef.current = {
+        width: guideRect.width,
+        height: guideRect.height,
+      };
+      setTurnActionsGuidePositionFromPointer(event.clientX, event.clientY);
+      setIsTurnActionsGuideDragging(true);
+      event.preventDefault();
+    },
+    [setTurnActionsGuidePositionFromPointer]
+  );
+
+  const handleTurnActionsGuideResetPosition = useCallback(() => {
+    setIsTurnActionsGuideDragging(false);
+    setTurnActionsGuideManualPosition(null);
+    clearStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY);
+  }, []);
+
+  useEffect(() => {
+    if (!turnActionsGuideManualPosition) {
+      clearStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY);
+      return;
+    }
+    writeStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY, turnActionsGuideManualPosition);
+  }, [turnActionsGuideManualPosition]);
+
+  useEffect(() => {
+    if (!turnActionsGuideManualPosition || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const guideNode = turnActionsGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const rect = guideNode.getBoundingClientRect();
+      const next = clampFloatingPanelPosition({
+        x: turnActionsGuideManualPosition.x,
+        y: turnActionsGuideManualPosition.y,
+        width: rect.width,
+        height: rect.height,
+      });
+      const nextRounded = {
+        x: Math.round(next.x),
+        y: Math.round(next.y),
+      };
+      if (
+        nextRounded.x !== turnActionsGuideManualPosition.x ||
+        nextRounded.y !== turnActionsGuideManualPosition.y
+      ) {
+        setTurnActionsGuideManualPosition(nextRounded);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [turnActionsGuideManualPosition]);
+
+  useEffect(() => {
+    if (!isTurnActionsGuideDragging || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handlePointerMove = (event) => {
+      setTurnActionsGuidePositionFromPointer(event.clientX, event.clientY);
+    };
+    const handlePointerUp = () => {
+      setIsTurnActionsGuideDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [isTurnActionsGuideDragging, setTurnActionsGuidePositionFromPointer]);
+
   const updateInteractionGuidePosition = useCallback(() => {
     const boardNode = boardRootRef.current;
     const guideNode = interactionGuideRef.current;
@@ -2379,7 +2939,42 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     if (!nextPosition) {
       return;
     }
+    const measuredGuideWidth = Math.max(1, Math.round(guideNode.getBoundingClientRect().width));
+    setInteractionGuideWidth((previous) => {
+      if (previous === measuredGuideWidth) {
+        return previous;
+      }
+      return measuredGuideWidth;
+    });
     setInteractionGuidePosition((previous) => {
+      if (
+        previous.isReady &&
+        previous.left === nextPosition.left &&
+        previous.top === nextPosition.top
+      ) {
+        return previous;
+      }
+      return {
+        left: nextPosition.left,
+        top: nextPosition.top,
+        isReady: true,
+      };
+    });
+  }, []);
+
+  const updateBattleStartGuidePosition = useCallback(() => {
+    const boardNode = boardRootRef.current;
+    const guideNode = battleStartGuideRef.current;
+    const interactionGuideNode = interactionGuideRef.current;
+    const nextPosition = resolveBattleStartGuidePosition({
+      boardNode,
+      guideNode,
+      interactionGuideNode,
+    });
+    if (!nextPosition) {
+      return;
+    }
+    setBattleStartGuidePosition((previous) => {
       if (
         previous.isReady &&
         previous.left === nextPosition.left &&
@@ -2397,12 +2992,17 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   useLayoutEffect(() => {
     updateInteractionGuidePosition();
+    updateBattleStartGuidePosition();
     if (typeof window === 'undefined') {
       return undefined;
     }
-    const frameId = window.requestAnimationFrame(updateInteractionGuidePosition);
+    const frameId = window.requestAnimationFrame(() => {
+      updateInteractionGuidePosition();
+      updateBattleStartGuidePosition();
+    });
     const handleResize = () => {
       updateInteractionGuidePosition();
+      updateBattleStartGuidePosition();
     };
     window.addEventListener('resize', handleResize);
     return () => {
@@ -2411,6 +3011,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     };
   }, [
     updateInteractionGuidePosition,
+    updateBattleStartGuidePosition,
     sessionDoc?.revision,
     isHandOpen,
     isToolboxOpen,
@@ -3448,6 +4049,45 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     pushSuccessNotice(`相手がカードを山札の${position}に戻しました。`);
   }, [lastDeckInsertEvent, ownerPlayerId, pushSuccessNotice]);
 
+  useEffect(() => {
+    if (previousBattleSetupCompleteRef.current === isBattleSetupComplete) {
+      return undefined;
+    }
+
+    const hasJustCompleted =
+      !previousBattleSetupCompleteRef.current && isBattleSetupComplete;
+    previousBattleSetupCompleteRef.current = isBattleSetupComplete;
+
+    if (opponentSetupFlipTimeoutRef.current) {
+      window.clearTimeout(opponentSetupFlipTimeoutRef.current);
+      opponentSetupFlipTimeoutRef.current = null;
+    }
+
+    if (!hasJustCompleted) {
+      setIsOpponentSetupFlipAnimating(false);
+      return undefined;
+    }
+
+    setIsOpponentSetupFlipAnimating(true);
+    opponentSetupFlipTimeoutRef.current = window.setTimeout(() => {
+      setIsOpponentSetupFlipAnimating(false);
+      opponentSetupFlipTimeoutRef.current = null;
+    }, OPPONENT_SETUP_FLIP_ANIMATION_MS);
+
+    return () => {
+      if (opponentSetupFlipTimeoutRef.current) {
+        window.clearTimeout(opponentSetupFlipTimeoutRef.current);
+        opponentSetupFlipTimeoutRef.current = null;
+      }
+    };
+  }, [isBattleSetupComplete]);
+
+  useEffect(() => {
+    if (isPlayerBattleStartReady) {
+      setIsBattleStartSubmitting(false);
+    }
+  }, [isPlayerBattleStartReady]);
+
   const handleCoinToss = useCallback(async () => {
     if (!sessionId || !ownerPlayerId || isCoinSubmitting || isMutating) {
       return;
@@ -3702,6 +4342,44 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       invalidMessage: '山札シャッフルを実行できませんでした。状態を確認してください。',
     });
   }, [executeQuickOperation]);
+
+  const handleBattleStartReady = useCallback(async () => {
+    if (isPlayerBattleStartReady) {
+      return;
+    }
+    if (
+      isBattleStartSubmitting ||
+      isMutating ||
+      isCoinSubmitting ||
+      isQuickActionSubmitting ||
+      isNoteSubmitting
+    ) {
+      return;
+    }
+
+    setIsBattleStartSubmitting(true);
+    const succeeded = await executeSessionMutation({
+      invalidMessage: '開始準備の更新に失敗しました。再試行してください。',
+      mutate: ({ sessionDoc: draftSessionDoc }) => {
+        const readyByPlayer = ensureBattleStartReadyByPlayer(draftSessionDoc);
+        readyByPlayer[ownerPlayerId] = true;
+        draftSessionDoc.publicState.battleStartReadyByPlayer = readyByPlayer;
+        return { sessionDoc: draftSessionDoc };
+      },
+    });
+    if (!succeeded) {
+      setIsBattleStartSubmitting(false);
+    }
+  }, [
+    executeSessionMutation,
+    isBattleStartSubmitting,
+    isCoinSubmitting,
+    isMutating,
+    isNoteSubmitting,
+    isPlayerBattleStartReady,
+    isQuickActionSubmitting,
+    ownerPlayerId,
+  ]);
 
   const handleOpenDeckPeekConfig = useCallback(() => {
     if (playerDeckCount <= 0 || isMutating || isCoinSubmitting || isQuickActionSubmitting) {
@@ -4166,7 +4844,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const isDraggingSingleStackCardForSwap =
     isDraggingCardFromPlayerStack && draggingSourceStackCardCount === 1;
   const isDraggingStackSwapCandidate = isDraggingStack || isDraggingSingleStackCardForSwap;
-  const shouldShowStackInsertTargets = isDraggingCard && !isDraggingStackSwapCandidate;
+  const shouldShowStackInsertTargets =
+    isBattleSetupComplete && isDraggingCard && !isDraggingStackSwapCandidate;
   const playerActiveCardIds = asArray(playerActive?.cardIds);
   const playerActiveCardCount = playerActiveCardIds.length;
   const opponentActiveCardCount = asArray(opponentActive?.cardIds).length;
@@ -4192,6 +4871,16 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const canDrawFromDeck = playerDeckCount > 0 && !isQuickActionLocked;
   const canShuffleDeck = playerDeckCount > 1 && !isQuickActionLocked;
   const canTakePrize = playerPrizeCount > 0 && !isQuickActionLocked;
+  const isInteractionGuideVisible = Boolean(guideVisibility.interaction);
+  const isBattleStartGuideVisible = Boolean(guideVisibility.battleStart);
+  const isTurnActionsGuideVisible = Boolean(guideVisibility.turnActions);
+  const isConditionGuideVisible = Boolean(guideVisibility.condition);
+  const isTurnActionsGuideAtInitialPosition = !turnActionsGuideManualPosition;
+  const isConditionGuideAtInitialPosition = !conditionGuideManualPosition;
+  const shouldUseConditionAutoAnchor =
+    isConditionGuideVisible &&
+    isTurnActionsGuideVisible &&
+    !conditionGuideManualPosition;
   const interactionGuideStyle = interactionGuidePosition.isReady
     ? {
         left: `${interactionGuidePosition.left}px`,
@@ -4200,6 +4889,79 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       }
     : {
         visibility: 'hidden',
+      };
+  const battleStartGuideStyle = battleStartGuidePosition.isReady
+    ? {
+        left: `${battleStartGuidePosition.left}px`,
+        top: `${battleStartGuidePosition.top}px`,
+        width: Number.isFinite(interactionGuideWidth) ? `${interactionGuideWidth}px` : undefined,
+        maxWidth: Number.isFinite(interactionGuideWidth) ? `${interactionGuideWidth}px` : undefined,
+        visibility: 'visible',
+      }
+    : {
+        visibility: 'hidden',
+      };
+  const conditionGuideStyle = conditionGuideManualPosition
+    ? {
+        position: 'fixed',
+        left: `${conditionGuideManualPosition.x}px`,
+        top: `${conditionGuideManualPosition.y}px`,
+        transform: 'none',
+        zIndex: isConditionGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 3)',
+        visibility: 'visible',
+      }
+    : shouldUseConditionAutoAnchor && conditionGuideAutoPosition
+    ? {
+        position: 'fixed',
+        left: `${conditionGuideAutoPosition.x}px`,
+        top: `${conditionGuideAutoPosition.y}px`,
+        transform: 'none',
+        zIndex: isConditionGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 3)',
+        visibility: 'visible',
+      }
+    : shouldUseConditionAutoAnchor
+    ? {
+        position: 'fixed',
+        transform: 'none',
+        zIndex: isConditionGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 3)',
+        visibility: 'hidden',
+      }
+    : {
+        position: 'fixed',
+        right: '10px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        zIndex: isConditionGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 3)',
+        visibility: 'visible',
+      };
+  const turnActionsGuideStyle = turnActionsGuideManualPosition
+    ? {
+        position: 'fixed',
+        left: `${turnActionsGuideManualPosition.x}px`,
+        top: `${turnActionsGuideManualPosition.y}px`,
+        transform: 'none',
+        zIndex: isTurnActionsGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 2)',
+        visibility: 'visible',
+      }
+    : {
+        position: 'fixed',
+        right: '10px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        zIndex: isTurnActionsGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 2)',
+        visibility: 'visible',
       };
 
   return (
@@ -4230,6 +4992,89 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             相手が山札を閲覧中（{opponentDeckPeekCount}枚）
           </div>
         ) : null}
+        {isWaitingForOpponentBattleStart ? (
+          <div className={styles.battleStartWaitingBanner}>相手の開始準備を待っています・・・</div>
+        ) : null}
+        <div className={styles.guideSettingsRoot} data-zone="guide-settings-root">
+          <button
+            type="button"
+            className={styles.guideSettingsButton}
+            onClick={handleGuideSettingsToggle}
+            aria-label={isGuideSettingsOpen ? 'ガイド表示設定を閉じる' : 'ガイド表示設定を開く'}
+            aria-expanded={isGuideSettingsOpen}
+            aria-controls="guide-settings-panel"
+          >
+            <FontAwesomeIcon icon={faCog} />
+          </button>
+          {isGuideSettingsOpen ? (
+            <div
+              id="guide-settings-panel"
+              className={styles.guideSettingsPanel}
+              role="dialog"
+              aria-label="ガイド表示設定"
+            >
+              <p className={styles.guideSettingsTitle}>ガイド表示設定</p>
+              <div className={styles.guideSettingsList}>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「操作ヒント」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isInteractionGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('interaction')}
+                    aria-pressed={isInteractionGuideVisible}
+                  >
+                    {isInteractionGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「バトルのはじめかた」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isBattleStartGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('battleStart')}
+                    aria-pressed={isBattleStartGuideVisible}
+                  >
+                    {isBattleStartGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「自分の番にできること」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isTurnActionsGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('turnActions')}
+                    aria-pressed={isTurnActionsGuideVisible}
+                  >
+                    {isTurnActionsGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「状態異常の効果」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isConditionGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('condition')}
+                    aria-pressed={isConditionGuideVisible}
+                  >
+                    {isConditionGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className={styles.opponentHandCountFixed} data-zone="opponent-hand-count-fixed">
           <div className={styles.opponentHandControl}>
             <button
@@ -4335,6 +5180,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               bench={opponentBench}
               cardCatalog={renderCardCatalog}
               allowCardDrop={false}
+              forceFaceDownCards={!isBattleSetupComplete}
+              stackImageClassName={
+                isBattleSetupComplete && isOpponentSetupFlipAnimating
+                  ? OPPONENT_SETUP_FLIP_IMAGE_CLASS
+                  : ''
+              }
               shouldShowStackInsertTargets={shouldShowStackInsertTargets}
               isDraggingStackSwapCandidate={isDraggingStackSwapCandidate}
               isZoneHighlighted={isZoneHighlighted}
@@ -4507,7 +5358,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                         });
                       }}
                     >
-                      <Pokemon {...toPokemonProps(opponentActive, renderCardCatalog)} />
+                      <Pokemon
+                        {...toPokemonProps(opponentActive, renderCardCatalog, {
+                          forceFaceDown: !isBattleSetupComplete,
+                          imageClassName:
+                            isBattleSetupComplete && isOpponentSetupFlipAnimating
+                              ? OPPONENT_SETUP_FLIP_IMAGE_CLASS
+                              : '',
+                        })}
+                      />
                     </div>
                   </DroppableStack>
                 ) : (
@@ -4532,7 +5391,29 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
-        <div className={styles.areaDivider} aria-hidden />
+        <div
+          className={joinClassNames(
+            styles.areaDivider,
+            !isPlayerBattleStartCommitted ? styles.areaDividerWithBattleStart : ''
+          )}
+        >
+          {!isPlayerBattleStartCommitted ? (
+            <button
+              type="button"
+              className={styles.battleStartButton}
+              onClick={handleBattleStartReady}
+              disabled={
+                isMutating ||
+                isCoinSubmitting ||
+                isQuickActionSubmitting ||
+                isNoteSubmitting ||
+                isUiInteractionBlocked
+              }
+            >
+              対戦スタート！
+            </button>
+          ) : null}
+        </div>
 
         <section className={styles.playerArea} data-zone="player-area" data-drop-group="area">
           <div className={styles.sideColumn}>
@@ -4967,18 +5848,176 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
-        <aside
-          ref={interactionGuideRef}
-          className={styles.interactionGuide}
-          style={interactionGuideStyle}
-          aria-label="操作ヒント"
-        >
-          <p className={styles.interactionGuideTitle}>操作ヒント</p>
-          <p className={styles.interactionGuideLine}>山札: クリックで閲覧</p>
-          <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
-          <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
-          <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
-        </aside>
+        {isInteractionGuideVisible ? (
+          <aside
+            ref={interactionGuideRef}
+            className={styles.interactionGuide}
+            style={interactionGuideStyle}
+            data-zone="interaction-guide"
+            aria-label="操作ヒント"
+          >
+            <p className={styles.interactionGuideTitle}>操作ヒント</p>
+            <p className={styles.interactionGuideLine}>山札: クリックで閲覧</p>
+            <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
+            <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
+            <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
+          </aside>
+        ) : null}
+        {isBattleStartGuideVisible ? (
+          <aside
+            ref={battleStartGuideRef}
+            className={joinClassNames(styles.interactionGuide, styles.battleStartGuide)}
+            style={battleStartGuideStyle}
+            data-zone="battle-start-guide"
+            aria-label="バトルのはじめかた"
+          >
+            <p className={styles.interactionGuideTitle}>バトルのはじめかた</p>
+            <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+              1. はじめに「よろしくおねがいします」とあいさつをします。次にコイントスをして、表が出たらプレイヤー１が、裏が出たらプレイヤー２が先攻か後攻かを選びます。
+            </p>
+            <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+              2. 手札の中から「たねポケモン」を1枚選び、「バトル場」に配置します。手札に「たねポケモン」がいない場合は、手札を全部山札に戻してシャッフルし、再度手札を引いてやり直します。
+            </p>
+            <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+              3. 手札にまだ「たねポケモン」がいれば、5枚までベンチに配置できます。完了したら、「対戦スタート！」
+            </p>
+          </aside>
+        ) : null}
+        {isConditionGuideVisible ? (
+          <aside
+            ref={conditionGuideRef}
+            className={joinClassNames(styles.interactionGuide, styles.conditionGuide)}
+            style={conditionGuideStyle}
+            data-zone="condition-guide"
+            aria-label="状態異常の効果"
+          >
+            <div className={styles.turnActionsGuideHeader}>
+              <p className={styles.turnActionsGuideTitle}>状態異常の効果</p>
+              <div className={styles.turnActionsGuideHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.turnActionsGuideReset}
+                  onClick={handleConditionGuideResetPosition}
+                  disabled={isConditionGuideAtInitialPosition}
+                  aria-label="状態異常の効果の位置をリセット"
+                >
+                  位置をリセット
+                </button>
+                <button
+                  type="button"
+                  className={joinClassNames(
+                    styles.turnActionsGuideHandle,
+                    isConditionGuideDragging ? styles.turnActionsGuideHandleActive : ''
+                  )}
+                  onPointerDown={handleConditionGuideDragStart}
+                  aria-label="状態異常の効果を移動"
+                >
+                  <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+                </button>
+              </div>
+            </div>
+            <div className={styles.conditionGuideTable} role="table" aria-label="状態異常の説明表">
+              <div className={styles.conditionGuideRow} role="row">
+                <p className={styles.conditionGuideHeadCell} role="columnheader">
+                  状態
+                </p>
+                <p className={styles.conditionGuideHeadCell} role="columnheader">
+                  効果
+                </p>
+              </div>
+              {CONDITION_GUIDE_ROWS.map((row) => (
+                <div key={row.status} className={styles.conditionGuideRow} role="row">
+                  <p className={styles.conditionGuideStatusCell} role="cell">
+                    {row.status}
+                  </p>
+                  <p className={styles.conditionGuideEffectCell} role="cell">
+                    {row.effect}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </aside>
+        ) : null}
+        {isTurnActionsGuideVisible ? (
+          <aside
+            ref={turnActionsGuideRef}
+            className={joinClassNames(styles.interactionGuide, styles.turnActionsGuide)}
+            style={turnActionsGuideStyle}
+            data-zone="turn-actions-guide"
+            aria-label="自分の番にできること"
+          >
+          <div className={styles.turnActionsGuideHeader}>
+            <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
+            <div className={styles.turnActionsGuideHeaderActions}>
+              <button
+                type="button"
+                className={styles.turnActionsGuideReset}
+                onClick={handleTurnActionsGuideResetPosition}
+                disabled={isTurnActionsGuideAtInitialPosition}
+                aria-label="自分の番にできることの位置をリセット"
+              >
+                位置をリセット
+              </button>
+              <button
+                type="button"
+                className={joinClassNames(
+                  styles.turnActionsGuideHandle,
+                  isTurnActionsGuideDragging ? styles.turnActionsGuideHandleActive : ''
+                )}
+                onPointerDown={handleTurnActionsGuideDragStart}
+                aria-label="自分の番にできることを移動"
+              >
+                <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+              </button>
+            </div>
+          </div>
+
+          <section className={styles.turnActionsSection}>
+            <p className={styles.turnActionsSectionBadge}>最初にすること</p>
+            <p className={styles.turnActionsMainLine}>自分の山札からカードを1枚引く</p>
+            <p className={styles.turnActionsSubLine}>これは必ずしてください。</p>
+          </section>
+
+          <p className={styles.turnActionsArrow} aria-hidden="true">
+            ↓
+          </p>
+
+          <section className={styles.turnActionsSection}>
+            <p className={styles.turnActionsSectionTitle}>自由にできること</p>
+            <div className={styles.turnActionsColumns}>
+              <div className={styles.turnActionsColumn}>
+                <p className={styles.turnActionsColumnTitle}>何回でもできる</p>
+                <p className={styles.turnActionsActionItem}>ベンチにたねポケモンを出す</p>
+                <p className={styles.turnActionsActionItem}>グッズを使う</p>
+                <p className={styles.turnActionsActionItem}>ポケモンを進化させる</p>
+              </div>
+              <div className={styles.turnActionsColumn}>
+                <p className={styles.turnActionsColumnTitle}>1回だけできる</p>
+                <p className={styles.turnActionsActionItem}>ポケモンにエネルギーを1枚つける</p>
+                <p className={styles.turnActionsActionItem}>サポートを使う</p>
+                <p className={styles.turnActionsActionItem}>バトルポケモンの「にげる」を使う</p>
+              </div>
+            </div>
+            <p className={styles.turnActionsSubLine}>※ やることの順番は自由です</p>
+          </section>
+
+          <p className={styles.turnActionsArrow} aria-hidden="true">
+            ↓
+          </p>
+
+          <section className={styles.turnActionsSection}>
+            <p className={styles.turnActionsSectionBadge}>最後にすること</p>
+            <p className={styles.turnActionsMainLine}>バトルポケモンのワザを使う</p>
+            <p className={styles.turnActionsSubLine}>※ ワザは自分の番に1つしか使えません。</p>
+            <p className={styles.turnActionsSubLine}>※ 先攻プレイヤーの最初の番は、ワザを使えません。</p>
+            <p className={styles.turnActionsArrow} aria-hidden="true">
+              ↓
+            </p>
+            <p className={styles.turnActionsMainLine}>ポケモンチェックを行う</p>
+            <p className={styles.turnActionsSubLine}>お互いのポケモンの状態を確認します</p>
+          </section>
+          </aside>
+        ) : null}
 
         <HandTray
           cards={playerHandCards}
@@ -4992,13 +6031,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           onToggle={handleToolboxToggle}
           dropPayload={toolboxDropPayload}
           isDropHighlighted={isZoneHighlighted('toolbox-panel')}
-        />
-        <OperationPanel
-          sessionId={sessionId}
-          playerId={ownerPlayerId}
-          sessionDoc={sessionDoc}
-          privateStateDoc={privateStateDoc}
-          onMutationMessage={handleExternalMutationMessage}
         />
         <aside className={styles.sharedNotesRoot} data-zone="shared-notes-panel">
           <div className={styles.sharedNotesList}>

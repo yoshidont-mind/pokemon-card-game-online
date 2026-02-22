@@ -25,6 +25,88 @@
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
 }
 
+.guideSettingsRoot {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: 8px;
+  z-index: calc(var(--z-overlay) + 9);
+  display: grid;
+  gap: 6px;
+}
+
+.guideSettingsButton {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #8ea988;
+  border-radius: 999px;
+  background: #eef4e8;
+  color: #41533d;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.guideSettingsButton:hover {
+  background: #e3edda;
+}
+
+.guideSettingsPanel {
+  width: min(90vw, 320px);
+  border: 1px solid rgba(236, 247, 229, 0.45);
+  border-radius: 10px;
+  background: rgba(143, 181, 111, 0.95);
+  color: #ffffff;
+  padding: 8px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24);
+}
+
+.guideSettingsTitle {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.guideSettingsList {
+  display: grid;
+  gap: 6px;
+}
+
+.guideSettingsItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.guideSettingsLabel {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.guideSettingsToggle {
+  min-width: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  background: rgba(198, 211, 186, 0.86);
+  color: #2b3b28;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.guideSettingsToggleOn {
+  background: rgba(230, 248, 216, 0.98);
+  color: #205a24;
+}
+
 .interactionGuideTitle {
   margin: 0 0 3px;
   font-size: 0.7rem;
@@ -46,10 +128,256 @@
   margin-top: 2px;
 }
 
+.battleStartGuide {
+  max-width: calc(100% - 24px);
+}
+
+.battleStartGuideStep {
+  line-height: 1.25;
+}
+
+.battleStartGuideStep + .battleStartGuideStep {
+  margin-top: 8px;
+}
+
+.turnActionsGuide {
+  max-width: min(96%, clamp(300px, 29vw, 360px));
+  background: rgb(143, 181, 111);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.conditionGuide {
+  max-width: min(96%, clamp(300px, 29vw, 360px));
+  background: rgb(143, 181, 111);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.conditionGuideTable {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(56px, 72px) minmax(0, 1fr);
+}
+
+.conditionGuideRow {
+  display: contents;
+}
+
+.conditionGuideHeadCell,
+.conditionGuideStatusCell,
+.conditionGuideEffectCell {
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 0.62rem;
+  line-height: 1.3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.conditionGuideHeadCell {
+  font-weight: 800;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.52);
+}
+
+.conditionGuideHeadCell:nth-child(2) {
+  border-left: 1px solid rgba(255, 255, 255, 0.52);
+}
+
+.conditionGuideStatusCell {
+  font-weight: 800;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.32);
+}
+
+.conditionGuideEffectCell {
+  font-weight: 600;
+  border-left: 1px solid rgba(255, 255, 255, 0.32);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.32);
+}
+
+.conditionGuideTable .conditionGuideRow:last-child .conditionGuideStatusCell,
+.conditionGuideTable .conditionGuideRow:last-child .conditionGuideEffectCell {
+  border-bottom: none;
+}
+
+.turnActionsGuideHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.turnActionsGuideHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.turnActionsGuideTitle {
+  margin: 0;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsGuideHandle {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  cursor: grab;
+  flex: 0 0 auto;
+}
+
+.turnActionsGuideHandle svg {
+  display: block;
+}
+
+.turnActionsGuideHandle:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.turnActionsGuideHandle:active,
+.turnActionsGuideHandleActive {
+  cursor: grabbing;
+}
+
+.turnActionsGuideReset {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.turnActionsGuideReset:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.turnActionsGuideReset:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.turnActionsSection {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 9px;
+  padding: 5px 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.turnActionsSectionTitle {
+  margin: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsSectionBadge {
+  margin: 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.67rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsMainLine {
+  margin: 0;
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsSubLine {
+  margin: 0;
+  text-align: center;
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsArrow {
+  margin: 0;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.turnActionsColumn {
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 8px;
+  padding: 4px;
+  display: grid;
+  gap: 3px;
+}
+
+.turnActionsColumnTitle {
+  margin: 0;
+  text-align: center;
+  font-size: 0.63rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsActionItem {
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 6px;
+  padding: 3px 4px;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
 .areaDivider {
   position: relative;
   height: clamp(8px, 1vw, 12px);
   margin: clamp(3px, 0.45vw, 7px) 0;
+}
+
+.areaDividerWithBattleStart {
+  height: clamp(30px, 3.4vw, 42px);
 }
 
 .areaDivider::before {
@@ -60,6 +388,35 @@
   top: 50%;
   border-top: 1px solid rgba(248, 252, 244, 0.9);
   transform: translateY(-50%);
+  z-index: 0;
+}
+
+.battleStartButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  border: 1px solid #6f8659;
+  border-radius: 999px;
+  background: #f4faef;
+  color: #1f2b16;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 16px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+}
+
+.battleStartButton:hover {
+  background: #e8f3df;
+  border-color: #5f7a4d;
+}
+
+.battleStartButton:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
 }
 
 .mutationBanner {
@@ -93,6 +450,23 @@
   top: calc(env(safe-area-inset-top, 0px) + 48px);
   right: 12px;
   z-index: calc(var(--z-overlay) + 11);
+  max-width: min(92vw, 420px);
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #8ac790;
+  background: rgba(230, 255, 232, 0.96);
+  color: #1f6d2a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.battleStartWaitingBanner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 86px);
+  right: 12px;
+  z-index: calc(var(--z-overlay) + 13);
   max-width: min(92vw, 420px);
   margin: 0;
   padding: 8px 10px;

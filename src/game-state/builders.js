@@ -66,6 +66,10 @@ export function createEmptySessionV2({ createdBy = 'system', now = nowIso() } = 
         turnNumber: null,
         currentPlayer: null,
       },
+      battleStartReadyByPlayer: {
+        player1: false,
+        player2: false,
+      },
       publicCardCatalog: {},
       players: {
         player1: {

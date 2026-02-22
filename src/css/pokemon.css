@@ -25,9 +25,37 @@
       calc(var(--pokemon-image-shift-x) + var(--pokemon-image-hover-shift-x)),
       calc(var(--pokemon-image-shift-y) + var(--pokemon-image-hover-lift) + var(--pokemon-image-hover-shift-y))
     ) scale(var(--pokemon-image-scale));
+    transform-origin: center center;
+    backface-visibility: hidden;
     width: var(--card-w, 88px);
     height: auto;
     border-radius: var(--radius-sm, 8px);
+}
+
+.pokemon-image-opponent-setup-flip {
+    animation: opponent-setup-flip 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform;
+}
+
+@keyframes opponent-setup-flip {
+    0% {
+        transform: translate(
+          calc(var(--pokemon-image-shift-x) + var(--pokemon-image-hover-shift-x)),
+          calc(var(--pokemon-image-shift-y) + var(--pokemon-image-hover-lift) + var(--pokemon-image-hover-shift-y))
+        ) scale(var(--pokemon-image-scale)) rotateY(180deg);
+    }
+    60% {
+        transform: translate(
+          calc(var(--pokemon-image-shift-x) + var(--pokemon-image-hover-shift-x)),
+          calc(var(--pokemon-image-shift-y) + var(--pokemon-image-hover-lift) + var(--pokemon-image-hover-shift-y))
+        ) scale(var(--pokemon-image-scale)) rotateY(-12deg);
+    }
+    100% {
+        transform: translate(
+          calc(var(--pokemon-image-shift-x) + var(--pokemon-image-hover-shift-x)),
+          calc(var(--pokemon-image-shift-y) + var(--pokemon-image-hover-lift) + var(--pokemon-image-hover-shift-y))
+        ) scale(var(--pokemon-image-scale)) rotateY(0deg);
+    }
 }
 
 .damage-badge {
