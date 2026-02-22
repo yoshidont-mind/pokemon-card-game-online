@@ -1854,6 +1854,41 @@
   padding: 8px 10px;
 }
 
+.handTrayActions {
+  width: 100%;
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.handTrayDangerButton {
+  border: 1px solid #c98787;
+  border-radius: 999px;
+  background: #ffecec;
+  color: #7a2424;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.handTrayDangerButton:hover {
+  background: #ffdede;
+}
+
+.handTrayDangerButton:focus-visible {
+  outline: 3px solid #2b5bd8;
+  outline-offset: 1px;
+}
+
+.handTrayDangerButton:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
 .handCardsScroller {
   width: fit-content;
   max-width: none;

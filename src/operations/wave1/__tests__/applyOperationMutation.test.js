@@ -858,16 +858,50 @@ describe('mutateDocsForOperationIntent wave1 direct operations', () => {
     });
     expect(privateStateDoc.zones.hand.some((ref) => ref.cardId === 'p1_hand_002')).toBe(false);
     expect(sessionDoc.publicState.players.player1.board.discard.some((ref) => ref.cardId === 'p1_hand_002')).toBe(true);
+    expect(sessionDoc.publicState.turnContext.lastHandBulkActionEvent).toBeUndefined();
   });
 
-  test('OP-B10 returns all hand cards to deck', () => {
+  test('OP-B09 records bulk hand discard event when all hand cards are discarded', () => {
+    const { sessionDoc, privateStateDoc } = executeRichOperation({
+      opId: OPERATION_IDS.OP_B09,
+      payload: {
+        count: 4,
+      },
+    });
+    expect(privateStateDoc.zones.hand).toHaveLength(0);
+    expect(sessionDoc.publicState.turnContext.lastHandBulkActionEvent).toMatchObject({
+      byPlayerId: 'player1',
+      action: 'discard-all',
+      count: 4,
+    });
+  });
+
+  test('OP-B10 returns all hand cards to deck top preserving hand order', () => {
     const { privateStateDoc, sessionDoc } = executeRichOperation({
       opId: OPERATION_IDS.OP_B10,
     });
     expect(privateStateDoc.zones.hand).toHaveLength(0);
     expect(privateStateDoc.zones.deck).toHaveLength(9);
+    expect(privateStateDoc.zones.deck.slice(0, 4).map((ref) => ref.cardId)).toEqual([
+      'p1_hand_001',
+      'p1_hand_002',
+      'p1_hand_003',
+      'p1_hand_004',
+    ]);
+    expect(privateStateDoc.zones.deck.slice(4).map((ref) => ref.cardId)).toEqual([
+      'p1_deck_001',
+      'p1_deck_002',
+      'p1_deck_003',
+      'p1_deck_004',
+      'p1_deck_005',
+    ]);
     expect(sessionDoc.publicState.players.player1.counters.handCount).toBe(0);
     expect(sessionDoc.publicState.players.player1.counters.deckCount).toBe(9);
+    expect(sessionDoc.publicState.turnContext.lastHandBulkActionEvent).toMatchObject({
+      byPlayerId: 'player1',
+      action: 'return-all-to-deck',
+      count: 4,
+    });
   });
 
   test.each([

@@ -642,19 +642,39 @@ function runDirectOperation({
   if (opId === OPERATION_IDS.OP_B09) {
     const hand = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.HAND);
     const discard = resolvePublicZone(board, PUBLIC_ZONE.DISCARD);
+    const handCountBefore = hand.length;
     const toDiscard = asArray(payload.cardIds).length > 0
       ? takeCardRefsByIds(hand, payload.cardIds)
       : takeTopCardRefs(hand, payload.count || 1);
     discard.push(...toDiscard.map((ref) => createPublicCardRefFromHelper(ref.cardId)));
+    if (handCountBefore > 0 && toDiscard.length === handCountBefore) {
+      const turnContext = ensureTurnContext(sessionDoc);
+      turnContext.lastHandBulkActionEvent = {
+        byPlayerId: playerId,
+        action: 'discard-all',
+        count: toDiscard.length,
+        at: now,
+      };
+    }
     return;
   }
 
   if (opId === OPERATION_IDS.OP_B10) {
     const hand = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.HAND);
     const deck = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.DECK);
+    const handCountBefore = hand.length;
     const handToDeck = hand.map((ref) => createDeckCardRef(ref.cardId));
     hand.splice(0, hand.length);
-    deck.push(...shuffleArray(handToDeck));
+    deck.unshift(...handToDeck);
+    if (handCountBefore > 0) {
+      const turnContext = ensureTurnContext(sessionDoc);
+      turnContext.lastHandBulkActionEvent = {
+        byPlayerId: playerId,
+        action: 'return-all-to-deck',
+        count: handCountBefore,
+        at: now,
+      };
+    }
     return;
   }
 
