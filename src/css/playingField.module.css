@@ -47,7 +47,7 @@
 }
 
 .battleStartGuide {
-  max-width: min(96%, clamp(410px, 38vw, 490px));
+  max-width: calc(100% - 24px);
 }
 
 .battleStartGuideStep {
@@ -55,7 +55,7 @@
 }
 
 .battleStartGuideStep + .battleStartGuideStep {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .turnActionsGuide {

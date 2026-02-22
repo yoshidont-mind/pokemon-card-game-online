@@ -421,34 +421,35 @@ function resolveBattleStartGuidePosition({ boardNode, guideNode, interactionGuid
   const minX = INTERACTION_GUIDE_MARGIN_PX;
   const minY = INTERACTION_GUIDE_MARGIN_PX;
   const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
-  const maxY = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
+  const maxYDefault = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
 
-  let preferredX = clampValue(boardRect.width * 0.32 - panelWidth / 2, minX, maxX);
-  let preferredY = clampValue(boardRect.height * 0.74 - panelHeight / 2, minY, maxY);
+  let preferredX = clampValue(boardRect.width * 0.74 - panelWidth / 2, minX, maxX);
+  let preferredY = clampValue(boardRect.height * 0.32 - panelHeight / 2, minY, maxYDefault);
+  let maxY = maxYDefault;
 
-  const stadiumNode = boardNode.querySelector('[data-zone="center-stadium"]');
-  const coinNode = boardNode.querySelector('[data-zone="coin-widget"]');
-  const playerActiveNode = boardNode.querySelector('[data-zone="player-active"]');
-  const playerBench1Node = boardNode.querySelector('[data-zone="player-bench-1"]');
-  const playerBench2Node = boardNode.querySelector('[data-zone="player-bench-2"]');
-  if (stadiumNode && coinNode && playerActiveNode && playerBench1Node && playerBench2Node) {
-    const stadiumRect = toLocalRect(stadiumNode.getBoundingClientRect(), boardRect);
-    const coinRect = toLocalRect(coinNode.getBoundingClientRect(), boardRect);
-    const activeRect = toLocalRect(playerActiveNode.getBoundingClientRect(), boardRect);
-    const bench1Rect = toLocalRect(playerBench1Node.getBoundingClientRect(), boardRect);
-    const bench2Rect = toLocalRect(playerBench2Node.getBoundingClientRect(), boardRect);
-    if (stadiumRect && coinRect && activeRect && bench1Rect && bench2Rect) {
-      const combinedLeft = Math.min(stadiumRect.left, coinRect.left, activeRect.left);
-      const combinedRight = Math.max(stadiumRect.right, coinRect.right, activeRect.right);
-      const combinedCenterX = (combinedLeft + combinedRight) / 2;
-      preferredX = clampValue(combinedCenterX - panelWidth / 2, minX, maxX);
+  const opponentBench4Node = boardNode.querySelector('[data-zone="opponent-bench-4"]');
+  const opponentBench5Node = boardNode.querySelector('[data-zone="opponent-bench-5"]');
+  const dividerNode = boardNode.querySelector(`.${styles.areaDivider}`);
+  if (opponentBench4Node && opponentBench5Node) {
+    const bench4Rect = toLocalRect(opponentBench4Node.getBoundingClientRect(), boardRect);
+    const bench5Rect = toLocalRect(opponentBench5Node.getBoundingClientRect(), boardRect);
+    const dividerRect = dividerNode ? toLocalRect(dividerNode.getBoundingClientRect(), boardRect) : null;
+    if (bench4Rect && bench5Rect) {
+      const benchCenterX =
+        (bench4Rect.left + bench4Rect.right + bench5Rect.left + bench5Rect.right) / 4;
+      preferredX = clampValue(benchCenterX - panelWidth / 2, minX, maxX);
 
-      const auxBottom = Math.max(stadiumRect.bottom, coinRect.bottom, activeRect.bottom);
-      const benchTop = Math.min(bench1Rect.top, bench2Rect.top);
-      const upperBound = auxBottom + INTERACTION_GUIDE_MARGIN_PX;
-      const lowerBound = benchTop - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
-      if (lowerBound >= upperBound) {
-        preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
+      const upperBound = Math.max(bench4Rect.bottom, bench5Rect.bottom) + INTERACTION_GUIDE_MARGIN_PX;
+      if (dividerRect) {
+        const lowerBound = dividerRect.top - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
+        if (Number.isFinite(lowerBound)) {
+          maxY = clampValue(lowerBound, minY, maxYDefault);
+          if (lowerBound >= upperBound) {
+            preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
+          } else {
+            preferredY = clampValue(Math.max(minY, lowerBound), minY, maxY);
+          }
+        }
       } else {
         preferredY = clampValue(upperBound, minY, maxY);
       }
@@ -2332,6 +2333,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     top: 0,
     isReady: false,
   });
+  const [interactionGuideWidth, setInteractionGuideWidth] = useState(null);
   const [battleStartGuidePosition, setBattleStartGuidePosition] = useState({
     left: 0,
     top: 0,
@@ -2587,6 +2589,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     if (!nextPosition) {
       return;
     }
+    const measuredGuideWidth = Math.max(1, Math.round(guideNode.getBoundingClientRect().width));
+    setInteractionGuideWidth((previous) => {
+      if (previous === measuredGuideWidth) {
+        return previous;
+      }
+      return measuredGuideWidth;
+    });
     setInteractionGuidePosition((previous) => {
       if (
         previous.isReady &&
@@ -4479,8 +4488,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       };
   const battleStartGuideStyle = battleStartGuidePosition.isReady
     ? {
-        left: `${Math.max(0, battleStartGuidePosition.left - 30)}px`,
+        left: `${battleStartGuidePosition.left}px`,
         top: `${battleStartGuidePosition.top}px`,
+        width: Number.isFinite(interactionGuideWidth) ? `${interactionGuideWidth}px` : undefined,
+        maxWidth: Number.isFinite(interactionGuideWidth) ? `${interactionGuideWidth}px` : undefined,
         visibility: 'visible',
       }
     : {
