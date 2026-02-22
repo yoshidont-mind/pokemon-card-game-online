@@ -402,6 +402,112 @@ function resolveInteractionGuidePosition({ boardNode, guideNode }) {
   };
 }
 
+function resolveBattleStartGuidePosition({ boardNode, guideNode, interactionGuideNode = null }) {
+  if (!boardNode || !guideNode) {
+    return null;
+  }
+
+  const boardRect = boardNode.getBoundingClientRect();
+  const guideRect = guideNode.getBoundingClientRect();
+  if (!Number.isFinite(boardRect.width) || !Number.isFinite(boardRect.height)) {
+    return null;
+  }
+  if (!Number.isFinite(guideRect.width) || !Number.isFinite(guideRect.height)) {
+    return null;
+  }
+
+  const panelWidth = Math.max(1, guideRect.width);
+  const panelHeight = Math.max(1, guideRect.height);
+  const minX = INTERACTION_GUIDE_MARGIN_PX;
+  const minY = INTERACTION_GUIDE_MARGIN_PX;
+  const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
+  const maxY = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
+
+  let preferredX = clampValue(boardRect.width * 0.32 - panelWidth / 2, minX, maxX);
+  let preferredY = clampValue(boardRect.height * 0.74 - panelHeight / 2, minY, maxY);
+
+  const stadiumNode = boardNode.querySelector('[data-zone="center-stadium"]');
+  const coinNode = boardNode.querySelector('[data-zone="coin-widget"]');
+  const playerActiveNode = boardNode.querySelector('[data-zone="player-active"]');
+  const playerBench1Node = boardNode.querySelector('[data-zone="player-bench-1"]');
+  const playerBench2Node = boardNode.querySelector('[data-zone="player-bench-2"]');
+  if (stadiumNode && coinNode && playerActiveNode && playerBench1Node && playerBench2Node) {
+    const stadiumRect = toLocalRect(stadiumNode.getBoundingClientRect(), boardRect);
+    const coinRect = toLocalRect(coinNode.getBoundingClientRect(), boardRect);
+    const activeRect = toLocalRect(playerActiveNode.getBoundingClientRect(), boardRect);
+    const bench1Rect = toLocalRect(playerBench1Node.getBoundingClientRect(), boardRect);
+    const bench2Rect = toLocalRect(playerBench2Node.getBoundingClientRect(), boardRect);
+    if (stadiumRect && coinRect && activeRect && bench1Rect && bench2Rect) {
+      const combinedLeft = Math.min(stadiumRect.left, coinRect.left, activeRect.left);
+      const combinedRight = Math.max(stadiumRect.right, coinRect.right, activeRect.right);
+      const combinedCenterX = (combinedLeft + combinedRight) / 2;
+      preferredX = clampValue(combinedCenterX - panelWidth / 2, minX, maxX);
+
+      const auxBottom = Math.max(stadiumRect.bottom, coinRect.bottom, activeRect.bottom);
+      const benchTop = Math.min(bench1Rect.top, bench2Rect.top);
+      const upperBound = auxBottom + INTERACTION_GUIDE_MARGIN_PX;
+      const lowerBound = benchTop - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
+      if (lowerBound >= upperBound) {
+        preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
+      } else {
+        preferredY = clampValue(upperBound, minY, maxY);
+      }
+    }
+  }
+
+  const obstacleSelector = [
+    `.${styles.zoneTile}`,
+    `.${styles.activeZone}`,
+    `.${styles.benchSlot}`,
+    `.${styles.centerZone}`,
+  ].join(', ');
+  const obstacles = Array.from(boardNode.querySelectorAll(obstacleSelector))
+    .map((node) => toLocalRect(node.getBoundingClientRect(), boardRect))
+    .filter(Boolean);
+
+  if (interactionGuideNode) {
+    const interactionRect = toLocalRect(interactionGuideNode.getBoundingClientRect(), boardRect);
+    if (interactionRect) {
+      obstacles.push(interactionRect);
+    }
+  }
+
+  let bestCandidate = null;
+  for (let y = minY; y <= maxY; y += INTERACTION_GUIDE_SCAN_STEP_PX) {
+    for (let x = minX; x <= maxX; x += INTERACTION_GUIDE_SCAN_STEP_PX) {
+      const candidate = {
+        left: x,
+        top: y,
+        right: x + panelWidth,
+        bottom: y + panelHeight,
+      };
+      const hasOverlap = obstacles.some((obstacle) =>
+        doRectsOverlap(candidate, obstacle, INTERACTION_GUIDE_OVERLAP_PADDING_PX)
+      );
+      if (hasOverlap) {
+        continue;
+      }
+
+      const score = Math.abs(x - preferredX) + Math.abs(y - preferredY);
+      if (!bestCandidate || score < bestCandidate.score) {
+        bestCandidate = { x, y, score };
+      }
+    }
+  }
+
+  if (!bestCandidate) {
+    return {
+      left: Math.round(preferredX),
+      top: Math.round(preferredY),
+    };
+  }
+
+  return {
+    left: Math.round(bestCandidate.x),
+    top: Math.round(bestCandidate.y),
+  };
+}
+
 function clampPositiveInt(value, max) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -2129,7 +2235,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   });
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
+  const battleStartGuideRef = useRef(null);
   const [interactionGuidePosition, setInteractionGuidePosition] = useState({
+    left: 0,
+    top: 0,
+    isReady: false,
+  });
+  const [battleStartGuidePosition, setBattleStartGuidePosition] = useState({
     left: 0,
     top: 0,
     isReady: false,
@@ -2395,14 +2507,47 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, []);
 
+  const updateBattleStartGuidePosition = useCallback(() => {
+    const boardNode = boardRootRef.current;
+    const guideNode = battleStartGuideRef.current;
+    const interactionGuideNode = interactionGuideRef.current;
+    const nextPosition = resolveBattleStartGuidePosition({
+      boardNode,
+      guideNode,
+      interactionGuideNode,
+    });
+    if (!nextPosition) {
+      return;
+    }
+    setBattleStartGuidePosition((previous) => {
+      if (
+        previous.isReady &&
+        previous.left === nextPosition.left &&
+        previous.top === nextPosition.top
+      ) {
+        return previous;
+      }
+      return {
+        left: nextPosition.left,
+        top: nextPosition.top,
+        isReady: true,
+      };
+    });
+  }, []);
+
   useLayoutEffect(() => {
     updateInteractionGuidePosition();
+    updateBattleStartGuidePosition();
     if (typeof window === 'undefined') {
       return undefined;
     }
-    const frameId = window.requestAnimationFrame(updateInteractionGuidePosition);
+    const frameId = window.requestAnimationFrame(() => {
+      updateInteractionGuidePosition();
+      updateBattleStartGuidePosition();
+    });
     const handleResize = () => {
       updateInteractionGuidePosition();
+      updateBattleStartGuidePosition();
     };
     window.addEventListener('resize', handleResize);
     return () => {
@@ -2411,6 +2556,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     };
   }, [
     updateInteractionGuidePosition,
+    updateBattleStartGuidePosition,
     sessionDoc?.revision,
     isHandOpen,
     isToolboxOpen,
@@ -4201,6 +4347,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     : {
         visibility: 'hidden',
       };
+  const battleStartGuideStyle = battleStartGuidePosition.isReady
+    ? {
+        left: `${Math.max(0, battleStartGuidePosition.left - 30)}px`,
+        top: `${battleStartGuidePosition.top}px`,
+        visibility: 'visible',
+      }
+    : {
+        visibility: 'hidden',
+      };
 
   return (
     <DndContext
@@ -4971,6 +5126,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           ref={interactionGuideRef}
           className={styles.interactionGuide}
           style={interactionGuideStyle}
+          data-zone="interaction-guide"
           aria-label="操作ヒント"
         >
           <p className={styles.interactionGuideTitle}>操作ヒント</p>
@@ -4978,6 +5134,24 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
           <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
           <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
+        </aside>
+        <aside
+          ref={battleStartGuideRef}
+          className={joinClassNames(styles.interactionGuide, styles.battleStartGuide)}
+          style={battleStartGuideStyle}
+          data-zone="battle-start-guide"
+          aria-label="バトルのはじめかた"
+        >
+          <p className={styles.interactionGuideTitle}>バトルのはじめかた</p>
+          <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+            1. はじめに「よろしくおねがいします」とあいさつをします。次にコイントスをして、表が出たらプレイヤー１が、裏が出たらプレイヤー２が先攻か後攻かを選びます。
+          </p>
+          <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+            2. 手札の中から「たねポケモン」を1枚選び、「バトル場」に配置します。手札に「たねポケモン」がいない場合は、手札を全部山札に戻してシャッフルし、再度手札を引いてやり直します。
+          </p>
+          <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+            3. 手札にまだ「たねポケモン」がいれば、5枚までベンチに配置できます。完了したら、「対戦スタート！」
+          </p>
         </aside>
 
         <HandTray

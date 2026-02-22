@@ -46,6 +46,18 @@
   margin-top: 2px;
 }
 
+.battleStartGuide {
+  max-width: min(96%, clamp(410px, 38vw, 490px));
+}
+
+.battleStartGuideStep {
+  line-height: 1.25;
+}
+
+.battleStartGuideStep + .battleStartGuideStep {
+  margin-top: 4px;
+}
+
 .areaDivider {
   position: relative;
   height: clamp(8px, 1vw, 12px);
