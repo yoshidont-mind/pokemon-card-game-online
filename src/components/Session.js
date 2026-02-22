@@ -558,7 +558,7 @@ const Session = () => {
           onClick={saveDeck}
           disabled={!isAuthReady || !isPlayerSlotReady}
         >
-          このデッキを保存
+          このデッキを使う
         </Button>
       )}
     </div>
