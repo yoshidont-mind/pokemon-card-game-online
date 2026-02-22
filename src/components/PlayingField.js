@@ -5652,6 +5652,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             !isPlayerBattleStartCommitted ? styles.areaDividerWithBattleStart : ''
           )}
         >
+          <div className={styles.pokeballMark} aria-hidden="true">
+            <span className={styles.pokeballBandLeft} />
+            <span className={styles.pokeballBandRight} />
+            <span className={styles.pokeballCore} />
+          </div>
           {!isPlayerBattleStartCommitted ? (
             <button
               type="button"

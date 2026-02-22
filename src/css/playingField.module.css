@@ -395,6 +395,11 @@
 }
 
 .areaDivider {
+  --pokeball-size: clamp(180px, 24vw, 270px);
+  --pokeball-stroke: clamp(4px, 0.65vw, 7px);
+  --pokeball-core-radius: clamp(16px, 2.2vw, 24px);
+  --pokeball-core-cutout: calc(var(--pokeball-core-radius) - 1px);
+  --pokeball-color: rgba(248, 252, 244, 0.86);
   position: relative;
   height: clamp(8px, 1vw, 12px);
   margin: clamp(3px, 0.45vw, 7px) 0;
@@ -410,9 +415,63 @@
   left: 0;
   right: 0;
   top: 50%;
-  border-top: 1px solid rgba(248, 252, 244, 0.9);
+  height: 1px;
   transform: translateY(-50%);
-  z-index: 0;
+  background:
+    linear-gradient(
+      to right,
+      var(--pokeball-color) 0 calc(50% - (var(--pokeball-size) / 2) - var(--pokeball-stroke)),
+      transparent calc(50% - (var(--pokeball-size) / 2) - var(--pokeball-stroke))
+        calc(50% + (var(--pokeball-size) / 2) + var(--pokeball-stroke)),
+      var(--pokeball-color) calc(50% + (var(--pokeball-size) / 2) + var(--pokeball-stroke)) 100%
+    );
+  z-index: -1;
+}
+
+.pokeballMark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--pokeball-size);
+  height: var(--pokeball-size);
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border: var(--pokeball-stroke) solid var(--pokeball-color);
+  border-radius: 999px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.pokeballBandLeft,
+.pokeballBandRight {
+  position: absolute;
+  top: 50%;
+  height: var(--pokeball-stroke);
+  transform: translateY(-50%);
+  background: var(--pokeball-color);
+}
+
+.pokeballBandLeft {
+  left: 0;
+  right: calc(50% + var(--pokeball-core-cutout));
+}
+
+.pokeballBandRight {
+  right: 0;
+  left: calc(50% + var(--pokeball-core-cutout));
+}
+
+.pokeballCore {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--pokeball-core-radius) * 2);
+  height: calc(var(--pokeball-core-radius) * 2);
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border: var(--pokeball-stroke) solid var(--pokeball-color);
+  border-radius: 999px;
 }
 
 .battleStartButton {
