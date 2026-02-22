@@ -14,6 +14,7 @@ const Pokemon = ({
                            isAsleep = false,
                            isParalyzed = false,
                            isConfused = false,
+                           imageClassName = '',
                            onClick = () => {},
                            onDoubleClick = () => {}
                        }) => {
@@ -37,7 +38,7 @@ const Pokemon = ({
                             key={index}
                             src={image}
                             alt={`Pokemon Card ${index}`}
-                            className="pokemon-image"
+                            className={imageClassName ? `pokemon-image ${imageClassName}` : 'pokemon-image'}
                             style={{
                               zIndex: index + 1,
                               '--pokemon-image-shift-x': `${horizontalOffset}px`,
@@ -73,6 +74,7 @@ Pokemon.propTypes = {
     isAsleep: PropTypes.bool,
     isParalyzed: PropTypes.bool,
     isConfused: PropTypes.bool,
+    imageClassName: PropTypes.string,
     onClick: PropTypes.func,
     onDoubleClick: PropTypes.func,
 };

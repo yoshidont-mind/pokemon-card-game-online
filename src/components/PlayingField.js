@@ -75,6 +75,8 @@ const FLOATING_PANEL_GUIDE_GAP_PX = 10;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
 const TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY = 'pcgo:turn-actions-guide-position:v1';
 const CONDITION_GUIDE_POSITION_STORAGE_KEY = 'pcgo:condition-guide-position:v1';
+const OPPONENT_SETUP_FLIP_ANIMATION_MS = 520;
+const OPPONENT_SETUP_FLIP_IMAGE_CLASS = 'pokemon-image-opponent-setup-flip';
 const OPPONENT_COUNT_FLASH_MS = 2000;
 const INTERACTION_GUIDE_MARGIN_PX = 8;
 const INTERACTION_GUIDE_OVERLAP_PADDING_PX = 4;
@@ -138,15 +140,24 @@ function getStackImages(stack, cardCatalog) {
     .filter(Boolean);
 }
 
-function toPokemonProps(stack, cardCatalog) {
+function toPokemonProps(stack, cardCatalog, options = {}) {
+  const forceFaceDown = Boolean(options?.forceFaceDown);
+  const imageClassName =
+    typeof options?.imageClassName === 'string' ? options.imageClassName : '';
+  const cardIds = asArray(stack?.cardIds).filter(Boolean);
+  const images = forceFaceDown
+    ? cardIds.map(() => CARD_BACK_IMAGE)
+    : getStackImages(stack, cardCatalog);
+
   return {
-    images: getStackImages(stack, cardCatalog),
+    images,
     damage: Number(stack?.damage || 0),
     isPoisoned: Boolean(stack?.specialConditions?.poisoned),
     isBurned: Boolean(stack?.specialConditions?.burned),
     isAsleep: Boolean(stack?.specialConditions?.asleep),
     isParalyzed: Boolean(stack?.specialConditions?.paralyzed),
     isConfused: Boolean(stack?.specialConditions?.confused),
+    imageClassName,
   };
 }
 
@@ -653,6 +664,30 @@ function detectMutationNoticeTone(message) {
     : MUTATION_NOTICE_TONE.SUCCESS;
 }
 
+function resolveBattleStartReadyByPlayer(sessionDoc) {
+  const source = sessionDoc?.publicState?.battleStartReadyByPlayer;
+  if (!source || typeof source !== 'object') {
+    return {
+      player1: true,
+      player2: true,
+    };
+  }
+  return {
+    player1: Boolean(source?.player1),
+    player2: Boolean(source?.player2),
+  };
+}
+
+function ensureBattleStartReadyByPlayer(sessionDoc) {
+  if (!sessionDoc?.publicState || typeof sessionDoc.publicState !== 'object') {
+    sessionDoc.publicState = {};
+  }
+
+  const normalized = resolveBattleStartReadyByPlayer(sessionDoc);
+  sessionDoc.publicState.battleStartReadyByPlayer = normalized;
+  return normalized;
+}
+
 function resolvePopupCardHoverShift({
   cardRect,
   viewportWidth,
@@ -941,6 +976,8 @@ function BenchRow({
   ownerPlayerId,
   bench,
   cardCatalog,
+  forceFaceDownCards = false,
+  stackImageClassName = '',
   allowCardDrop,
   shouldShowStackInsertTargets,
   isDraggingStackSwapCandidate,
@@ -1250,7 +1287,12 @@ function BenchRow({
                       draggingClassName={styles.draggingSource}
                     >
                       <div className={styles.stackSingleCardButton}>
-                        <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                        <Pokemon
+                          {...toPokemonProps(stack, cardCatalog, {
+                            forceFaceDown: forceFaceDownCards,
+                            imageClassName: stackImageClassName,
+                          })}
+                        />
                       </div>
                     </DraggableCard>
                   ) : canDragStackGroup && stackGroupDragPayload ? (
@@ -1260,10 +1302,20 @@ function BenchRow({
                       className={styles.stackGroupDraggable}
                       draggingClassName={styles.draggingSource}
                     >
-                      <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                      <Pokemon
+                        {...toPokemonProps(stack, cardCatalog, {
+                          forceFaceDown: forceFaceDownCards,
+                          imageClassName: stackImageClassName,
+                        })}
+                      />
                     </DraggableCard>
                   ) : (
-                    <Pokemon {...toPokemonProps(stack, cardCatalog)} />
+                    <Pokemon
+                      {...toPokemonProps(stack, cardCatalog, {
+                        forceFaceDown: forceFaceDownCards,
+                        imageClassName: stackImageClassName,
+                      })}
+                    />
                   )}
                 </div>
               </DroppableStack>
@@ -2250,6 +2302,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const hasInitializedDeckShuffleEventRef = useRef(false);
   const handledDeckInsertEventAtRef = useRef('');
   const hasInitializedDeckInsertEventRef = useRef(false);
+  const opponentSetupFlipTimeoutRef = useRef(null);
+  const previousBattleSetupCompleteRef = useRef(false);
   const opponentRevealButtonRefs = useRef({});
   const opponentBoardRevealRefs = useRef({});
   const opponentActiveHoverSurfaceRef = useRef(null);
@@ -2285,6 +2339,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     top: 0,
     isReady: false,
   });
+  const [isOpponentSetupFlipAnimating, setIsOpponentSetupFlipAnimating] = useState(false);
+  const [isBattleStartSubmitting, setIsBattleStartSubmitting] = useState(false);
   const [isGuideSettingsOpen, setIsGuideSettingsOpen] = useState(false);
   const [guideVisibility, setGuideVisibility] = useState(GUIDE_VISIBILITY_DEFAULTS);
   const [conditionGuideManualPosition, setConditionGuideManualPosition] = useState(() =>
@@ -2441,6 +2497,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   const publicPlayers = sessionDoc?.publicState?.players || {};
   const turnContext = sessionDoc?.publicState?.turnContext || {};
+  const battleStartReadyByPlayer = resolveBattleStartReadyByPlayer(sessionDoc);
+  const isPlayerBattleStartReady = Boolean(battleStartReadyByPlayer?.[ownerPlayerId]);
+  const isOpponentBattleStartReady = Boolean(battleStartReadyByPlayer?.[opponentPlayerId]);
+  const isPlayerBattleStartCommitted = isPlayerBattleStartReady || isBattleStartSubmitting;
+  const isBattleSetupComplete = isPlayerBattleStartReady && isOpponentBattleStartReady;
+  const isWaitingForOpponentBattleStart =
+    isPlayerBattleStartCommitted && !isOpponentBattleStartReady;
   const playerBoard = publicPlayers?.[ownerPlayerId]?.board || EMPTY_OBJECT;
   const opponentBoard = publicPlayers?.[opponentPlayerId]?.board || EMPTY_OBJECT;
   const playerCounters = publicPlayers?.[ownerPlayerId]?.counters || EMPTY_OBJECT;
@@ -3986,6 +4049,45 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     pushSuccessNotice(`相手がカードを山札の${position}に戻しました。`);
   }, [lastDeckInsertEvent, ownerPlayerId, pushSuccessNotice]);
 
+  useEffect(() => {
+    if (previousBattleSetupCompleteRef.current === isBattleSetupComplete) {
+      return undefined;
+    }
+
+    const hasJustCompleted =
+      !previousBattleSetupCompleteRef.current && isBattleSetupComplete;
+    previousBattleSetupCompleteRef.current = isBattleSetupComplete;
+
+    if (opponentSetupFlipTimeoutRef.current) {
+      window.clearTimeout(opponentSetupFlipTimeoutRef.current);
+      opponentSetupFlipTimeoutRef.current = null;
+    }
+
+    if (!hasJustCompleted) {
+      setIsOpponentSetupFlipAnimating(false);
+      return undefined;
+    }
+
+    setIsOpponentSetupFlipAnimating(true);
+    opponentSetupFlipTimeoutRef.current = window.setTimeout(() => {
+      setIsOpponentSetupFlipAnimating(false);
+      opponentSetupFlipTimeoutRef.current = null;
+    }, OPPONENT_SETUP_FLIP_ANIMATION_MS);
+
+    return () => {
+      if (opponentSetupFlipTimeoutRef.current) {
+        window.clearTimeout(opponentSetupFlipTimeoutRef.current);
+        opponentSetupFlipTimeoutRef.current = null;
+      }
+    };
+  }, [isBattleSetupComplete]);
+
+  useEffect(() => {
+    if (isPlayerBattleStartReady) {
+      setIsBattleStartSubmitting(false);
+    }
+  }, [isPlayerBattleStartReady]);
+
   const handleCoinToss = useCallback(async () => {
     if (!sessionId || !ownerPlayerId || isCoinSubmitting || isMutating) {
       return;
@@ -4240,6 +4342,44 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       invalidMessage: '山札シャッフルを実行できませんでした。状態を確認してください。',
     });
   }, [executeQuickOperation]);
+
+  const handleBattleStartReady = useCallback(async () => {
+    if (isPlayerBattleStartReady) {
+      return;
+    }
+    if (
+      isBattleStartSubmitting ||
+      isMutating ||
+      isCoinSubmitting ||
+      isQuickActionSubmitting ||
+      isNoteSubmitting
+    ) {
+      return;
+    }
+
+    setIsBattleStartSubmitting(true);
+    const succeeded = await executeSessionMutation({
+      invalidMessage: '開始準備の更新に失敗しました。再試行してください。',
+      mutate: ({ sessionDoc: draftSessionDoc }) => {
+        const readyByPlayer = ensureBattleStartReadyByPlayer(draftSessionDoc);
+        readyByPlayer[ownerPlayerId] = true;
+        draftSessionDoc.publicState.battleStartReadyByPlayer = readyByPlayer;
+        return { sessionDoc: draftSessionDoc };
+      },
+    });
+    if (!succeeded) {
+      setIsBattleStartSubmitting(false);
+    }
+  }, [
+    executeSessionMutation,
+    isBattleStartSubmitting,
+    isCoinSubmitting,
+    isMutating,
+    isNoteSubmitting,
+    isPlayerBattleStartReady,
+    isQuickActionSubmitting,
+    ownerPlayerId,
+  ]);
 
   const handleOpenDeckPeekConfig = useCallback(() => {
     if (playerDeckCount <= 0 || isMutating || isCoinSubmitting || isQuickActionSubmitting) {
@@ -4704,7 +4844,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const isDraggingSingleStackCardForSwap =
     isDraggingCardFromPlayerStack && draggingSourceStackCardCount === 1;
   const isDraggingStackSwapCandidate = isDraggingStack || isDraggingSingleStackCardForSwap;
-  const shouldShowStackInsertTargets = isDraggingCard && !isDraggingStackSwapCandidate;
+  const shouldShowStackInsertTargets =
+    isBattleSetupComplete && isDraggingCard && !isDraggingStackSwapCandidate;
   const playerActiveCardIds = asArray(playerActive?.cardIds);
   const playerActiveCardCount = playerActiveCardIds.length;
   const opponentActiveCardCount = asArray(opponentActive?.cardIds).length;
@@ -4850,6 +4991,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <div className={styles.deckPeekLiveBanner}>
             相手が山札を閲覧中（{opponentDeckPeekCount}枚）
           </div>
+        ) : null}
+        {isWaitingForOpponentBattleStart ? (
+          <div className={styles.battleStartWaitingBanner}>相手の開始準備を待っています・・・</div>
         ) : null}
         <div className={styles.guideSettingsRoot} data-zone="guide-settings-root">
           <button
@@ -5036,6 +5180,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               bench={opponentBench}
               cardCatalog={renderCardCatalog}
               allowCardDrop={false}
+              forceFaceDownCards={!isBattleSetupComplete}
+              stackImageClassName={
+                isBattleSetupComplete && isOpponentSetupFlipAnimating
+                  ? OPPONENT_SETUP_FLIP_IMAGE_CLASS
+                  : ''
+              }
               shouldShowStackInsertTargets={shouldShowStackInsertTargets}
               isDraggingStackSwapCandidate={isDraggingStackSwapCandidate}
               isZoneHighlighted={isZoneHighlighted}
@@ -5208,7 +5358,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                         });
                       }}
                     >
-                      <Pokemon {...toPokemonProps(opponentActive, renderCardCatalog)} />
+                      <Pokemon
+                        {...toPokemonProps(opponentActive, renderCardCatalog, {
+                          forceFaceDown: !isBattleSetupComplete,
+                          imageClassName:
+                            isBattleSetupComplete && isOpponentSetupFlipAnimating
+                              ? OPPONENT_SETUP_FLIP_IMAGE_CLASS
+                              : '',
+                        })}
+                      />
                     </div>
                   </DroppableStack>
                 ) : (
@@ -5233,7 +5391,24 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
-        <div className={styles.areaDivider} aria-hidden />
+        <div className={styles.areaDivider}>
+          {!isPlayerBattleStartCommitted ? (
+            <button
+              type="button"
+              className={styles.battleStartButton}
+              onClick={handleBattleStartReady}
+              disabled={
+                isMutating ||
+                isCoinSubmitting ||
+                isQuickActionSubmitting ||
+                isNoteSubmitting ||
+                isUiInteractionBlocked
+              }
+            >
+              対戦スタート！
+            </button>
+          ) : null}
+        </div>
 
         <section className={styles.playerArea} data-zone="player-area" data-drop-group="area">
           <div className={styles.sideColumn}>
