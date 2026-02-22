@@ -5586,9 +5586,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <section className={styles.turnActionsSection}>
             <p className={styles.turnActionsSectionBadge}>最後にすること</p>
             <p className={styles.turnActionsMainLine}>バトルポケモンのワザを使う</p>
-            <p className={styles.turnActionsSubLine}>
-              ワザを1つ使ったら自分の番は終わります。先攻プレイヤーの最初の番は、ワザを使えません。
+            <p className={styles.turnActionsSubLine}>※ ワザは自分の番に1つしか使えません。</p>
+            <p className={styles.turnActionsSubLine}>※ 先攻プレイヤーの最初の番は、ワザを使えません。</p>
+            <p className={styles.turnActionsArrow} aria-hidden="true">
+              ↓
             </p>
+            <p className={styles.turnActionsMainLine}>ポケモンチェックを行う</p>
+            <p className={styles.turnActionsSubLine}>お互いのポケモンの状態を確認します</p>
           </section>
         </aside>
 
