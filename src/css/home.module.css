@@ -16,53 +16,32 @@
   pointer-events: none;
 }
 
-.backgroundLane {
-  --lane-top: 20%;
-  --lane-duration: 70s;
-  --lane-delay: 0s;
-  position: absolute;
-  top: var(--lane-top);
-  left: -8vw;
-  width: 116vw;
-  transform: translateY(-50%);
-}
-
-.backgroundTrack {
-  width: max-content;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  animation: home-cards-scroll var(--lane-duration) linear infinite;
-  animation-delay: var(--lane-delay);
-}
-
-.backgroundTrackReverse {
-  animation-direction: reverse;
-}
-
 .backgroundCard {
+  --floating-start-x: 0vw;
+  --floating-start-y: 0vh;
+  --floating-move-x: 40vw;
+  --floating-move-y: 10vh;
+  --floating-duration: 28s;
+  --floating-delay: 0s;
+  --floating-tilt: 0deg;
+  --floating-spin: 0deg;
+  --floating-scale: 1;
+  --floating-opacity: 0.8;
+  position: absolute;
+  left: 0;
+  top: 0;
   width: clamp(74px, 8.2vw, 114px);
   height: auto;
   border-radius: 10px;
-  opacity: 0.14;
+  opacity: var(--floating-opacity);
   filter: saturate(0.86) contrast(0.95);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-}
-
-.backgroundCard:nth-child(4n) {
-  transform: translateY(12px) rotate(-4deg);
-}
-
-.backgroundCard:nth-child(4n + 1) {
-  transform: translateY(-10px) rotate(3deg);
-}
-
-.backgroundCard:nth-child(4n + 2) {
-  transform: translateY(8px) rotate(2deg);
-}
-
-.backgroundCard:nth-child(4n + 3) {
-  transform: translateY(-7px) rotate(-2deg);
+  transform: translate3d(var(--floating-start-x), var(--floating-start-y), 0)
+    rotate(var(--floating-tilt))
+    scale(var(--floating-scale));
+  animation: home-floating-card var(--floating-duration) linear infinite;
+  animation-delay: var(--floating-delay);
+  will-change: transform, opacity;
 }
 
 .backgroundFade {
@@ -208,11 +187,27 @@
   }
 }
 
-@keyframes home-cards-scroll {
+@keyframes home-floating-card {
   0% {
-    transform: translateX(0);
+    opacity: 0;
+    transform: translate3d(var(--floating-start-x), var(--floating-start-y), 0)
+      rotate(var(--floating-tilt))
+      scale(var(--floating-scale));
+  }
+  14% {
+    opacity: var(--floating-opacity);
+  }
+  86% {
+    opacity: var(--floating-opacity);
   }
   100% {
-    transform: translateX(-50%);
+    opacity: 0;
+    transform: translate3d(
+        calc(var(--floating-start-x) + var(--floating-move-x)),
+        calc(var(--floating-start-y) + var(--floating-move-y)),
+        0
+      )
+      rotate(calc(var(--floating-tilt) + var(--floating-spin)))
+      scale(var(--floating-scale));
   }
 }

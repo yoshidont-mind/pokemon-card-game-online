@@ -1,5 +1,5 @@
 // src/components/Home.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import db from '../firebase';
@@ -12,32 +12,66 @@ import {
 } from '../game-state/setupUtils';
 import { ensureSignedIn } from '../auth/authClient';
 import styles from '../css/home.module.css';
+import backgroundPokemonCardUrls from '../data/homeBackgroundPokemonCards.json';
 
-const POKEMON_BACKGROUND_CARD_URLS = Object.freeze([
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045466_P_RAPURASU.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045467_P_MARIRU.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045468_P_MARIRURI.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045469_P_KEROMATSU.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045470_P_GEKOGASHIRA.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045471_P_GEKKOUGAEX.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045472_P_DAKURAIEX.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045473_P_KOMATANA.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045474_P_KIRIKIZAN.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045475_P_DODOGEZAN.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045476_P_OTOSHIDORI.jpg',
-    'https://www.pokemon-card.com/assets/images/card_images/large/SVI/045477_P_IBUI.jpg',
-]);
+const BACKGROUND_CARD_COUNT = 120;
 
-const BACKGROUND_LANES = Object.freeze([
-    { key: 'lane-a', durationSec: 62, delaySec: 0, reverse: false },
-    { key: 'lane-b', durationSec: 76, delaySec: -8, reverse: true },
-    { key: 'lane-c', durationSec: 84, delaySec: -20, reverse: false },
-]);
+function createFloatingCardSpecs(cardUrls, count) {
+    const source = Array.isArray(cardUrls)
+        ? cardUrls.filter((url) => typeof url === 'string' && url.trim() !== '')
+        : [];
+    if (source.length === 0) {
+        return [];
+    }
+
+    const shuffled = [...source];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+
+    return Array.from({ length: Math.max(1, count) }, (_, index) => {
+        const imageUrl = shuffled[index % shuffled.length];
+        const directionDeg = Math.random() * 360;
+        const directionRad = (directionDeg * Math.PI) / 180;
+        const travelDistance = 26 + Math.random() * 70;
+        const moveX = Math.cos(directionRad) * travelDistance;
+        const moveY = Math.sin(directionRad) * travelDistance;
+        const durationSec = 20 + Math.random() * 28;
+        const delaySec = -Math.random() * durationSec;
+        const tiltDeg = -24 + Math.random() * 48;
+        const spinDeg = -22 + Math.random() * 44;
+        const scale = 0.78 + Math.random() * 0.58;
+        const opacity = 0.7 + Math.random() * 0.25;
+        const startX = -22 + Math.random() * 144;
+        const startY = -26 + Math.random() * 152;
+        return {
+            key: `floating-${index + 1}-${imageUrl}`,
+            imageUrl,
+            style: {
+                '--floating-start-x': `${startX.toFixed(2)}vw`,
+                '--floating-start-y': `${startY.toFixed(2)}vh`,
+                '--floating-move-x': `${moveX.toFixed(2)}vw`,
+                '--floating-move-y': `${moveY.toFixed(2)}vh`,
+                '--floating-duration': `${durationSec.toFixed(2)}s`,
+                '--floating-delay': `${delaySec.toFixed(2)}s`,
+                '--floating-tilt': `${tiltDeg.toFixed(2)}deg`,
+                '--floating-spin': `${spinDeg.toFixed(2)}deg`,
+                '--floating-scale': scale.toFixed(3),
+                '--floating-opacity': opacity.toFixed(3),
+            },
+        };
+    });
+}
 
 const Home = () => {
     const navigate = useNavigate();
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [initialPrizeCount, setInitialPrizeCount] = useState(INITIAL_PRIZE_COUNT_DEFAULT);
+    const floatingBackgroundCards = useMemo(
+        () => createFloatingCardSpecs(backgroundPokemonCardUrls, BACKGROUND_CARD_COUNT),
+        []
+    );
 
     useEffect(() => {
         let isMounted = true;
@@ -104,36 +138,16 @@ const Home = () => {
     return (
         <div className={styles.page}>
             <div className={styles.backgroundLayer} aria-hidden>
-                {BACKGROUND_LANES.map((lane, laneIndex) => (
-                    <div
-                        key={lane.key}
-                        className={styles.backgroundLane}
-                        style={{
-                            '--lane-top': `${14 + laneIndex * 30}%`,
-                            '--lane-duration': `${lane.durationSec}s`,
-                            '--lane-delay': `${lane.delaySec}s`,
-                        }}
-                    >
-                        <div
-                            className={[
-                                styles.backgroundTrack,
-                                lane.reverse ? styles.backgroundTrackReverse : '',
-                            ].join(' ')}
-                        >
-                            {[...POKEMON_BACKGROUND_CARD_URLS, ...POKEMON_BACKGROUND_CARD_URLS].map(
-                                (imageUrl, cardIndex) => (
-                                    <img
-                                        key={`${lane.key}-${imageUrl}-${cardIndex}`}
-                                        src={imageUrl}
-                                        alt=""
-                                        className={styles.backgroundCard}
-                                        loading="lazy"
-                                        decoding="async"
-                                    />
-                                )
-                            )}
-                        </div>
-                    </div>
+                {floatingBackgroundCards.map((card) => (
+                    <img
+                        key={card.key}
+                        src={card.imageUrl}
+                        alt=""
+                        className={styles.backgroundCard}
+                        style={card.style}
+                        loading="lazy"
+                        decoding="async"
+                    />
                 ))}
                 <div className={styles.backgroundFade} />
             </div>
