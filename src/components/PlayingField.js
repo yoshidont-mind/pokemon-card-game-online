@@ -2987,7 +2987,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const updateBattleStartGuidePosition = useCallback(() => {
     const guideNode = battleStartGuideRef.current;
     const conditionNode = conditionGuideRef.current;
-    if (battleStartGuideManualPosition) {
+    if (
+      battleStartGuideManualPosition ||
+      conditionGuideManualPosition ||
+      isConditionGuideDragging
+    ) {
       return;
     }
     const nextPosition = resolveBattleStartGuidePosition({
@@ -3011,7 +3015,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         isReady: true,
       };
     });
-  }, [battleStartGuideManualPosition]);
+  }, [battleStartGuideManualPosition, conditionGuideManualPosition, isConditionGuideDragging]);
 
   useLayoutEffect(() => {
     updateInteractionGuidePosition();
