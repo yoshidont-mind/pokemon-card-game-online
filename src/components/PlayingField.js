@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { createPortal } from 'react-dom';
 import {
   faArrowsUpDownLeftRight,
+  faCog,
   faEdit,
   faMinus,
   faPlus,
@@ -12,7 +13,6 @@ import {
 import Pokemon from './Pokemon';
 import HandTray from './HandTray';
 import ToolboxPanel from './ToolboxPanel';
-import OperationPanel from './operation/OperationPanel';
 import DroppableZone from './dnd/DroppableZone';
 import DroppableStack from './dnd/DroppableStack';
 import DraggableCard from './dnd/DraggableCard';
@@ -109,6 +109,12 @@ const CONDITION_GUIDE_ROWS = Object.freeze([
     effect: 'ワザ使用時にコイン。ウラなら自分に30ダメージでワザ失敗',
   },
 ]);
+const GUIDE_VISIBILITY_DEFAULTS = Object.freeze({
+  interaction: true,
+  battleStart: true,
+  turnActions: true,
+  condition: true,
+});
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -2279,6 +2285,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     top: 0,
     isReady: false,
   });
+  const [isGuideSettingsOpen, setIsGuideSettingsOpen] = useState(false);
+  const [guideVisibility, setGuideVisibility] = useState(GUIDE_VISIBILITY_DEFAULTS);
   const [conditionGuideManualPosition, setConditionGuideManualPosition] = useState(() =>
     readStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY)
   );
@@ -2419,6 +2427,17 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       return next;
     });
   }, [persistUiPrefs]);
+
+  const handleGuideSettingsToggle = useCallback(() => {
+    setIsGuideSettingsOpen((previous) => !previous);
+  }, []);
+
+  const handleGuideVisibilityToggle = useCallback((key) => {
+    setGuideVisibility((previous) => ({
+      ...previous,
+      [key]: !Boolean(previous?.[key]),
+    }));
+  }, []);
 
   const publicPlayers = sessionDoc?.publicState?.players || {};
   const turnContext = sessionDoc?.publicState?.turnContext || {};
@@ -2641,7 +2660,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [isConditionGuideDragging, setConditionGuidePositionFromPointer]);
 
   const updateConditionGuideAutoPosition = useCallback(() => {
-    if (conditionGuideManualPosition) {
+    if (
+      conditionGuideManualPosition ||
+      !guideVisibility.condition ||
+      !guideVisibility.turnActions
+    ) {
       return;
     }
     const conditionNode = conditionGuideRef.current;
@@ -2678,10 +2701,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       }
       return nextRounded;
     });
-  }, [conditionGuideManualPosition]);
+  }, [conditionGuideManualPosition, guideVisibility.condition, guideVisibility.turnActions]);
 
   useLayoutEffect(() => {
-    if (conditionGuideManualPosition || typeof window === 'undefined') {
+    if (
+      conditionGuideManualPosition ||
+      !guideVisibility.condition ||
+      !guideVisibility.turnActions ||
+      typeof window === 'undefined'
+    ) {
       return undefined;
     }
 
@@ -2694,6 +2722,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, [
     conditionGuideManualPosition,
+    guideVisibility.condition,
+    guideVisibility.turnActions,
     turnActionsGuideManualPosition,
     isTurnActionsGuideDragging,
     updateConditionGuideAutoPosition,
@@ -4688,6 +4718,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const canDrawFromDeck = playerDeckCount > 0 && !isQuickActionLocked;
   const canShuffleDeck = playerDeckCount > 1 && !isQuickActionLocked;
   const canTakePrize = playerPrizeCount > 0 && !isQuickActionLocked;
+  const isInteractionGuideVisible = Boolean(guideVisibility.interaction);
+  const isBattleStartGuideVisible = Boolean(guideVisibility.battleStart);
+  const isTurnActionsGuideVisible = Boolean(guideVisibility.turnActions);
+  const isConditionGuideVisible = Boolean(guideVisibility.condition);
+  const shouldUseConditionAutoAnchor =
+    isConditionGuideVisible &&
+    isTurnActionsGuideVisible &&
+    !conditionGuideManualPosition;
   const interactionGuideStyle = interactionGuidePosition.isReady
     ? {
         left: `${interactionGuidePosition.left}px`,
@@ -4719,7 +4757,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           : 'calc(var(--z-toolbox) + 3)',
         visibility: 'visible',
       }
-    : conditionGuideAutoPosition
+    : shouldUseConditionAutoAnchor && conditionGuideAutoPosition
     ? {
         position: 'fixed',
         left: `${conditionGuideAutoPosition.x}px`,
@@ -4730,11 +4768,20 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           : 'calc(var(--z-toolbox) + 3)',
         visibility: 'visible',
       }
+    : shouldUseConditionAutoAnchor
+    ? {
+        position: 'fixed',
+        transform: 'none',
+        zIndex: isConditionGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 3)',
+        visibility: 'hidden',
+      }
     : {
         position: 'fixed',
         right: '10px',
-        top: '10px',
-        transform: 'none',
+        top: '50%',
+        transform: 'translateY(-50%)',
         zIndex: isConditionGuideDragging
           ? 'calc(var(--z-overlay) + 2)'
           : 'calc(var(--z-toolbox) + 3)',
@@ -4790,6 +4837,86 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             相手が山札を閲覧中（{opponentDeckPeekCount}枚）
           </div>
         ) : null}
+        <div className={styles.guideSettingsRoot} data-zone="guide-settings-root">
+          <button
+            type="button"
+            className={styles.guideSettingsButton}
+            onClick={handleGuideSettingsToggle}
+            aria-label={isGuideSettingsOpen ? 'ガイド表示設定を閉じる' : 'ガイド表示設定を開く'}
+            aria-expanded={isGuideSettingsOpen}
+            aria-controls="guide-settings-panel"
+          >
+            <FontAwesomeIcon icon={faCog} />
+          </button>
+          {isGuideSettingsOpen ? (
+            <div
+              id="guide-settings-panel"
+              className={styles.guideSettingsPanel}
+              role="dialog"
+              aria-label="ガイド表示設定"
+            >
+              <p className={styles.guideSettingsTitle}>ガイド表示設定</p>
+              <div className={styles.guideSettingsList}>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「操作ヒント」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isInteractionGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('interaction')}
+                    aria-pressed={isInteractionGuideVisible}
+                  >
+                    {isInteractionGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「バトルのはじめかた」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isBattleStartGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('battleStart')}
+                    aria-pressed={isBattleStartGuideVisible}
+                  >
+                    {isBattleStartGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「自分の番にできること」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isTurnActionsGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('turnActions')}
+                    aria-pressed={isTurnActionsGuideVisible}
+                  >
+                    {isTurnActionsGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className={styles.guideSettingsItem}>
+                  <p className={styles.guideSettingsLabel}>「状態異常の効果」を表示する</p>
+                  <button
+                    type="button"
+                    className={joinClassNames(
+                      styles.guideSettingsToggle,
+                      isConditionGuideVisible ? styles.guideSettingsToggleOn : ''
+                    )}
+                    onClick={() => handleGuideVisibilityToggle('condition')}
+                    aria-pressed={isConditionGuideVisible}
+                  >
+                    {isConditionGuideVisible ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className={styles.opponentHandCountFixed} data-zone="opponent-hand-count-fixed">
           <div className={styles.opponentHandControl}>
             <button
@@ -5527,86 +5654,93 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </section>
 
-        <aside
-          ref={interactionGuideRef}
-          className={styles.interactionGuide}
-          style={interactionGuideStyle}
-          data-zone="interaction-guide"
-          aria-label="操作ヒント"
-        >
-          <p className={styles.interactionGuideTitle}>操作ヒント</p>
-          <p className={styles.interactionGuideLine}>山札: クリックで閲覧</p>
-          <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
-          <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
-          <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
-        </aside>
-        <aside
-          ref={battleStartGuideRef}
-          className={joinClassNames(styles.interactionGuide, styles.battleStartGuide)}
-          style={battleStartGuideStyle}
-          data-zone="battle-start-guide"
-          aria-label="バトルのはじめかた"
-        >
-          <p className={styles.interactionGuideTitle}>バトルのはじめかた</p>
-          <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
-            1. はじめに「よろしくおねがいします」とあいさつをします。次にコイントスをして、表が出たらプレイヤー１が、裏が出たらプレイヤー２が先攻か後攻かを選びます。
-          </p>
-          <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
-            2. 手札の中から「たねポケモン」を1枚選び、「バトル場」に配置します。手札に「たねポケモン」がいない場合は、手札を全部山札に戻してシャッフルし、再度手札を引いてやり直します。
-          </p>
-          <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
-            3. 手札にまだ「たねポケモン」がいれば、5枚までベンチに配置できます。完了したら、「対戦スタート！」
-          </p>
-        </aside>
-        <aside
-          ref={conditionGuideRef}
-          className={joinClassNames(styles.interactionGuide, styles.conditionGuide)}
-          style={conditionGuideStyle}
-          data-zone="condition-guide"
-          aria-label="状態異常の効果"
-        >
-          <div className={styles.turnActionsGuideHeader}>
-            <p className={styles.turnActionsGuideTitle}>状態異常の効果</p>
-            <button
-              type="button"
-              className={joinClassNames(
-                styles.turnActionsGuideHandle,
-                isConditionGuideDragging ? styles.turnActionsGuideHandleActive : ''
-              )}
-              onPointerDown={handleConditionGuideDragStart}
-              aria-label="状態異常の効果を移動"
-            >
-              <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
-            </button>
-          </div>
-          <div className={styles.conditionGuideTable} role="table" aria-label="状態異常の説明表">
-            <div className={styles.conditionGuideRow} role="row">
-              <p className={styles.conditionGuideHeadCell} role="columnheader">
-                状態
-              </p>
-              <p className={styles.conditionGuideHeadCell} role="columnheader">
-                効果
-              </p>
+        {isInteractionGuideVisible ? (
+          <aside
+            ref={interactionGuideRef}
+            className={styles.interactionGuide}
+            style={interactionGuideStyle}
+            data-zone="interaction-guide"
+            aria-label="操作ヒント"
+          >
+            <p className={styles.interactionGuideTitle}>操作ヒント</p>
+            <p className={styles.interactionGuideLine}>山札: クリックで閲覧</p>
+            <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
+            <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
+            <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
+          </aside>
+        ) : null}
+        {isBattleStartGuideVisible ? (
+          <aside
+            ref={battleStartGuideRef}
+            className={joinClassNames(styles.interactionGuide, styles.battleStartGuide)}
+            style={battleStartGuideStyle}
+            data-zone="battle-start-guide"
+            aria-label="バトルのはじめかた"
+          >
+            <p className={styles.interactionGuideTitle}>バトルのはじめかた</p>
+            <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+              1. はじめに「よろしくおねがいします」とあいさつをします。次にコイントスをして、表が出たらプレイヤー１が、裏が出たらプレイヤー２が先攻か後攻かを選びます。
+            </p>
+            <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+              2. 手札の中から「たねポケモン」を1枚選び、「バトル場」に配置します。手札に「たねポケモン」がいない場合は、手札を全部山札に戻してシャッフルし、再度手札を引いてやり直します。
+            </p>
+            <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
+              3. 手札にまだ「たねポケモン」がいれば、5枚までベンチに配置できます。完了したら、「対戦スタート！」
+            </p>
+          </aside>
+        ) : null}
+        {isConditionGuideVisible ? (
+          <aside
+            ref={conditionGuideRef}
+            className={joinClassNames(styles.interactionGuide, styles.conditionGuide)}
+            style={conditionGuideStyle}
+            data-zone="condition-guide"
+            aria-label="状態異常の効果"
+          >
+            <div className={styles.turnActionsGuideHeader}>
+              <p className={styles.turnActionsGuideTitle}>状態異常の効果</p>
+              <button
+                type="button"
+                className={joinClassNames(
+                  styles.turnActionsGuideHandle,
+                  isConditionGuideDragging ? styles.turnActionsGuideHandleActive : ''
+                )}
+                onPointerDown={handleConditionGuideDragStart}
+                aria-label="状態異常の効果を移動"
+              >
+                <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+              </button>
             </div>
-            {CONDITION_GUIDE_ROWS.map((row) => (
-              <div key={row.status} className={styles.conditionGuideRow} role="row">
-                <p className={styles.conditionGuideStatusCell} role="cell">
-                  {row.status}
+            <div className={styles.conditionGuideTable} role="table" aria-label="状態異常の説明表">
+              <div className={styles.conditionGuideRow} role="row">
+                <p className={styles.conditionGuideHeadCell} role="columnheader">
+                  状態
                 </p>
-                <p className={styles.conditionGuideEffectCell} role="cell">
-                  {row.effect}
+                <p className={styles.conditionGuideHeadCell} role="columnheader">
+                  効果
                 </p>
               </div>
-            ))}
-          </div>
-        </aside>
-        <aside
-          ref={turnActionsGuideRef}
-          className={joinClassNames(styles.interactionGuide, styles.turnActionsGuide)}
-          style={turnActionsGuideStyle}
-          data-zone="turn-actions-guide"
-          aria-label="自分の番にできること"
-        >
+              {CONDITION_GUIDE_ROWS.map((row) => (
+                <div key={row.status} className={styles.conditionGuideRow} role="row">
+                  <p className={styles.conditionGuideStatusCell} role="cell">
+                    {row.status}
+                  </p>
+                  <p className={styles.conditionGuideEffectCell} role="cell">
+                    {row.effect}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </aside>
+        ) : null}
+        {isTurnActionsGuideVisible ? (
+          <aside
+            ref={turnActionsGuideRef}
+            className={joinClassNames(styles.interactionGuide, styles.turnActionsGuide)}
+            style={turnActionsGuideStyle}
+            data-zone="turn-actions-guide"
+            aria-label="自分の番にできること"
+          >
           <div className={styles.turnActionsGuideHeader}>
             <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
             <button
@@ -5666,7 +5800,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             <p className={styles.turnActionsMainLine}>ポケモンチェックを行う</p>
             <p className={styles.turnActionsSubLine}>お互いのポケモンの状態を確認します</p>
           </section>
-        </aside>
+          </aside>
+        ) : null}
 
         <HandTray
           cards={playerHandCards}
@@ -5680,13 +5815,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           onToggle={handleToolboxToggle}
           dropPayload={toolboxDropPayload}
           isDropHighlighted={isZoneHighlighted('toolbox-panel')}
-        />
-        <OperationPanel
-          sessionId={sessionId}
-          playerId={ownerPlayerId}
-          sessionDoc={sessionDoc}
-          privateStateDoc={privateStateDoc}
-          onMutationMessage={handleExternalMutationMessage}
         />
         <aside className={styles.sharedNotesRoot} data-zone="shared-notes-panel">
           <div className={styles.sharedNotesList}>

@@ -197,6 +197,35 @@ test('panel open states are restored from private uiPrefs', async () => {
   });
 });
 
+test('guide settings toggles control helper guide visibility', async () => {
+  renderPlayingField();
+
+  expect(screen.getByLabelText('操作ヒント')).toBeInTheDocument();
+  expect(screen.getByLabelText('バトルのはじめかた')).toBeInTheDocument();
+  expect(screen.getByLabelText('自分の番にできること')).toBeInTheDocument();
+  expect(screen.getByLabelText('状態異常の効果')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /ガイド表示設定を開く/i }));
+  const settingsPanel = screen.getByRole('dialog', { name: 'ガイド表示設定' });
+
+  const interactionRow = within(settingsPanel).getByText('「操作ヒント」を表示する').closest('div');
+  const turnActionsRow = within(settingsPanel).getByText('「自分の番にできること」を表示する').closest('div');
+  const conditionRow = within(settingsPanel).getByText('「状態異常の効果」を表示する').closest('div');
+  expect(interactionRow).toBeTruthy();
+  expect(turnActionsRow).toBeTruthy();
+  expect(conditionRow).toBeTruthy();
+
+  fireEvent.click(within(interactionRow).getByRole('button'));
+  fireEvent.click(within(turnActionsRow).getByRole('button'));
+  fireEvent.click(within(conditionRow).getByRole('button'));
+
+  await waitFor(() => {
+    expect(screen.queryByLabelText('操作ヒント')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('自分の番にできること')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('状態異常の効果')).not.toBeInTheDocument();
+  });
+});
+
 test('hand tray caps columns at 10 and uses wrapped layout metadata', async () => {
   const hand = Array.from({ length: 12 }, (_, index) => ({
     cardId: `c_player1_${String(index + 1).padStart(3, '0')}`,
