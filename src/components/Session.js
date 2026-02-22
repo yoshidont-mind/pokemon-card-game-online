@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Button } from 'react-bootstrap';
 import axios from 'axios';
 import { doc, onSnapshot } from 'firebase/firestore';
 import db from '../firebase';
 import PlayingField from './PlayingField';
 import '../css/style.css';
+import PreplayShell from './layout/PreplayShell';
+import styles from '../css/preplayScreens.module.css';
 import { createPrivateStateFromDeckImageUrls } from '../game-state/builders';
 import { ensureSignedIn, getCurrentUid } from '../auth/authClient';
 import { adaptSessionForClient, hasDeckConfigured } from '../game-state/compatRead';
@@ -485,24 +486,69 @@ const Session = () => {
     }
   };
 
+  const renderPreplayShell = ({
+    title,
+    subtitle = '',
+    statusMessage = '',
+    isStatusDanger = false,
+    modalClassName = '',
+    body = null,
+  }) => (
+    <PreplayShell modalClassName={modalClassName}>
+      <section className={styles.header}>
+        <p className={styles.eyebrow}>Pokémon Trading Card Game Online Simulator</p>
+        <h1 className={styles.title}>{title}</h1>
+        {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
+      </section>
+      {statusMessage ? (
+        <p
+          className={[
+            styles.statusMessage,
+            isStatusDanger ? styles.statusMessageDanger : '',
+          ].join(' ')}
+        >
+          {statusMessage}
+        </p>
+      ) : null}
+      {body}
+    </PreplayShell>
+  );
+
   if (!sessionId || !ownerPlayerId) {
-    return <div className="container mt-5">URLの `id` / `playerId` を確認してください。</div>;
+    return renderPreplayShell({
+      title: 'セッションURLを確認してください',
+      statusMessage: 'URLの `id` / `playerId` を確認してください。',
+      isStatusDanger: true,
+    });
   }
 
   if (!isAuthReady) {
-    return <div className="container mt-5">認証を初期化中...</div>;
+    return renderPreplayShell({
+      title: 'セッションに接続しています',
+      statusMessage: '認証を初期化中...',
+    });
   }
 
   if (!rawSessionDoc) {
-    return <div className="container mt-5">セッションを読み込み中...</div>;
+    return renderPreplayShell({
+      title: 'セッションを読み込み中',
+      statusMessage: 'セッション情報を取得しています。しばらくお待ちください。',
+    });
   }
 
   if (slotErrorMessage) {
-    return <div className="container mt-5 text-danger">{slotErrorMessage}</div>;
+    return renderPreplayShell({
+      title: 'セッション参加エラー',
+      statusMessage: slotErrorMessage,
+      isStatusDanger: true,
+    });
   }
 
   if (!isPlayerSlotReady) {
-    return <div className="container mt-5">参加者スロットを確認中...</div>;
+    return renderPreplayShell({
+      title: '参加状態を確認中',
+      statusMessage: '参加者スロットを確認中...',
+    });
   }
 
   const shouldShowPlayingField =
@@ -524,49 +570,75 @@ const Session = () => {
     );
   }
 
-  return (
-    <div className="container mt-5">
-      <h3>セッションID: {sessionId}</h3>
-      {mutationMessage && <div className="alert alert-warning">{mutationMessage}</div>}
-      <Button className="btn btn-primary mb-3" onClick={copyToClipboard}>
-        コピー
-      </Button>
-      <div className="mb-3">
-        <input
-          type="text"
-          id="deckCode"
-          name="deckCode"
-          className="form-control d-inline-block w-75"
-          value={deckCode}
-          onChange={(event) => setDeckCode(event.target.value)}
-          placeholder="デッキコードを入力"
-        />
-        <Button className="btn btn-secondary ml-2" onClick={fetchDeckInfo}>
-          デッキ情報を取得
-        </Button>
-      </div>
-      <div className="mb-3 hover-zoom">
-        {selectedDeckCards.map((card, index) => (
-          <img
-            key={`${card}-${index}`}
-            src={card}
-            alt={`Card ${index}`}
-            className="img-thumbnail"
-            style={{ width: '100px', margin: '5px' }}
-          />
-        ))}
-      </div>
-      {selectedDeckCards.length > 0 && (
-        <Button
-          className="btn btn-success"
-          onClick={saveDeck}
-          disabled={!isAuthReady || !isPlayerSlotReady}
-        >
-          このデッキを使う
-        </Button>
-      )}
-    </div>
-  );
+  return renderPreplayShell({
+    title: 'デッキを準備する',
+    subtitle: 'デッキコードからカード一覧を取得し、使用デッキとして保存します。',
+    statusMessage: mutationMessage || '',
+    isStatusDanger: Boolean(mutationMessage),
+    modalClassName: styles.sessionDeckModal,
+    body: (
+      <>
+        <section className={styles.sessionIdRow}>
+          <p className={styles.sessionIdLabel}>セッションID</p>
+          <p className={styles.sessionIdValue}>{sessionId}</p>
+          <button type="button" className={styles.buttonGhost} onClick={copyToClipboard}>
+            コピー
+          </button>
+        </section>
+
+        <section className={styles.fieldGroup}>
+          <label htmlFor="deckCode" className={styles.label}>
+            デッキコード
+          </label>
+          <div className={styles.inputRow}>
+            <input
+              type="text"
+              id="deckCode"
+              name="deckCode"
+              className={styles.textInput}
+              value={deckCode}
+              onChange={(event) => setDeckCode(event.target.value)}
+              placeholder="デッキコードを入力"
+            />
+            <button type="button" className={styles.buttonSecondary} onClick={fetchDeckInfo}>
+              デッキ情報を取得
+            </button>
+          </div>
+        </section>
+
+        <section className={styles.deckPreview}>
+          {selectedDeckCards.length > 0 ? (
+            <div className={styles.deckGrid}>
+              {selectedDeckCards.map((card, index) => (
+                <div key={`${card}-${index}`} className={styles.deckCardCell}>
+                  <img
+                    src={card}
+                    alt={`Card ${index}`}
+                    className={styles.deckCard}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className={styles.statusMessage}>デッキ情報を取得すると、ここにカード一覧が表示されます。</p>
+          )}
+        </section>
+
+        {selectedDeckCards.length > 0 ? (
+          <div className={[styles.actions, styles.singleAction].join(' ')}>
+            <button
+              type="button"
+              className={styles.buttonPrimary}
+              onClick={saveDeck}
+              disabled={!isAuthReady || !isPlayerSlotReady}
+            >
+              このデッキを使う
+            </button>
+          </div>
+        ) : null}
+      </>
+    ),
+  });
 };
 
 export default Session;
