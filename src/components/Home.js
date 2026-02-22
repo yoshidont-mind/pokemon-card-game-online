@@ -15,6 +15,10 @@ import styles from '../css/home.module.css';
 import backgroundPokemonCardUrls from '../data/homeBackgroundPokemonCards.json';
 
 const BACKGROUND_CARD_COUNT = 120;
+const HERO_TITLE_LINES = Object.freeze([
+    'Pokémon Trading Card Game',
+    'Online Simulator',
+]);
 
 function createFloatingCardSpecs(cardUrls, count) {
     const source = Array.isArray(cardUrls)
@@ -153,11 +157,27 @@ const Home = () => {
             </div>
 
             <main className={styles.modal}>
-                <p className={styles.productName}>Pokémon Trading Card Game Online Simulator</p>
-                <h1 className={styles.heading}>対戦セッションをはじめる</h1>
-                <p className={styles.subheading}>
-                    デッキ準備からオンライン対戦開始までを、シンプルにセットアップできます。
-                </p>
+                <h1
+                    className={styles.heroTitle}
+                    aria-label="Pokémon Trading Card Game Online Simulator"
+                >
+                    {HERO_TITLE_LINES.map((line, lineIndex) => (
+                        <span key={line} className={styles.heroTitleLine}>
+                            {[...line].map((char, charIndex) => (
+                                <span
+                                    key={`${line}-${char}-${charIndex}`}
+                                    className={styles.heroTitleChar}
+                                    style={{
+                                        '--char-index': charIndex,
+                                        '--line-index': lineIndex,
+                                    }}
+                                >
+                                    {char === ' ' ? '\u00A0' : char}
+                                </span>
+                            ))}
+                        </span>
+                    ))}
+                </h1>
 
                 <section className={styles.setupSection}>
                     <label htmlFor="initial-prize-count" className={styles.sliderLabel}>

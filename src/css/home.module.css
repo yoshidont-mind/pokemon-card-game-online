@@ -66,33 +66,51 @@
   padding: clamp(20px, 4vw, 34px);
   display: grid;
   gap: 16px;
+  align-content: start;
 }
 
-.productName {
-  margin: 0;
-  font-size: clamp(0.72rem, 1.5vw, 0.88rem);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #5f7084;
-  font-weight: 700;
+.modal > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
-.heading {
+.heroTitle {
   margin: 0;
-  font-size: clamp(1.44rem, 3.5vw, 2.2rem);
-  line-height: 1.1;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 100%;
   color: #13243a;
-  font-weight: 800;
+  font-size: clamp(1.05rem, 2.5vw, 1.78rem);
+  line-height: 1.08;
+  font-weight: 900;
+  letter-spacing: 0.012em;
+  text-transform: uppercase;
+  font-family: 'Avenir Next', 'Montserrat', 'Segoe UI', sans-serif;
+  text-shadow: 0 6px 18px rgba(34, 56, 80, 0.12);
 }
 
-.subheading {
-  margin: 0;
-  color: #4f6278;
-  font-size: clamp(0.86rem, 1.8vw, 0.98rem);
-  line-height: 1.55;
+.heroTitleLine {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.heroTitleChar {
+  --char-index: 0;
+  --line-index: 0;
+  display: inline-block;
+  animation: hero-title-hop 2.8s cubic-bezier(0.22, 0.68, 0.32, 1.06) infinite;
+  animation-delay: calc((var(--line-index) * 1.4s) + (var(--char-index) * 0.045s));
+  transform-origin: 50% 85%;
 }
 
 .setupSection {
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid #d8e1e9;
   border-radius: 16px;
   padding: 14px 14px 12px;
@@ -209,5 +227,24 @@
       )
       rotate(calc(var(--floating-tilt) + var(--floating-spin)))
       scale(var(--floating-scale));
+  }
+}
+
+@keyframes hero-title-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  8% {
+    transform: translateY(-11px);
+  }
+  13% {
+    transform: translateY(0);
+  }
+  16% {
+    transform: translateY(-4px);
+  }
+  20% {
+    transform: translateY(0);
   }
 }
