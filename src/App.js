@@ -1,6 +1,6 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import Home from './components/Home';
 import Session from './components/Session';
 import Join from './components/Join';
@@ -12,7 +12,8 @@ function App() {
     return (
         <Router>
             <Routes>
-                <Route path="/home" element={<Home />} />
+                <Route path="/" element={<Home />} />
+                <Route path="/home" element={<Navigate to="/" replace />} />
                 <Route path="/session" element={<Session />} />
                 <Route path="/join" element={<Join />} />
                 <Route path="/test/pokemon" element={<PokemonTest />} />
