@@ -2600,8 +2600,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     [setConditionGuidePositionFromPointer]
   );
 
+  const handleConditionGuideResetPosition = useCallback(() => {
+    setIsConditionGuideDragging(false);
+    setConditionGuideManualPosition(null);
+    clearStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY);
+  }, []);
+
   useEffect(() => {
     if (!conditionGuideManualPosition) {
+      clearStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY);
       return;
     }
     writeStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY, conditionGuideManualPosition);
@@ -2793,8 +2800,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     [setTurnActionsGuidePositionFromPointer]
   );
 
+  const handleTurnActionsGuideResetPosition = useCallback(() => {
+    setIsTurnActionsGuideDragging(false);
+    setTurnActionsGuideManualPosition(null);
+    clearStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY);
+  }, []);
+
   useEffect(() => {
     if (!turnActionsGuideManualPosition) {
+      clearStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY);
       return;
     }
     writeStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY, turnActionsGuideManualPosition);
@@ -4722,6 +4736,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const isBattleStartGuideVisible = Boolean(guideVisibility.battleStart);
   const isTurnActionsGuideVisible = Boolean(guideVisibility.turnActions);
   const isConditionGuideVisible = Boolean(guideVisibility.condition);
+  const isTurnActionsGuideAtInitialPosition = !turnActionsGuideManualPosition;
+  const isConditionGuideAtInitialPosition = !conditionGuideManualPosition;
   const shouldUseConditionAutoAnchor =
     isConditionGuideVisible &&
     isTurnActionsGuideVisible &&
@@ -5699,17 +5715,28 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           >
             <div className={styles.turnActionsGuideHeader}>
               <p className={styles.turnActionsGuideTitle}>状態異常の効果</p>
-              <button
-                type="button"
-                className={joinClassNames(
-                  styles.turnActionsGuideHandle,
-                  isConditionGuideDragging ? styles.turnActionsGuideHandleActive : ''
-                )}
-                onPointerDown={handleConditionGuideDragStart}
-                aria-label="状態異常の効果を移動"
-              >
-                <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
-              </button>
+              <div className={styles.turnActionsGuideHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.turnActionsGuideReset}
+                  onClick={handleConditionGuideResetPosition}
+                  disabled={isConditionGuideAtInitialPosition}
+                  aria-label="状態異常の効果の位置をリセット"
+                >
+                  位置をリセット
+                </button>
+                <button
+                  type="button"
+                  className={joinClassNames(
+                    styles.turnActionsGuideHandle,
+                    isConditionGuideDragging ? styles.turnActionsGuideHandleActive : ''
+                  )}
+                  onPointerDown={handleConditionGuideDragStart}
+                  aria-label="状態異常の効果を移動"
+                >
+                  <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+                </button>
+              </div>
             </div>
             <div className={styles.conditionGuideTable} role="table" aria-label="状態異常の説明表">
               <div className={styles.conditionGuideRow} role="row">
@@ -5743,17 +5770,28 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           >
           <div className={styles.turnActionsGuideHeader}>
             <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
-            <button
-              type="button"
-              className={joinClassNames(
-                styles.turnActionsGuideHandle,
-                isTurnActionsGuideDragging ? styles.turnActionsGuideHandleActive : ''
-              )}
-              onPointerDown={handleTurnActionsGuideDragStart}
-              aria-label="自分の番にできることを移動"
-            >
-              <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
-            </button>
+            <div className={styles.turnActionsGuideHeaderActions}>
+              <button
+                type="button"
+                className={styles.turnActionsGuideReset}
+                onClick={handleTurnActionsGuideResetPosition}
+                disabled={isTurnActionsGuideAtInitialPosition}
+                aria-label="自分の番にできることの位置をリセット"
+              >
+                位置をリセット
+              </button>
+              <button
+                type="button"
+                className={joinClassNames(
+                  styles.turnActionsGuideHandle,
+                  isTurnActionsGuideDragging ? styles.turnActionsGuideHandleActive : ''
+                )}
+                onPointerDown={handleTurnActionsGuideDragStart}
+                aria-label="自分の番にできることを移動"
+              >
+                <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+              </button>
+            </div>
           </div>
 
           <section className={styles.turnActionsSection}>

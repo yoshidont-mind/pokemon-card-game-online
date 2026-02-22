@@ -214,6 +214,12 @@
   gap: 6px;
 }
 
+.turnActionsGuideHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .turnActionsGuideTitle {
   margin: 0;
   text-align: left;
@@ -250,6 +256,28 @@
 .turnActionsGuideHandle:active,
 .turnActionsGuideHandleActive {
   cursor: grabbing;
+}
+
+.turnActionsGuideReset {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.turnActionsGuideReset:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.turnActionsGuideReset:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
 }
 
 .turnActionsSection {
