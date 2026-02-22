@@ -532,40 +532,11 @@ function resolveTurnActionsGuidePosition({
   const minX = INTERACTION_GUIDE_MARGIN_PX;
   const minY = INTERACTION_GUIDE_MARGIN_PX;
   const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
-  const maxYDefault = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
+  const maxY = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
 
-  let preferredX = clampValue(boardRect.width * 0.74 - panelWidth / 2, minX, maxX);
-  let preferredY = clampValue(boardRect.height * 0.32 - panelHeight / 2, minY, maxYDefault);
-  let maxY = maxYDefault;
-
-  const opponentBench4Node = boardNode.querySelector('[data-zone="opponent-bench-4"]');
-  const opponentBench5Node = boardNode.querySelector('[data-zone="opponent-bench-5"]');
-  const dividerNode = boardNode.querySelector(`.${styles.areaDivider}`);
-  if (opponentBench4Node && opponentBench5Node) {
-    const bench4Rect = toLocalRect(opponentBench4Node.getBoundingClientRect(), boardRect);
-    const bench5Rect = toLocalRect(opponentBench5Node.getBoundingClientRect(), boardRect);
-    const dividerRect = dividerNode ? toLocalRect(dividerNode.getBoundingClientRect(), boardRect) : null;
-    if (bench4Rect && bench5Rect) {
-      const benchCenterX =
-        (bench4Rect.left + bench4Rect.right + bench5Rect.left + bench5Rect.right) / 4;
-      preferredX = clampValue(benchCenterX - panelWidth / 2, minX, maxX);
-
-      const upperBound = Math.max(bench4Rect.bottom, bench5Rect.bottom) + INTERACTION_GUIDE_MARGIN_PX;
-      if (dividerRect) {
-        const lowerBound = dividerRect.top - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
-        if (Number.isFinite(lowerBound)) {
-          maxY = clampValue(lowerBound, minY, maxYDefault);
-          if (lowerBound >= upperBound) {
-            preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
-          } else {
-            preferredY = clampValue(Math.max(minY, lowerBound), minY, maxY);
-          }
-        }
-      } else {
-        preferredY = clampValue(upperBound, minY, maxY);
-      }
-    }
-  }
+  // Prefer the right-center area of the playmat.
+  const preferredX = maxX;
+  const preferredY = clampValue(boardRect.height * 0.5 - panelHeight / 2, minY, maxY);
 
   const obstacleSelector = [
     `.${styles.zoneTile}`,
@@ -4515,15 +4486,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     : {
         visibility: 'hidden',
       };
-  const turnActionsGuideStyle = turnActionsGuidePosition.isReady
-    ? {
-        left: `${turnActionsGuidePosition.left}px`,
-        top: `${turnActionsGuidePosition.top}px`,
-        visibility: 'visible',
-      }
-    : {
-        visibility: 'hidden',
-      };
+  const turnActionsGuideStyle = {
+    position: 'fixed',
+    right: '10px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    zIndex: 'calc(var(--z-toolbox) + 2)',
+    visibility: 'visible',
+  };
 
   return (
     <DndContext
