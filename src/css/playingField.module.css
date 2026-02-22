@@ -352,7 +352,7 @@
 .turnActionsColumnTitle {
   margin: 0;
   text-align: center;
-  font-size: 0.63rem;
+  font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.15;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
@@ -364,7 +364,7 @@
   border-radius: 6px;
   padding: 3px 4px;
   text-align: center;
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
   display: grid;
@@ -374,14 +374,14 @@
 
 .turnActionsActionMain {
   display: block;
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .turnActionsActionNote {
   display: block;
-  font-size: 0.56rem;
+  font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.25;
 }

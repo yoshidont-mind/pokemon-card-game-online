@@ -78,7 +78,6 @@ const MUTATION_NOTICE_TONE = Object.freeze({
 const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できません|見つかりません|不正|invalid|error|denied|not found/i;
 const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
-const FLOATING_PANEL_GUIDE_GAP_PX = 10;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
 const TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY = 'pcgo:turn-actions-guide-position:v1';
 const CONDITION_GUIDE_POSITION_STORAGE_KEY = 'pcgo:condition-guide-position:v1';
@@ -2375,7 +2374,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [conditionGuideManualPosition, setConditionGuideManualPosition] = useState(() =>
     readStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY)
   );
-  const [conditionGuideAutoPosition, setConditionGuideAutoPosition] = useState(null);
   const [isConditionGuideDragging, setIsConditionGuideDragging] = useState(false);
   const [turnActionsGuideManualPosition, setTurnActionsGuideManualPosition] = useState(() =>
     readStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY)
@@ -2759,74 +2757,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [isConditionGuideDragging, setConditionGuidePositionFromPointer]);
-
-  const updateConditionGuideAutoPosition = useCallback(() => {
-    if (
-      conditionGuideManualPosition ||
-      !guideVisibility.condition ||
-      !guideVisibility.turnActions
-    ) {
-      return;
-    }
-    const conditionNode = conditionGuideRef.current;
-    const turnActionsNode = turnActionsGuideRef.current;
-    if (!conditionNode || !turnActionsNode) {
-      return;
-    }
-    const conditionRect = conditionNode.getBoundingClientRect();
-    const turnActionsRect = turnActionsNode.getBoundingClientRect();
-    if (
-      !Number.isFinite(conditionRect.width) ||
-      !Number.isFinite(conditionRect.height) ||
-      conditionRect.width <= 0 ||
-      conditionRect.height <= 0 ||
-      !Number.isFinite(turnActionsRect.left) ||
-      !Number.isFinite(turnActionsRect.top)
-    ) {
-      return;
-    }
-
-    const next = clampFloatingPanelPosition({
-      x: turnActionsRect.left,
-      y: turnActionsRect.top - conditionRect.height - FLOATING_PANEL_GUIDE_GAP_PX,
-      width: conditionRect.width,
-      height: conditionRect.height,
-    });
-    const nextRounded = {
-      x: Math.round(next.x),
-      y: Math.round(next.y),
-    };
-    setConditionGuideAutoPosition((previous) => {
-      if (previous && previous.x === nextRounded.x && previous.y === nextRounded.y) {
-        return previous;
-      }
-      return nextRounded;
-    });
-  }, [conditionGuideManualPosition, guideVisibility.condition, guideVisibility.turnActions]);
-
-  useLayoutEffect(() => {
-    if (
-      conditionGuideManualPosition ||
-      !guideVisibility.condition ||
-      !guideVisibility.turnActions ||
-      typeof window === 'undefined'
-    ) {
-      return undefined;
-    }
-
-    const handleResize = () => {
-      updateConditionGuideAutoPosition();
-    };
-
-    updateConditionGuideAutoPosition();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [
-    conditionGuideManualPosition,
-    guideVisibility.condition,
-    guideVisibility.turnActions,
-    updateConditionGuideAutoPosition,
-  ]);
 
   const setTurnActionsGuidePositionFromPointer = useCallback((clientX, clientY) => {
     const offset = turnActionsGuideDragOffsetRef.current;
@@ -5138,10 +5068,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const isConditionGuideVisible = Boolean(guideVisibility.condition);
   const isTurnActionsGuideAtInitialPosition = !turnActionsGuideManualPosition;
   const isConditionGuideAtInitialPosition = !conditionGuideManualPosition;
-  const shouldUseConditionAutoAnchor =
-    isConditionGuideVisible &&
-    isTurnActionsGuideVisible &&
-    !conditionGuideManualPosition;
   const interactionGuideStyle = interactionGuidePosition.isReady
     ? {
         left: `${interactionGuidePosition.left}px`,
@@ -5173,29 +5099,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           : 'calc(var(--z-toolbox) + 3)',
         visibility: 'visible',
       }
-    : shouldUseConditionAutoAnchor && conditionGuideAutoPosition
-    ? {
-        position: 'fixed',
-        left: `${conditionGuideAutoPosition.x}px`,
-        top: `${conditionGuideAutoPosition.y}px`,
-        transform: 'none',
-        zIndex: isConditionGuideDragging
-          ? 'calc(var(--z-overlay) + 2)'
-          : 'calc(var(--z-toolbox) + 3)',
-        visibility: 'visible',
-      }
-    : shouldUseConditionAutoAnchor
-    ? {
-        position: 'fixed',
-        transform: 'none',
-        zIndex: isConditionGuideDragging
-          ? 'calc(var(--z-overlay) + 2)'
-          : 'calc(var(--z-toolbox) + 3)',
-        visibility: 'hidden',
-      }
     : {
         position: 'fixed',
-        right: '10px',
+        left: '10px',
         top: '50%',
         transform: 'translateY(-50%)',
         zIndex: isConditionGuideDragging
@@ -6280,7 +6186,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             aria-label="自分の番にできること"
           >
           <div className={styles.turnActionsGuideHeader}>
-            <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
+            <p className={styles.turnActionsGuideTitle}>ターンの流れ</p>
             <div className={styles.turnActionsGuideHeaderActions}>
               <button
                 type="button"
