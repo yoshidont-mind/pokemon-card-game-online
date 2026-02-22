@@ -1058,6 +1058,13 @@
   z-index: 2;
 }
 
+.battleLineRevealOpponent:hover,
+.battleLineRevealOpponent:focus-within,
+.battleLineRevealPlayer:hover,
+.battleLineRevealPlayer:focus-within {
+  z-index: calc(var(--z-overlay) + 2);
+}
+
 .battleLineRowWithAux .battleLineActive {
   grid-column: 4;
   justify-self: center;
