@@ -78,8 +78,9 @@ const MUTATION_NOTICE_TONE = Object.freeze({
 const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できません|見つかりません|不正|invalid|error|denied|not found/i;
 const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
-const FLOATING_PANEL_GUIDE_GAP_PX = 10;
+const FLOATING_PANEL_GUIDE_STACK_GAP_PX = 10;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
+const BATTLE_START_GUIDE_POSITION_STORAGE_KEY = 'pcgo:battle-start-guide-position:v1';
 const TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY = 'pcgo:turn-actions-guide-position:v1';
 const CONDITION_GUIDE_POSITION_STORAGE_KEY = 'pcgo:condition-guide-position:v1';
 const OPPONENT_SETUP_FLIP_ANIMATION_MS = 520;
@@ -455,110 +456,47 @@ function resolveInteractionGuidePosition({ boardNode, guideNode }) {
   };
 }
 
-function resolveBattleStartGuidePosition({ boardNode, guideNode, interactionGuideNode = null }) {
-  if (!boardNode || !guideNode) {
+function resolveBattleStartGuidePosition({
+  guideNode,
+  conditionGuideNode = null,
+}) {
+  if (!guideNode || typeof window === 'undefined') {
     return null;
   }
 
-  const boardRect = boardNode.getBoundingClientRect();
   const guideRect = guideNode.getBoundingClientRect();
-  if (!Number.isFinite(boardRect.width) || !Number.isFinite(boardRect.height)) {
-    return null;
-  }
   if (!Number.isFinite(guideRect.width) || !Number.isFinite(guideRect.height)) {
     return null;
   }
 
   const panelWidth = Math.max(1, guideRect.width);
   const panelHeight = Math.max(1, guideRect.height);
-  const minX = INTERACTION_GUIDE_MARGIN_PX;
-  const minY = INTERACTION_GUIDE_MARGIN_PX;
-  const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
-  const maxYDefault = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
 
-  let preferredX = clampValue(boardRect.width * 0.74 - panelWidth / 2, minX, maxX);
-  let preferredY = clampValue(boardRect.height * 0.32 - panelHeight / 2, minY, maxYDefault);
-  let maxY = maxYDefault;
+  let preferredX = 10;
+  let preferredY = Math.round(window.innerHeight * 0.22);
 
-  const opponentBench4Node = boardNode.querySelector('[data-zone="opponent-bench-4"]');
-  const opponentBench5Node = boardNode.querySelector('[data-zone="opponent-bench-5"]');
-  const dividerNode = boardNode.querySelector(`.${styles.areaDivider}`);
-  if (opponentBench4Node && opponentBench5Node) {
-    const bench4Rect = toLocalRect(opponentBench4Node.getBoundingClientRect(), boardRect);
-    const bench5Rect = toLocalRect(opponentBench5Node.getBoundingClientRect(), boardRect);
-    const dividerRect = dividerNode ? toLocalRect(dividerNode.getBoundingClientRect(), boardRect) : null;
-    if (bench4Rect && bench5Rect) {
-      const benchCenterX =
-        (bench4Rect.left + bench4Rect.right + bench5Rect.left + bench5Rect.right) / 4;
-      preferredX = clampValue(benchCenterX - panelWidth / 2, minX, maxX);
-
-      const upperBound = Math.max(bench4Rect.bottom, bench5Rect.bottom) + INTERACTION_GUIDE_MARGIN_PX;
-      if (dividerRect) {
-        const lowerBound = dividerRect.top - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
-        if (Number.isFinite(lowerBound)) {
-          maxY = clampValue(lowerBound, minY, maxYDefault);
-          if (lowerBound >= upperBound) {
-            preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
-          } else {
-            preferredY = clampValue(Math.max(minY, lowerBound), minY, maxY);
-          }
-        }
-      } else {
-        preferredY = clampValue(upperBound, minY, maxY);
-      }
+  if (conditionGuideNode) {
+    const conditionRect = conditionGuideNode.getBoundingClientRect();
+    if (
+      Number.isFinite(conditionRect.left) &&
+      Number.isFinite(conditionRect.top) &&
+      Number.isFinite(conditionRect.height)
+    ) {
+      preferredX = Math.round(conditionRect.left);
+      preferredY = Math.round(conditionRect.top - panelHeight - FLOATING_PANEL_GUIDE_STACK_GAP_PX);
     }
   }
 
-  const obstacleSelector = [
-    `.${styles.zoneTile}`,
-    `.${styles.activeZone}`,
-    `.${styles.benchSlot}`,
-    `.${styles.centerZone}`,
-  ].join(', ');
-  const obstacles = Array.from(boardNode.querySelectorAll(obstacleSelector))
-    .map((node) => toLocalRect(node.getBoundingClientRect(), boardRect))
-    .filter(Boolean);
-
-  if (interactionGuideNode) {
-    const interactionRect = toLocalRect(interactionGuideNode.getBoundingClientRect(), boardRect);
-    if (interactionRect) {
-      obstacles.push(interactionRect);
-    }
-  }
-
-  let bestCandidate = null;
-  for (let y = minY; y <= maxY; y += INTERACTION_GUIDE_SCAN_STEP_PX) {
-    for (let x = minX; x <= maxX; x += INTERACTION_GUIDE_SCAN_STEP_PX) {
-      const candidate = {
-        left: x,
-        top: y,
-        right: x + panelWidth,
-        bottom: y + panelHeight,
-      };
-      const hasOverlap = obstacles.some((obstacle) =>
-        doRectsOverlap(candidate, obstacle, INTERACTION_GUIDE_OVERLAP_PADDING_PX)
-      );
-      if (hasOverlap) {
-        continue;
-      }
-
-      const score = Math.abs(x - preferredX) + Math.abs(y - preferredY);
-      if (!bestCandidate || score < bestCandidate.score) {
-        bestCandidate = { x, y, score };
-      }
-    }
-  }
-
-  if (!bestCandidate) {
-    return {
-      left: Math.round(preferredX),
-      top: Math.round(preferredY),
-    };
-  }
+  const clamped = clampFloatingPanelPosition({
+    x: preferredX,
+    y: preferredY,
+    width: panelWidth,
+    height: panelHeight,
+  });
 
   return {
-    left: Math.round(bestCandidate.x),
-    top: Math.round(bestCandidate.y),
+    left: Math.round(clamped.x),
+    top: Math.round(clamped.y),
   };
 }
 
@@ -2351,6 +2289,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
   const battleStartGuideRef = useRef(null);
+  const battleStartGuideDragOffsetRef = useRef({ x: 0, y: 0 });
+  const battleStartGuideDragSizeRef = useRef({ width: 0, height: 0 });
   const conditionGuideRef = useRef(null);
   const conditionGuideDragOffsetRef = useRef({ x: 0, y: 0 });
   const conditionGuideDragSizeRef = useRef({ width: 0, height: 0 });
@@ -2362,7 +2302,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     top: 0,
     isReady: false,
   });
-  const [interactionGuideWidth, setInteractionGuideWidth] = useState(null);
   const [battleStartGuidePosition, setBattleStartGuidePosition] = useState({
     left: 0,
     top: 0,
@@ -2372,10 +2311,13 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [isBattleStartSubmitting, setIsBattleStartSubmitting] = useState(false);
   const [isGuideSettingsOpen, setIsGuideSettingsOpen] = useState(false);
   const [guideVisibility, setGuideVisibility] = useState(GUIDE_VISIBILITY_DEFAULTS);
+  const [battleStartGuideManualPosition, setBattleStartGuideManualPosition] = useState(() =>
+    readStoredPosition(BATTLE_START_GUIDE_POSITION_STORAGE_KEY)
+  );
+  const [isBattleStartGuideDragging, setIsBattleStartGuideDragging] = useState(false);
   const [conditionGuideManualPosition, setConditionGuideManualPosition] = useState(() =>
     readStoredPosition(CONDITION_GUIDE_POSITION_STORAGE_KEY)
   );
-  const [conditionGuideAutoPosition, setConditionGuideAutoPosition] = useState(null);
   const [isConditionGuideDragging, setIsConditionGuideDragging] = useState(false);
   const [turnActionsGuideManualPosition, setTurnActionsGuideManualPosition] = useState(() =>
     readStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY)
@@ -2636,6 +2578,130 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     isDeckPeekConfigOpen ||
     isHandBulkActionConfirmOpen;
 
+  const setBattleStartGuidePositionFromPointer = useCallback((clientX, clientY) => {
+    const offset = battleStartGuideDragOffsetRef.current;
+    const size = battleStartGuideDragSizeRef.current;
+    if (
+      !Number.isFinite(clientX) ||
+      !Number.isFinite(clientY) ||
+      !Number.isFinite(size.width) ||
+      !Number.isFinite(size.height) ||
+      size.width <= 0 ||
+      size.height <= 0
+    ) {
+      return;
+    }
+
+    const next = clampFloatingPanelPosition({
+      x: clientX - offset.x,
+      y: clientY - offset.y,
+      width: size.width,
+      height: size.height,
+    });
+    const nextRounded = {
+      x: Math.round(next.x),
+      y: Math.round(next.y),
+    };
+
+    setBattleStartGuideManualPosition((previous) => {
+      if (previous && previous.x === nextRounded.x && previous.y === nextRounded.y) {
+        return previous;
+      }
+      return nextRounded;
+    });
+  }, []);
+
+  const handleBattleStartGuideDragStart = useCallback(
+    (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
+      const guideNode = battleStartGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const guideRect = guideNode.getBoundingClientRect();
+      battleStartGuideDragOffsetRef.current = {
+        x: event.clientX - guideRect.left,
+        y: event.clientY - guideRect.top,
+      };
+      battleStartGuideDragSizeRef.current = {
+        width: guideRect.width,
+        height: guideRect.height,
+      };
+      setBattleStartGuidePositionFromPointer(event.clientX, event.clientY);
+      setIsBattleStartGuideDragging(true);
+      event.preventDefault();
+    },
+    [setBattleStartGuidePositionFromPointer]
+  );
+
+  const handleBattleStartGuideResetPosition = useCallback(() => {
+    setIsBattleStartGuideDragging(false);
+    setBattleStartGuideManualPosition(null);
+    clearStoredPosition(BATTLE_START_GUIDE_POSITION_STORAGE_KEY);
+  }, []);
+
+  useEffect(() => {
+    if (!battleStartGuideManualPosition) {
+      clearStoredPosition(BATTLE_START_GUIDE_POSITION_STORAGE_KEY);
+      return;
+    }
+    writeStoredPosition(BATTLE_START_GUIDE_POSITION_STORAGE_KEY, battleStartGuideManualPosition);
+  }, [battleStartGuideManualPosition]);
+
+  useEffect(() => {
+    if (!battleStartGuideManualPosition || typeof window === 'undefined') {
+      return undefined;
+    }
+    const handleResize = () => {
+      const guideNode = battleStartGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const rect = guideNode.getBoundingClientRect();
+      const next = clampFloatingPanelPosition({
+        x: battleStartGuideManualPosition.x,
+        y: battleStartGuideManualPosition.y,
+        width: rect.width,
+        height: rect.height,
+      });
+      const nextRounded = {
+        x: Math.round(next.x),
+        y: Math.round(next.y),
+      };
+      if (
+        nextRounded.x !== battleStartGuideManualPosition.x ||
+        nextRounded.y !== battleStartGuideManualPosition.y
+      ) {
+        setBattleStartGuideManualPosition(nextRounded);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [battleStartGuideManualPosition]);
+
+  useEffect(() => {
+    if (!isBattleStartGuideDragging || typeof window === 'undefined') {
+      return undefined;
+    }
+    const handlePointerMove = (event) => {
+      setBattleStartGuidePositionFromPointer(event.clientX, event.clientY);
+    };
+    const handlePointerUp = () => {
+      setIsBattleStartGuideDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [isBattleStartGuideDragging, setBattleStartGuidePositionFromPointer]);
+
   const setConditionGuidePositionFromPointer = useCallback((clientX, clientY) => {
     const offset = conditionGuideDragOffsetRef.current;
     const size = conditionGuideDragSizeRef.current;
@@ -2759,74 +2825,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [isConditionGuideDragging, setConditionGuidePositionFromPointer]);
-
-  const updateConditionGuideAutoPosition = useCallback(() => {
-    if (
-      conditionGuideManualPosition ||
-      !guideVisibility.condition ||
-      !guideVisibility.turnActions
-    ) {
-      return;
-    }
-    const conditionNode = conditionGuideRef.current;
-    const turnActionsNode = turnActionsGuideRef.current;
-    if (!conditionNode || !turnActionsNode) {
-      return;
-    }
-    const conditionRect = conditionNode.getBoundingClientRect();
-    const turnActionsRect = turnActionsNode.getBoundingClientRect();
-    if (
-      !Number.isFinite(conditionRect.width) ||
-      !Number.isFinite(conditionRect.height) ||
-      conditionRect.width <= 0 ||
-      conditionRect.height <= 0 ||
-      !Number.isFinite(turnActionsRect.left) ||
-      !Number.isFinite(turnActionsRect.top)
-    ) {
-      return;
-    }
-
-    const next = clampFloatingPanelPosition({
-      x: turnActionsRect.left,
-      y: turnActionsRect.top - conditionRect.height - FLOATING_PANEL_GUIDE_GAP_PX,
-      width: conditionRect.width,
-      height: conditionRect.height,
-    });
-    const nextRounded = {
-      x: Math.round(next.x),
-      y: Math.round(next.y),
-    };
-    setConditionGuideAutoPosition((previous) => {
-      if (previous && previous.x === nextRounded.x && previous.y === nextRounded.y) {
-        return previous;
-      }
-      return nextRounded;
-    });
-  }, [conditionGuideManualPosition, guideVisibility.condition, guideVisibility.turnActions]);
-
-  useLayoutEffect(() => {
-    if (
-      conditionGuideManualPosition ||
-      !guideVisibility.condition ||
-      !guideVisibility.turnActions ||
-      typeof window === 'undefined'
-    ) {
-      return undefined;
-    }
-
-    const handleResize = () => {
-      updateConditionGuideAutoPosition();
-    };
-
-    updateConditionGuideAutoPosition();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [
-    conditionGuideManualPosition,
-    guideVisibility.condition,
-    guideVisibility.turnActions,
-    updateConditionGuideAutoPosition,
-  ]);
 
   const setTurnActionsGuidePositionFromPointer = useCallback((clientX, clientY) => {
     const offset = turnActionsGuideDragOffsetRef.current;
@@ -2970,13 +2968,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     if (!nextPosition) {
       return;
     }
-    const measuredGuideWidth = Math.max(1, Math.round(guideNode.getBoundingClientRect().width));
-    setInteractionGuideWidth((previous) => {
-      if (previous === measuredGuideWidth) {
-        return previous;
-      }
-      return measuredGuideWidth;
-    });
     setInteractionGuidePosition((previous) => {
       if (
         previous.isReady &&
@@ -2994,13 +2985,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, []);
 
   const updateBattleStartGuidePosition = useCallback(() => {
-    const boardNode = boardRootRef.current;
     const guideNode = battleStartGuideRef.current;
-    const interactionGuideNode = interactionGuideRef.current;
+    const conditionNode = conditionGuideRef.current;
+    if (
+      battleStartGuideManualPosition ||
+      conditionGuideManualPosition ||
+      isConditionGuideDragging
+    ) {
+      return;
+    }
     const nextPosition = resolveBattleStartGuidePosition({
-      boardNode,
       guideNode,
-      interactionGuideNode,
+      conditionGuideNode: conditionNode,
     });
     if (!nextPosition) {
       return;
@@ -3019,7 +3015,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         isReady: true,
       };
     });
-  }, []);
+  }, [battleStartGuideManualPosition, conditionGuideManualPosition, isConditionGuideDragging]);
 
   useLayoutEffect(() => {
     updateInteractionGuidePosition();
@@ -3046,6 +3042,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     sessionDoc?.revision,
     isHandOpen,
     isToolboxOpen,
+    conditionGuideManualPosition,
+    guideVisibility.condition,
+    guideVisibility.battleStart,
   ]);
 
   const playerActive = playerBoard?.active;
@@ -5136,12 +5135,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const isBattleStartGuideVisible = Boolean(guideVisibility.battleStart);
   const isTurnActionsGuideVisible = Boolean(guideVisibility.turnActions);
   const isConditionGuideVisible = Boolean(guideVisibility.condition);
+  const isBattleStartGuideAtInitialPosition = !battleStartGuideManualPosition;
   const isTurnActionsGuideAtInitialPosition = !turnActionsGuideManualPosition;
   const isConditionGuideAtInitialPosition = !conditionGuideManualPosition;
-  const shouldUseConditionAutoAnchor =
-    isConditionGuideVisible &&
-    isTurnActionsGuideVisible &&
-    !conditionGuideManualPosition;
   const interactionGuideStyle = interactionGuidePosition.isReady
     ? {
         left: `${interactionGuidePosition.left}px`,
@@ -5151,15 +5147,33 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     : {
         visibility: 'hidden',
       };
-  const battleStartGuideStyle = battleStartGuidePosition.isReady
+  const battleStartGuideStyle = battleStartGuideManualPosition
     ? {
+        position: 'fixed',
+        left: `${battleStartGuideManualPosition.x}px`,
+        top: `${battleStartGuideManualPosition.y}px`,
+        transform: 'none',
+        zIndex: isBattleStartGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 1)',
+        visibility: 'visible',
+      }
+    : battleStartGuidePosition.isReady
+    ? {
+        position: 'fixed',
         left: `${battleStartGuidePosition.left}px`,
         top: `${battleStartGuidePosition.top}px`,
-        width: Number.isFinite(interactionGuideWidth) ? `${interactionGuideWidth}px` : undefined,
-        maxWidth: Number.isFinite(interactionGuideWidth) ? `${interactionGuideWidth}px` : undefined,
+        transform: 'none',
+        zIndex: isBattleStartGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 1)',
         visibility: 'visible',
       }
     : {
+        position: 'fixed',
+        zIndex: isBattleStartGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 1)',
         visibility: 'hidden',
       };
   const conditionGuideStyle = conditionGuideManualPosition
@@ -5173,29 +5187,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           : 'calc(var(--z-toolbox) + 3)',
         visibility: 'visible',
       }
-    : shouldUseConditionAutoAnchor && conditionGuideAutoPosition
-    ? {
-        position: 'fixed',
-        left: `${conditionGuideAutoPosition.x}px`,
-        top: `${conditionGuideAutoPosition.y}px`,
-        transform: 'none',
-        zIndex: isConditionGuideDragging
-          ? 'calc(var(--z-overlay) + 2)'
-          : 'calc(var(--z-toolbox) + 3)',
-        visibility: 'visible',
-      }
-    : shouldUseConditionAutoAnchor
-    ? {
-        position: 'fixed',
-        transform: 'none',
-        zIndex: isConditionGuideDragging
-          ? 'calc(var(--z-overlay) + 2)'
-          : 'calc(var(--z-toolbox) + 3)',
-        visibility: 'hidden',
-      }
     : {
         position: 'fixed',
-        right: '10px',
+        left: '10px',
         top: '50%',
         transform: 'translateY(-50%)',
         zIndex: isConditionGuideDragging
@@ -6204,7 +6198,31 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             data-zone="battle-start-guide"
             aria-label="バトルのはじめかた"
           >
-            <p className={styles.interactionGuideTitle}>バトルのはじめかた</p>
+            <div className={styles.turnActionsGuideHeader}>
+              <p className={styles.turnActionsGuideTitle}>バトルのはじめかた</p>
+              <div className={styles.turnActionsGuideHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.turnActionsGuideReset}
+                  onClick={handleBattleStartGuideResetPosition}
+                  disabled={isBattleStartGuideAtInitialPosition}
+                  aria-label="バトルのはじめかたの位置をリセット"
+                >
+                  位置をリセット
+                </button>
+                <button
+                  type="button"
+                  className={joinClassNames(
+                    styles.turnActionsGuideHandle,
+                    isBattleStartGuideDragging ? styles.turnActionsGuideHandleActive : ''
+                  )}
+                  onPointerDown={handleBattleStartGuideDragStart}
+                  aria-label="バトルのはじめかたを移動"
+                >
+                  <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+                </button>
+              </div>
+            </div>
             <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
               1. はじめに「よろしくおねがいします」とあいさつをします。次にコイントスをして、表が出たらプレイヤー１が、裏が出たらプレイヤー２が先攻か後攻かを選びます。
             </p>
@@ -6280,7 +6298,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             aria-label="自分の番にできること"
           >
           <div className={styles.turnActionsGuideHeader}>
-            <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
+            <p className={styles.turnActionsGuideTitle}>ターンの流れ</p>
             <div className={styles.turnActionsGuideHeaderActions}>
               <button
                 type="button"
@@ -6308,7 +6326,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <section className={styles.turnActionsSection}>
             <p className={styles.turnActionsSectionBadge}>最初にすること</p>
             <p className={styles.turnActionsMainLine}>自分の山札からカードを1枚引く</p>
-            <p className={styles.turnActionsSubLine}>これは必ずしてください。</p>
           </section>
 
           <p className={styles.turnActionsArrow} aria-hidden="true">
@@ -6322,14 +6339,32 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 <p className={styles.turnActionsColumnTitle}>何回でもできる</p>
                 <p className={styles.turnActionsActionItem}>ベンチにたねポケモンを出す</p>
                 <p className={styles.turnActionsActionItem}>グッズを使う</p>
-                <p className={styles.turnActionsActionItem}>ポケモンを進化させる</p>
+                <p className={styles.turnActionsActionItem}>
+                  <span className={styles.turnActionsActionMain}>ポケモンを進化させる</span>
+                  <span className={styles.turnActionsActionNote}>※ 最初の番は進化できない</span>
+                  <span className={styles.turnActionsActionNote}>
+                    ※ 出したばかり/進化したばかりのポケモンもその番は進化できない
+                  </span>
+                </p>
+                <p className={styles.turnActionsActionItem}>
+                  <span className={styles.turnActionsActionMain}>ポケモンのどうぐをつける</span>
+                  <span className={styles.turnActionsActionNote}>※ 1匹1枚まで / つけ替え不可</span>
+                </p>
               </div>
               <div className={styles.turnActionsColumn}>
                 <p className={styles.turnActionsColumnTitle}>1回だけできる</p>
                 <p className={styles.turnActionsActionItem}>ポケモンにエネルギーを1枚つける</p>
-                <p className={styles.turnActionsActionItem}>サポートを使う</p>
+                <p className={styles.turnActionsActionItem}>
+                  <span className={styles.turnActionsActionMain}>サポートを使う</span>
+                  <span className={styles.turnActionsActionNote}>※ 先攻の最初の番は使えない</span>
+                </p>
                 <p className={styles.turnActionsActionItem}>バトルポケモンの「にげる」を使う</p>
+                <p className={styles.turnActionsActionItem}>スタジアムを出す</p>
               </div>
+            </div>
+            <div className={styles.turnActionsColumn}>
+              <p className={styles.turnActionsColumnTitle}>回数はカード文言次第</p>
+              <p className={styles.turnActionsActionItem}>特性を使う</p>
             </div>
             <p className={styles.turnActionsSubLine}>※ やることの順番は自由です</p>
           </section>
@@ -6341,7 +6376,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <section className={styles.turnActionsSection}>
             <p className={styles.turnActionsSectionBadge}>最後にすること</p>
             <p className={styles.turnActionsMainLine}>バトルポケモンのワザを使う</p>
-            <p className={styles.turnActionsSubLine}>※ ワザは自分の番に1つしか使えません。</p>
+            <p className={styles.turnActionsSubLine}>※ 自分の番に1つだけ使えます。使わなくてもOK。</p>
             <p className={styles.turnActionsSubLine}>※ 先攻プレイヤーの最初の番は、ワザを使えません。</p>
             <p className={styles.turnActionsArrow} aria-hidden="true">
               ↓
