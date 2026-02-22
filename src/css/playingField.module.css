@@ -129,7 +129,14 @@
 }
 
 .battleStartGuide {
-  max-width: calc(100% - 24px);
+  width: min(96vw, clamp(300px, 29vw, 360px));
+  max-width: min(96vw, clamp(300px, 29vw, 360px));
+  background: rgb(143, 181, 111);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
 }
 
 .battleStartGuideStep {
@@ -151,7 +158,8 @@
 }
 
 .conditionGuide {
-  max-width: min(96%, clamp(300px, 29vw, 360px));
+  width: min(96vw, clamp(300px, 29vw, 360px));
+  max-width: min(96vw, clamp(300px, 29vw, 360px));
   background: rgb(143, 181, 111);
   border-radius: 12px;
   padding: 8px 10px;
