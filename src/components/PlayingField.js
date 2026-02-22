@@ -2731,8 +2731,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     conditionGuideManualPosition,
     guideVisibility.condition,
     guideVisibility.turnActions,
-    turnActionsGuideManualPosition,
-    isTurnActionsGuideDragging,
     updateConditionGuideAutoPosition,
   ]);
 
