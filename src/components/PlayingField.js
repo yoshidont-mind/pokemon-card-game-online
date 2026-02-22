@@ -72,6 +72,7 @@ const ALERT_MESSAGE_PATTERN = /拒否|失敗|競合|権限|不足|できませ�
 const NOTE_MAX_LENGTH = 120;
 const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8;
 const DECK_PEEK_POSITION_STORAGE_KEY = 'pcgo:deck-peek-position:v1';
+const TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY = 'pcgo:turn-actions-guide-position:v1';
 const OPPONENT_COUNT_FLASH_MS = 2000;
 const INTERACTION_GUIDE_MARGIN_PX = 8;
 const INTERACTION_GUIDE_OVERLAP_PADDING_PX = 4;
@@ -470,96 +471,6 @@ function resolveBattleStartGuidePosition({ boardNode, guideNode, interactionGuid
     const interactionRect = toLocalRect(interactionGuideNode.getBoundingClientRect(), boardRect);
     if (interactionRect) {
       obstacles.push(interactionRect);
-    }
-  }
-
-  let bestCandidate = null;
-  for (let y = minY; y <= maxY; y += INTERACTION_GUIDE_SCAN_STEP_PX) {
-    for (let x = minX; x <= maxX; x += INTERACTION_GUIDE_SCAN_STEP_PX) {
-      const candidate = {
-        left: x,
-        top: y,
-        right: x + panelWidth,
-        bottom: y + panelHeight,
-      };
-      const hasOverlap = obstacles.some((obstacle) =>
-        doRectsOverlap(candidate, obstacle, INTERACTION_GUIDE_OVERLAP_PADDING_PX)
-      );
-      if (hasOverlap) {
-        continue;
-      }
-
-      const score = Math.abs(x - preferredX) + Math.abs(y - preferredY);
-      if (!bestCandidate || score < bestCandidate.score) {
-        bestCandidate = { x, y, score };
-      }
-    }
-  }
-
-  if (!bestCandidate) {
-    return {
-      left: Math.round(preferredX),
-      top: Math.round(preferredY),
-    };
-  }
-
-  return {
-    left: Math.round(bestCandidate.x),
-    top: Math.round(bestCandidate.y),
-  };
-}
-
-function resolveTurnActionsGuidePosition({
-  boardNode,
-  guideNode,
-  interactionGuideNode = null,
-  battleStartGuideNode = null,
-}) {
-  if (!boardNode || !guideNode) {
-    return null;
-  }
-
-  const boardRect = boardNode.getBoundingClientRect();
-  const guideRect = guideNode.getBoundingClientRect();
-  if (!Number.isFinite(boardRect.width) || !Number.isFinite(boardRect.height)) {
-    return null;
-  }
-  if (!Number.isFinite(guideRect.width) || !Number.isFinite(guideRect.height)) {
-    return null;
-  }
-
-  const panelWidth = Math.max(1, guideRect.width);
-  const panelHeight = Math.max(1, guideRect.height);
-  const minX = INTERACTION_GUIDE_MARGIN_PX;
-  const minY = INTERACTION_GUIDE_MARGIN_PX;
-  const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
-  const maxY = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
-
-  // Prefer the right-center area of the playmat.
-  const preferredX = maxX;
-  const preferredY = clampValue(boardRect.height * 0.5 - panelHeight / 2, minY, maxY);
-
-  const obstacleSelector = [
-    `.${styles.zoneTile}`,
-    `.${styles.activeZone}`,
-    `.${styles.benchSlot}`,
-    `.${styles.centerZone}`,
-  ].join(', ');
-  const obstacles = Array.from(boardNode.querySelectorAll(obstacleSelector))
-    .map((node) => toLocalRect(node.getBoundingClientRect(), boardRect))
-    .filter(Boolean);
-
-  if (interactionGuideNode) {
-    const interactionRect = toLocalRect(interactionGuideNode.getBoundingClientRect(), boardRect);
-    if (interactionRect) {
-      obstacles.push(interactionRect);
-    }
-  }
-
-  if (battleStartGuideNode) {
-    const battleStartRect = toLocalRect(battleStartGuideNode.getBoundingClientRect(), boardRect);
-    if (battleStartRect) {
-      obstacles.push(battleStartRect);
     }
   }
 
@@ -2328,6 +2239,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const interactionGuideRef = useRef(null);
   const battleStartGuideRef = useRef(null);
   const turnActionsGuideRef = useRef(null);
+  const turnActionsGuideDragOffsetRef = useRef({ x: 0, y: 0 });
+  const turnActionsGuideDragSizeRef = useRef({ width: 0, height: 0 });
   const [interactionGuidePosition, setInteractionGuidePosition] = useState({
     left: 0,
     top: 0,
@@ -2339,11 +2252,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     top: 0,
     isReady: false,
   });
-  const [turnActionsGuidePosition, setTurnActionsGuidePosition] = useState({
-    left: 0,
-    top: 0,
-    isReady: false,
-  });
+  const [turnActionsGuideManualPosition, setTurnActionsGuideManualPosition] = useState(() =>
+    readStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY)
+  );
+  const [isTurnActionsGuideDragging, setIsTurnActionsGuideDragging] = useState(false);
 
   const clearMutationNotice = useCallback(() => {
     setMutationNotice((previous) => {
@@ -2579,6 +2491,131 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     isRandomDiscardConfigOpen ||
     isDeckPeekConfigOpen;
 
+  const setTurnActionsGuidePositionFromPointer = useCallback((clientX, clientY) => {
+    const offset = turnActionsGuideDragOffsetRef.current;
+    const size = turnActionsGuideDragSizeRef.current;
+    if (
+      !Number.isFinite(clientX) ||
+      !Number.isFinite(clientY) ||
+      !Number.isFinite(size.width) ||
+      !Number.isFinite(size.height) ||
+      size.width <= 0 ||
+      size.height <= 0
+    ) {
+      return;
+    }
+
+    const next = clampFloatingPanelPosition({
+      x: clientX - offset.x,
+      y: clientY - offset.y,
+      width: size.width,
+      height: size.height,
+    });
+
+    const nextRounded = {
+      x: Math.round(next.x),
+      y: Math.round(next.y),
+    };
+
+    setTurnActionsGuideManualPosition((previous) => {
+      if (
+        previous &&
+        previous.x === nextRounded.x &&
+        previous.y === nextRounded.y
+      ) {
+        return previous;
+      }
+      return nextRounded;
+    });
+  }, []);
+
+  const handleTurnActionsGuideDragStart = useCallback(
+    (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
+      const guideNode = turnActionsGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+
+      const guideRect = guideNode.getBoundingClientRect();
+      turnActionsGuideDragOffsetRef.current = {
+        x: event.clientX - guideRect.left,
+        y: event.clientY - guideRect.top,
+      };
+      turnActionsGuideDragSizeRef.current = {
+        width: guideRect.width,
+        height: guideRect.height,
+      };
+      setTurnActionsGuidePositionFromPointer(event.clientX, event.clientY);
+      setIsTurnActionsGuideDragging(true);
+      event.preventDefault();
+    },
+    [setTurnActionsGuidePositionFromPointer]
+  );
+
+  useEffect(() => {
+    if (!turnActionsGuideManualPosition) {
+      return;
+    }
+    writeStoredPosition(TURN_ACTIONS_GUIDE_POSITION_STORAGE_KEY, turnActionsGuideManualPosition);
+  }, [turnActionsGuideManualPosition]);
+
+  useEffect(() => {
+    if (!turnActionsGuideManualPosition || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const guideNode = turnActionsGuideRef.current;
+      if (!guideNode) {
+        return;
+      }
+      const rect = guideNode.getBoundingClientRect();
+      const next = clampFloatingPanelPosition({
+        x: turnActionsGuideManualPosition.x,
+        y: turnActionsGuideManualPosition.y,
+        width: rect.width,
+        height: rect.height,
+      });
+      const nextRounded = {
+        x: Math.round(next.x),
+        y: Math.round(next.y),
+      };
+      if (
+        nextRounded.x !== turnActionsGuideManualPosition.x ||
+        nextRounded.y !== turnActionsGuideManualPosition.y
+      ) {
+        setTurnActionsGuideManualPosition(nextRounded);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [turnActionsGuideManualPosition]);
+
+  useEffect(() => {
+    if (!isTurnActionsGuideDragging || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handlePointerMove = (event) => {
+      setTurnActionsGuidePositionFromPointer(event.clientX, event.clientY);
+    };
+    const handlePointerUp = () => {
+      setIsTurnActionsGuideDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [isTurnActionsGuideDragging, setTurnActionsGuidePositionFromPointer]);
+
   const updateInteractionGuidePosition = useCallback(() => {
     const boardNode = boardRootRef.current;
     const guideNode = interactionGuideRef.current;
@@ -2640,52 +2677,19 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, []);
 
-  const updateTurnActionsGuidePosition = useCallback(() => {
-    const boardNode = boardRootRef.current;
-    const guideNode = turnActionsGuideRef.current;
-    const interactionGuideNode = interactionGuideRef.current;
-    const battleStartGuideNode = battleStartGuideRef.current;
-    const nextPosition = resolveTurnActionsGuidePosition({
-      boardNode,
-      guideNode,
-      interactionGuideNode,
-      battleStartGuideNode,
-    });
-    if (!nextPosition) {
-      return;
-    }
-    setTurnActionsGuidePosition((previous) => {
-      if (
-        previous.isReady &&
-        previous.left === nextPosition.left &&
-        previous.top === nextPosition.top
-      ) {
-        return previous;
-      }
-      return {
-        left: nextPosition.left,
-        top: nextPosition.top,
-        isReady: true,
-      };
-    });
-  }, []);
-
   useLayoutEffect(() => {
     updateInteractionGuidePosition();
     updateBattleStartGuidePosition();
-    updateTurnActionsGuidePosition();
     if (typeof window === 'undefined') {
       return undefined;
     }
     const frameId = window.requestAnimationFrame(() => {
       updateInteractionGuidePosition();
       updateBattleStartGuidePosition();
-      updateTurnActionsGuidePosition();
     });
     const handleResize = () => {
       updateInteractionGuidePosition();
       updateBattleStartGuidePosition();
-      updateTurnActionsGuidePosition();
     };
     window.addEventListener('resize', handleResize);
     return () => {
@@ -2695,7 +2699,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [
     updateInteractionGuidePosition,
     updateBattleStartGuidePosition,
-    updateTurnActionsGuidePosition,
     sessionDoc?.revision,
     isHandOpen,
     isToolboxOpen,
@@ -4497,14 +4500,27 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     : {
         visibility: 'hidden',
       };
-  const turnActionsGuideStyle = {
-    position: 'fixed',
-    right: '10px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    zIndex: 'calc(var(--z-toolbox) + 2)',
-    visibility: 'visible',
-  };
+  const turnActionsGuideStyle = turnActionsGuideManualPosition
+    ? {
+        position: 'fixed',
+        left: `${turnActionsGuideManualPosition.x}px`,
+        top: `${turnActionsGuideManualPosition.y}px`,
+        transform: 'none',
+        zIndex: isTurnActionsGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 2)',
+        visibility: 'visible',
+      }
+    : {
+        position: 'fixed',
+        right: '10px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        zIndex: isTurnActionsGuideDragging
+          ? 'calc(var(--z-overlay) + 2)'
+          : 'calc(var(--z-toolbox) + 2)',
+        visibility: 'visible',
+      };
 
   return (
     <DndContext
@@ -5309,7 +5325,20 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           data-zone="turn-actions-guide"
           aria-label="自分の番にできること"
         >
-          <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
+          <div className={styles.turnActionsGuideHeader}>
+            <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
+            <button
+              type="button"
+              className={joinClassNames(
+                styles.turnActionsGuideHandle,
+                isTurnActionsGuideDragging ? styles.turnActionsGuideHandleActive : ''
+              )}
+              onPointerDown={handleTurnActionsGuideDragStart}
+              aria-label="自分の番にできることを移動"
+            >
+              <FontAwesomeIcon icon={faArrowsUpDownLeftRight} />
+            </button>
+          </div>
 
           <section className={styles.turnActionsSection}>
             <p className={styles.turnActionsSectionBadge}>最初にすること</p>
