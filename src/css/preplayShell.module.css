@@ -21,7 +21,7 @@
   --floating-start-y: 0vh;
   --floating-move-x: 40vw;
   --floating-move-y: 10vh;
-  --floating-duration: 28s;
+  --floating-duration: 56s;
   --floating-delay: 0s;
   --floating-tilt: 0deg;
   --floating-spin: 0deg;
@@ -47,15 +47,7 @@
 .backgroundFade {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.62) 70%),
-    linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.92) 0%,
-      rgba(255, 255, 255, 0.6) 18%,
-      rgba(255, 255, 255, 0.6) 82%,
-      rgba(255, 255, 255, 0.92) 100%
-    );
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .modal {
@@ -81,7 +73,7 @@
 
 @keyframes preplay-floating-card {
   0% {
-    opacity: var(--floating-opacity);
+    opacity: 0;
     transform: translate3d(var(--floating-start-x), var(--floating-start-y), 0)
       rotate(var(--floating-tilt))
       scale(var(--floating-scale));
