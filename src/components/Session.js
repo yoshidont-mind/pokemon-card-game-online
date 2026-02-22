@@ -26,6 +26,14 @@ const DECK_PREVIEW_BASE_SHIFT = Object.freeze({
   x: 0,
   y: -40,
 });
+const DEFAULT_DECK_PROXY_BASE_URL =
+  process.env.NODE_ENV === 'development' ? 'http://localhost:3001/proxy' : '/api/proxy';
+
+function buildDeckProxyUrl(deckCode) {
+  const baseUrl = (process.env.REACT_APP_DECK_PROXY_URL || DEFAULT_DECK_PROXY_BASE_URL).trim();
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}deckCode=${encodeURIComponent(deckCode)}`;
+}
 
 function clampValue(value, min, max) {
   if (!Number.isFinite(value)) {
@@ -412,7 +420,7 @@ const Session = () => {
       alert('デッキコードを入力してください。');
       return;
     }
-    const url = `http://localhost:3001/proxy?url=https://www.pokemon-card.com/deck/confirm.html/deckID/${deckCode}`;
+    const url = buildDeckProxyUrl(deckCode);
     try {
       const response = await axios.get(url);
       const { imageUrls, cardData } = response.data;

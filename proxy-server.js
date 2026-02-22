@@ -9,9 +9,12 @@ const port = 3001;
 app.use(cors());
 
 app.get('/proxy', async (req, res) => {
-    const url = req.query.url;
+    const deckCode = typeof req.query.deckCode === 'string' ? req.query.deckCode.trim() : '';
+    const url = deckCode
+        ? `https://www.pokemon-card.com/deck/confirm.html/deckID/${deckCode}`
+        : req.query.url;
     if (!url) {
-        return res.status(400).send('URL is required');
+        return res.status(400).send('deckCode or url is required');
     }
 
     try {
