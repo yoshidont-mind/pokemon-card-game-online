@@ -508,6 +508,125 @@ function resolveBattleStartGuidePosition({ boardNode, guideNode, interactionGuid
   };
 }
 
+function resolveTurnActionsGuidePosition({
+  boardNode,
+  guideNode,
+  interactionGuideNode = null,
+  battleStartGuideNode = null,
+}) {
+  if (!boardNode || !guideNode) {
+    return null;
+  }
+
+  const boardRect = boardNode.getBoundingClientRect();
+  const guideRect = guideNode.getBoundingClientRect();
+  if (!Number.isFinite(boardRect.width) || !Number.isFinite(boardRect.height)) {
+    return null;
+  }
+  if (!Number.isFinite(guideRect.width) || !Number.isFinite(guideRect.height)) {
+    return null;
+  }
+
+  const panelWidth = Math.max(1, guideRect.width);
+  const panelHeight = Math.max(1, guideRect.height);
+  const minX = INTERACTION_GUIDE_MARGIN_PX;
+  const minY = INTERACTION_GUIDE_MARGIN_PX;
+  const maxX = Math.max(minX, boardRect.width - panelWidth - INTERACTION_GUIDE_MARGIN_PX);
+  const maxYDefault = Math.max(minY, boardRect.height - panelHeight - INTERACTION_GUIDE_MARGIN_PX);
+
+  let preferredX = clampValue(boardRect.width * 0.74 - panelWidth / 2, minX, maxX);
+  let preferredY = clampValue(boardRect.height * 0.32 - panelHeight / 2, minY, maxYDefault);
+  let maxY = maxYDefault;
+
+  const opponentBench4Node = boardNode.querySelector('[data-zone="opponent-bench-4"]');
+  const opponentBench5Node = boardNode.querySelector('[data-zone="opponent-bench-5"]');
+  const dividerNode = boardNode.querySelector(`.${styles.areaDivider}`);
+  if (opponentBench4Node && opponentBench5Node) {
+    const bench4Rect = toLocalRect(opponentBench4Node.getBoundingClientRect(), boardRect);
+    const bench5Rect = toLocalRect(opponentBench5Node.getBoundingClientRect(), boardRect);
+    const dividerRect = dividerNode ? toLocalRect(dividerNode.getBoundingClientRect(), boardRect) : null;
+    if (bench4Rect && bench5Rect) {
+      const benchCenterX =
+        (bench4Rect.left + bench4Rect.right + bench5Rect.left + bench5Rect.right) / 4;
+      preferredX = clampValue(benchCenterX - panelWidth / 2, minX, maxX);
+
+      const upperBound = Math.max(bench4Rect.bottom, bench5Rect.bottom) + INTERACTION_GUIDE_MARGIN_PX;
+      if (dividerRect) {
+        const lowerBound = dividerRect.top - panelHeight - INTERACTION_GUIDE_MARGIN_PX;
+        if (Number.isFinite(lowerBound)) {
+          maxY = clampValue(lowerBound, minY, maxYDefault);
+          if (lowerBound >= upperBound) {
+            preferredY = clampValue((upperBound + lowerBound) / 2, minY, maxY);
+          } else {
+            preferredY = clampValue(Math.max(minY, lowerBound), minY, maxY);
+          }
+        }
+      } else {
+        preferredY = clampValue(upperBound, minY, maxY);
+      }
+    }
+  }
+
+  const obstacleSelector = [
+    `.${styles.zoneTile}`,
+    `.${styles.activeZone}`,
+    `.${styles.benchSlot}`,
+    `.${styles.centerZone}`,
+  ].join(', ');
+  const obstacles = Array.from(boardNode.querySelectorAll(obstacleSelector))
+    .map((node) => toLocalRect(node.getBoundingClientRect(), boardRect))
+    .filter(Boolean);
+
+  if (interactionGuideNode) {
+    const interactionRect = toLocalRect(interactionGuideNode.getBoundingClientRect(), boardRect);
+    if (interactionRect) {
+      obstacles.push(interactionRect);
+    }
+  }
+
+  if (battleStartGuideNode) {
+    const battleStartRect = toLocalRect(battleStartGuideNode.getBoundingClientRect(), boardRect);
+    if (battleStartRect) {
+      obstacles.push(battleStartRect);
+    }
+  }
+
+  let bestCandidate = null;
+  for (let y = minY; y <= maxY; y += INTERACTION_GUIDE_SCAN_STEP_PX) {
+    for (let x = minX; x <= maxX; x += INTERACTION_GUIDE_SCAN_STEP_PX) {
+      const candidate = {
+        left: x,
+        top: y,
+        right: x + panelWidth,
+        bottom: y + panelHeight,
+      };
+      const hasOverlap = obstacles.some((obstacle) =>
+        doRectsOverlap(candidate, obstacle, INTERACTION_GUIDE_OVERLAP_PADDING_PX)
+      );
+      if (hasOverlap) {
+        continue;
+      }
+
+      const score = Math.abs(x - preferredX) + Math.abs(y - preferredY);
+      if (!bestCandidate || score < bestCandidate.score) {
+        bestCandidate = { x, y, score };
+      }
+    }
+  }
+
+  if (!bestCandidate) {
+    return {
+      left: Math.round(preferredX),
+      top: Math.round(preferredY),
+    };
+  }
+
+  return {
+    left: Math.round(bestCandidate.x),
+    top: Math.round(bestCandidate.y),
+  };
+}
+
 function clampPositiveInt(value, max) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -2236,12 +2355,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
   const battleStartGuideRef = useRef(null);
+  const turnActionsGuideRef = useRef(null);
   const [interactionGuidePosition, setInteractionGuidePosition] = useState({
     left: 0,
     top: 0,
     isReady: false,
   });
   const [battleStartGuidePosition, setBattleStartGuidePosition] = useState({
+    left: 0,
+    top: 0,
+    isReady: false,
+  });
+  const [turnActionsGuidePosition, setTurnActionsGuidePosition] = useState({
     left: 0,
     top: 0,
     isReady: false,
@@ -2535,19 +2660,52 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, []);
 
+  const updateTurnActionsGuidePosition = useCallback(() => {
+    const boardNode = boardRootRef.current;
+    const guideNode = turnActionsGuideRef.current;
+    const interactionGuideNode = interactionGuideRef.current;
+    const battleStartGuideNode = battleStartGuideRef.current;
+    const nextPosition = resolveTurnActionsGuidePosition({
+      boardNode,
+      guideNode,
+      interactionGuideNode,
+      battleStartGuideNode,
+    });
+    if (!nextPosition) {
+      return;
+    }
+    setTurnActionsGuidePosition((previous) => {
+      if (
+        previous.isReady &&
+        previous.left === nextPosition.left &&
+        previous.top === nextPosition.top
+      ) {
+        return previous;
+      }
+      return {
+        left: nextPosition.left,
+        top: nextPosition.top,
+        isReady: true,
+      };
+    });
+  }, []);
+
   useLayoutEffect(() => {
     updateInteractionGuidePosition();
     updateBattleStartGuidePosition();
+    updateTurnActionsGuidePosition();
     if (typeof window === 'undefined') {
       return undefined;
     }
     const frameId = window.requestAnimationFrame(() => {
       updateInteractionGuidePosition();
       updateBattleStartGuidePosition();
+      updateTurnActionsGuidePosition();
     });
     const handleResize = () => {
       updateInteractionGuidePosition();
       updateBattleStartGuidePosition();
+      updateTurnActionsGuidePosition();
     };
     window.addEventListener('resize', handleResize);
     return () => {
@@ -2557,6 +2715,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [
     updateInteractionGuidePosition,
     updateBattleStartGuidePosition,
+    updateTurnActionsGuidePosition,
     sessionDoc?.revision,
     isHandOpen,
     isToolboxOpen,
@@ -4356,6 +4515,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     : {
         visibility: 'hidden',
       };
+  const turnActionsGuideStyle = turnActionsGuidePosition.isReady
+    ? {
+        left: `${turnActionsGuidePosition.left}px`,
+        top: `${turnActionsGuidePosition.top}px`,
+        visibility: 'visible',
+      }
+    : {
+        visibility: 'hidden',
+      };
 
   return (
     <DndContext
@@ -5152,6 +5320,56 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <p className={joinClassNames(styles.interactionGuideLine, styles.battleStartGuideStep)}>
             3. 手札にまだ「たねポケモン」がいれば、5枚までベンチに配置できます。完了したら、「対戦スタート！」
           </p>
+        </aside>
+        <aside
+          ref={turnActionsGuideRef}
+          className={joinClassNames(styles.interactionGuide, styles.turnActionsGuide)}
+          style={turnActionsGuideStyle}
+          data-zone="turn-actions-guide"
+          aria-label="自分の番にできること"
+        >
+          <p className={styles.turnActionsGuideTitle}>自分の番にできること</p>
+
+          <section className={styles.turnActionsSection}>
+            <p className={styles.turnActionsSectionBadge}>最初にすること</p>
+            <p className={styles.turnActionsMainLine}>自分の山札からカードを1枚引く</p>
+            <p className={styles.turnActionsSubLine}>これは必ずしてください。</p>
+          </section>
+
+          <p className={styles.turnActionsArrow} aria-hidden="true">
+            ↓
+          </p>
+
+          <section className={styles.turnActionsSection}>
+            <p className={styles.turnActionsSectionTitle}>自由にできること</p>
+            <div className={styles.turnActionsColumns}>
+              <div className={styles.turnActionsColumn}>
+                <p className={styles.turnActionsColumnTitle}>何回でもできる</p>
+                <p className={styles.turnActionsActionItem}>ベンチにたねポケモンを出す</p>
+                <p className={styles.turnActionsActionItem}>グッズを使う</p>
+                <p className={styles.turnActionsActionItem}>ポケモンを進化させる</p>
+              </div>
+              <div className={styles.turnActionsColumn}>
+                <p className={styles.turnActionsColumnTitle}>1回だけできる</p>
+                <p className={styles.turnActionsActionItem}>ポケモンにエネルギーを1枚つける</p>
+                <p className={styles.turnActionsActionItem}>サポートを使う</p>
+                <p className={styles.turnActionsActionItem}>バトルポケモンの「にげる」を使う</p>
+              </div>
+            </div>
+            <p className={styles.turnActionsSubLine}>※ やることの順番は自由です</p>
+          </section>
+
+          <p className={styles.turnActionsArrow} aria-hidden="true">
+            ↓
+          </p>
+
+          <section className={styles.turnActionsSection}>
+            <p className={styles.turnActionsSectionBadge}>最後にすること</p>
+            <p className={styles.turnActionsMainLine}>バトルポケモンのワザを使う</p>
+            <p className={styles.turnActionsSubLine}>
+              ワザを1つ使ったら自分の番は終わります。先攻プレイヤーの最初の番は、ワザを使えません。
+            </p>
+          </section>
         </aside>
 
         <HandTray

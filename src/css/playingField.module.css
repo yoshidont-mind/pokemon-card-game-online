@@ -58,6 +58,114 @@
   margin-top: 4px;
 }
 
+.turnActionsGuide {
+  max-width: min(96%, clamp(300px, 29vw, 360px));
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.turnActionsGuideTitle {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsSection {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 9px;
+  padding: 5px 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.turnActionsSectionTitle {
+  margin: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsSectionBadge {
+  margin: 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.67rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsMainLine {
+  margin: 0;
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsSubLine {
+  margin: 0;
+  text-align: center;
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsArrow {
+  margin: 0;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.turnActionsColumn {
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 8px;
+  padding: 4px;
+  display: grid;
+  gap: 3px;
+}
+
+.turnActionsColumnTitle {
+  margin: 0;
+  text-align: center;
+  font-size: 0.63rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+.turnActionsActionItem {
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 6px;
+  padding: 3px 4px;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
 .areaDivider {
   position: relative;
   height: clamp(8px, 1vw, 12px);
