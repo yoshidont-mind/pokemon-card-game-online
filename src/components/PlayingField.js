@@ -2270,6 +2270,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [opponentActiveSingleHoverShift, setOpponentActiveSingleHoverShift] = useState(() => ({
     ...POPUP_CARD_BASE_SHIFT,
   }));
+  const [isStadiumCardHovering, setIsStadiumCardHovering] = useState(false);
+  const [stadiumCardHoverShift, setStadiumCardHoverShift] = useState(() => ({
+    ...POPUP_CARD_BASE_SHIFT,
+  }));
   const [opponentCountFlash, setOpponentCountFlash] = useState({
     lost: false,
     discard: false,
@@ -2314,6 +2318,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const opponentBoardRevealRefs = useRef({});
   const playerBoardRevealRefs = useRef({});
   const opponentActiveHoverSurfaceRef = useRef(null);
+  const stadiumHoverSurfaceRef = useRef(null);
   const opponentCountPrevRef = useRef({
     lost: null,
     discard: null,
@@ -3891,6 +3896,47 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, []);
 
+  const clearStadiumCardHover = useCallback(() => {
+    setIsStadiumCardHovering(false);
+    setStadiumCardHoverShift((previous) => {
+      if (
+        previous.x === POPUP_CARD_BASE_SHIFT.x &&
+        previous.y === POPUP_CARD_BASE_SHIFT.y
+      ) {
+        return previous;
+      }
+      return { ...POPUP_CARD_BASE_SHIFT };
+    });
+  }, []);
+
+  const activateStadiumCardHover = useCallback(
+    (containerNode) => {
+      if (!containerNode || typeof window === 'undefined') {
+        clearStadiumCardHover();
+        return;
+      }
+      const imageNode = containerNode.querySelector('img');
+      const anchorRect =
+        imageNode?.getBoundingClientRect?.() || containerNode.getBoundingClientRect();
+
+      stadiumHoverSurfaceRef.current = containerNode;
+      setIsStadiumCardHovering(true);
+      const next = resolvePopupCardHoverShift({
+        cardRect: anchorRect,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        scale: POPUP_CARD_HOVER_SCALE,
+      });
+      setStadiumCardHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    },
+    [clearStadiumCardHover]
+  );
+
   const activateOpponentActiveSingleHover = useCallback(
     (containerNode) => {
       if (!containerNode || typeof window === 'undefined') {
@@ -3926,6 +3972,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [clearOpponentActiveSingleHover, opponentActive]);
 
   useEffect(() => {
+    if (!stadiumCardId || !stadiumCardImageUrl) {
+      clearStadiumCardHover();
+    }
+  }, [clearStadiumCardHover, stadiumCardId, stadiumCardImageUrl]);
+
+  useEffect(() => {
     if (!isOpponentActiveSingleHovering || typeof window === 'undefined') {
       return undefined;
     }
@@ -3951,6 +4003,36 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isOpponentActiveSingleHovering]);
+
+  useEffect(() => {
+    if (!isStadiumCardHovering || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const node = stadiumHoverSurfaceRef.current;
+      if (!node) {
+        return;
+      }
+      const imageNode = node.querySelector('img');
+      const anchorRect = imageNode?.getBoundingClientRect?.() || node.getBoundingClientRect();
+      const next = resolvePopupCardHoverShift({
+        cardRect: anchorRect,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        scale: POPUP_CARD_HOVER_SCALE,
+      });
+      setStadiumCardHoverShift((previous) => {
+        if (previous.x === next.x && previous.y === next.y) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isStadiumCardHovering]);
 
   useEffect(() => {
     const revealRequestsForActor = operationRequests.filter(
@@ -5531,7 +5613,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
           <div className={styles.mainColumn}>
             <div className={`${styles.activeRow} ${styles.battleLineRow} ${styles.battleLineRowWithAux}`.trim()}>
-              <div className={styles.playerBattleAux}>
+              <div
+                className={joinClassNames(
+                  styles.playerBattleAux,
+                  isStadiumCardHovering ? styles.playerBattleAuxHovering : ''
+                )}
+              >
                 <div className={styles.stadiumCoinRow}>
                   <DroppableZone
                     dropId="zone-center-stadium"
@@ -5544,26 +5631,54 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   >
                     <p className={styles.zoneTitle}>スタジアム</p>
                     {stadiumCardId && stadiumCardImageUrl ? (
-                      canDragStadiumCard ? (
-                        <DraggableCard
-                          dragId={`stadium-card-${stadiumCardId}`}
-                          dragPayload={stadiumCardDragPayload}
-                          className={styles.stadiumCardDraggable}
-                          draggingClassName={styles.draggingSource}
-                        >
+                      <div
+                        ref={(node) => {
+                          if (node) {
+                            stadiumHoverSurfaceRef.current = node;
+                          } else {
+                            stadiumHoverSurfaceRef.current = null;
+                          }
+                        }}
+                        className={joinClassNames(
+                          styles.stadiumCardHoverable,
+                          isStadiumCardHovering ? styles.stadiumCardHoverableActive : ''
+                        )}
+                        style={
+                          isStadiumCardHovering
+                            ? {
+                                '--stadium-card-shift-x': `${stadiumCardHoverShift.x}px`,
+                                '--stadium-card-shift-y': `${stadiumCardHoverShift.y}px`,
+                              }
+                            : undefined
+                        }
+                        tabIndex={0}
+                        aria-label="スタジアムカードを拡大表示"
+                        onMouseEnter={(event) => activateStadiumCardHover(event.currentTarget)}
+                        onMouseLeave={clearStadiumCardHover}
+                        onFocus={(event) => activateStadiumCardHover(event.currentTarget)}
+                        onBlur={clearStadiumCardHover}
+                      >
+                        {canDragStadiumCard ? (
+                          <DraggableCard
+                            dragId={`stadium-card-${stadiumCardId}`}
+                            dragPayload={stadiumCardDragPayload}
+                            className={styles.stadiumCardDraggable}
+                            draggingClassName={styles.draggingSource}
+                          >
+                            <img
+                              src={stadiumCardImageUrl}
+                              alt="場に出ているスタジアムカード"
+                              className={styles.stadiumCardImage}
+                            />
+                          </DraggableCard>
+                        ) : (
                           <img
                             src={stadiumCardImageUrl}
                             alt="場に出ているスタジアムカード"
                             className={styles.stadiumCardImage}
                           />
-                        </DraggableCard>
-                      ) : (
-                        <img
-                          src={stadiumCardImageUrl}
-                          alt="場に出ているスタジアムカード"
-                          className={styles.stadiumCardImage}
-                        />
-                      )
+                        )}
+                      </div>
                     ) : (
                       <span className={styles.zoneValueMuted}>なし</span>
                     )}
