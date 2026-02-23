@@ -287,7 +287,7 @@ test('shows quick action buttons for deck draw, shuffle, and prize take', () => 
 
   expect(screen.getByRole('button', { name: /山札から1枚引く/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /山札をシャッフルする/i })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /山札を閲覧する/i })).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: /山札を閲覧する/i }).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole('button', { name: /サイドから1枚取る/i })).toBeInTheDocument();
 });
 
@@ -587,6 +587,109 @@ test('shows rejection banner when opponent rejects reveal request', async () => 
 
   await waitFor(() => {
     expect(screen.getByText('相手が手札公開リクエストを拒否しました。')).toBeInTheDocument();
+  });
+});
+
+test('opens opponent deck reveal request modal from opponent deck click', async () => {
+  renderPlayingField();
+
+  const opponentDeckZone = document.querySelector('[data-zone="opponent-deck"]');
+  expect(opponentDeckZone).toBeInTheDocument();
+
+  const openButton = within(opponentDeckZone).getByRole('button', { name: '山札を閲覧する' });
+  fireEvent.click(openButton);
+
+  await waitFor(() => {
+    expect(screen.getByText('相手山札の公開を要求')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '枚数を確定して閲覧依頼' })).toBeInTheDocument();
+  });
+});
+
+test('shows opponent deck reveal modal when a new reveal request is approved', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          publicCardCatalog: {
+            c_player2_deck_001: 'https://example.com/p2_deck_001.jpg',
+            c_player2_deck_002: 'https://example.com/p2_deck_002.jpg',
+          },
+          operationRequests: [
+            {
+              requestId: 'req_reveal_deck_001',
+              opId: 'OP-B14',
+              requestType: 'opponent-reveal-deck',
+              status: 'completed',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 2 },
+              result: {
+                revealedCardIds: ['c_player2_deck_001', 'c_player2_deck_002'],
+              },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手の山札（2枚）')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '公開山札 1 を拡大表示' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '閉じる' })).toBeInTheDocument();
+  });
+});
+
+test('shows rejection banner when opponent rejects deck reveal request', async () => {
+  const privateStateDoc = createPrivateStateDoc();
+  const { rerender } = render(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc()}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  rerender(
+    <PlayingField
+      sessionId="session-layout-test"
+      playerId="player1"
+      sessionDoc={createSessionDoc({
+        publicState: {
+          operationRequests: [
+            {
+              requestId: 'req_reveal_deck_002',
+              opId: 'OP-B14',
+              requestType: 'opponent-reveal-deck',
+              status: 'rejected',
+              actorPlayerId: 'player1',
+              targetPlayerId: 'player2',
+              payload: { count: 2 },
+              result: { reason: 'rejected-by-target-player' },
+            },
+          ],
+        },
+      })}
+      privateStateDoc={privateStateDoc}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText('相手が山札公開リクエストを拒否しました。')).toBeInTheDocument();
   });
 });
 

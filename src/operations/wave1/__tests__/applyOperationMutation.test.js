@@ -262,6 +262,58 @@ describe('mutateDocsForOperationIntent', () => {
     expect(privateStateDoc.zones.hand).toHaveLength(3);
   });
 
+  test('request approve resolves reveal-deck request and returns top N card ids', () => {
+    const sessionDoc = createSessionDoc();
+    sessionDoc.publicState.operationRequests = [
+      {
+        requestId: 'req_002_b14',
+        opId: OPERATION_IDS.OP_B14,
+        requestType: 'opponent-reveal-deck',
+        status: 'pending',
+        actorPlayerId: 'player1',
+        targetPlayerId: 'player2',
+        payload: { count: 2 },
+        createdAt: '2026-02-19T03:00:00.000Z',
+        resolvedAt: null,
+        resolvedByPlayerId: null,
+        result: null,
+      },
+    ];
+
+    const privateStateDoc = createPrivateStateDoc({
+      ownerPlayerId: 'player2',
+    });
+
+    mutateDocsForOperationIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player2',
+      intent: {
+        action: {
+          opId: INTERNAL_OPERATION_IDS.REQUEST_APPROVE,
+          mode: 'request-resolution',
+          payload: {
+            requestId: 'req_002_b14',
+            action: 'approve',
+          },
+        },
+      },
+      now: '2026-02-19T03:11:00.000Z',
+    });
+
+    expect(sessionDoc.publicState.operationRequests[0].status).toBe('completed');
+    expect(sessionDoc.publicState.operationRequests[0].resolvedByPlayerId).toBe('player2');
+    expect(sessionDoc.publicState.operationRequests[0].result.revealedCardIds).toEqual([
+      'c_player2_deck_001',
+      'c_player2_deck_002',
+    ]);
+    expect(privateStateDoc.zones.deck.map((ref) => ref.cardId)).toEqual([
+      'c_player2_deck_001',
+      'c_player2_deck_002',
+      'c_player2_deck_003',
+    ]);
+  });
+
   test('request approve resolves OP-B12 selected discard request', () => {
     const sessionDoc = createSessionDoc();
     sessionDoc.publicState.operationRequests = [
