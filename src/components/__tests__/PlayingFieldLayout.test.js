@@ -143,7 +143,7 @@ test('hand tray toggle updates aria-expanded and panel visibility', async () => 
   });
 });
 
-test('hand card click toggles pinned state without separate preview pane', async () => {
+test('hand card click state is cleared when cursor leaves the card', async () => {
   renderPlayingField();
 
   fireEvent.click(screen.getByRole('button', { name: /手札を開く/i }));
@@ -154,10 +154,11 @@ test('hand card click toggles pinned state without separate preview pane', async
   expect(screen.queryByText(/拡大表示されます/)).not.toBeInTheDocument();
 
   const firstHandCardButton = screen.getByRole('button', { name: /手札 1 を拡大表示/i });
+  fireEvent.mouseEnter(firstHandCardButton);
   fireEvent.click(firstHandCardButton);
   expect(firstHandCardButton).toHaveAttribute('aria-pressed', 'true');
 
-  fireEvent.click(firstHandCardButton);
+  fireEvent.mouseLeave(firstHandCardButton);
   expect(firstHandCardButton).toHaveAttribute('aria-pressed', 'false');
 });
 
