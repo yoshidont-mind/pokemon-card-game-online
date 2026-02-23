@@ -2232,6 +2232,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     discard: false,
     deck: false,
     prize: false,
+    hand: false,
   });
   const [stackModalState, setStackModalState] = useState({
     ownerPlayerId: '',
@@ -2279,12 +2280,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     discard: null,
     deck: null,
     prize: null,
+    hand: null,
   });
   const opponentCountFlashTimeoutsRef = useRef({
     lost: null,
     discard: null,
     deck: null,
     prize: null,
+    hand: null,
   });
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
@@ -3078,6 +3081,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       ['discard', opponentDiscardCount],
       ['deck', opponentDeckCount],
       ['prize', opponentPrizeCount],
+      ['hand', opponentHandCount],
     ];
 
     zoneCountEntries.forEach(([zoneKey, nextCount]) => {
@@ -3104,7 +3108,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         opponentCountFlashTimeoutsRef.current[zoneKey] = null;
       }, OPPONENT_COUNT_FLASH_MS);
     });
-  }, [opponentDeckCount, opponentDiscardCount, opponentLostCount, opponentPrizeCount]);
+  }, [opponentDeckCount, opponentDiscardCount, opponentLostCount, opponentPrizeCount, opponentHandCount]);
 
   useEffect(() => {
     return () => {
@@ -5334,7 +5338,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <div className={styles.opponentHandControl}>
             <button
               type="button"
-              className={styles.handCountPill}
+              className={joinClassNames(
+                styles.handCountPill,
+                opponentCountFlash.hand ? styles.handCountPillAlert : ''
+              )}
               data-zone="opponent-hand-count-pill"
               aria-label={`相手手札（${opponentHandCount}枚）`}
               aria-haspopup="menu"

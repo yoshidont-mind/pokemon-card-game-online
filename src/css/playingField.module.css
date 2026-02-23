@@ -721,6 +721,12 @@
   outline-offset: 2px;
 }
 
+.handCountPillAlert {
+  background: rgba(207, 54, 54, 0.82);
+  border-color: rgba(140, 24, 24, 0.88);
+  color: #fff;
+}
+
 .opponentHandMenu {
   position: absolute;
   top: calc(100% + 6px);
@@ -1795,6 +1801,7 @@
 }
 
 .prizeFan {
+  --prize-fan-pair-width: calc(var(--card-w) + (var(--card-w) * 0.34));
   position: relative;
   width: 100%;
   display: grid;
@@ -1811,7 +1818,7 @@
 
 .prizeFanRow {
   position: relative;
-  width: calc(var(--card-w) + (var(--card-w) * 0.34));
+  width: var(--prize-fan-pair-width);
   height: calc(var(--card-w) * 1.4);
 }
 
@@ -1830,6 +1837,8 @@
 }
 
 .prizeFanCountOverlay {
+  width: var(--prize-fan-pair-width);
+  max-width: var(--prize-fan-pair-width);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
