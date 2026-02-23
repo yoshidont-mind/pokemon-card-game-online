@@ -5293,6 +5293,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       : 0;
   const isDraggingCard = activeDragPayload?.dragType === 'card';
   const isDraggingStack = activeDragPayload?.dragType === 'stack';
+  const isDraggingDeckInsertCandidate = isDraggingCard || isDraggingStack;
   const isDraggingCardFromPlayerStack =
     isDraggingCard && activeDragPayload?.sourceZone === 'player-stack';
   const draggingSourceStackKind =
@@ -6284,7 +6285,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   ) : (
                     <DeckPile count={displayPlayerDeckCount} alt="Player Deck" />
                   )}
-                  {isDraggingCard ? (
+                  {isDraggingDeckInsertCandidate ? (
                     <div className={styles.deckInsertTargets}>
                       <DroppableZone
                         dropId="zone-player-deck-insert-top"
