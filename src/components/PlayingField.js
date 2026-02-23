@@ -2568,7 +2568,6 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [opponentHandRevealCards, opponentRevealSelectedCardIds]);
   const selectedOpponentRevealCardCount = selectedOpponentRevealCardIds.length;
   const opponentRevealColumnCount = Math.max(1, Math.min(10, opponentHandRevealCards.length || 1));
-  const opponentDeckRevealColumnCount = Math.max(1, Math.min(10, opponentDeckRevealCards.length || 1));
   const pendingApprovalRequests = useMemo(
     () => listPendingOperationRequests(sessionDoc, ownerPlayerId),
     [ownerPlayerId, sessionDoc]
@@ -6885,93 +6884,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         </div>
       ) : null}
       {!hasBlockingRequest && isOpponentDeckRevealOpen ? (
-        <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">
-          <div
-            className={styles.opponentRevealCard}
-            style={{ '--opponent-reveal-columns': String(opponentDeckRevealColumnCount) }}
-          >
-            <p className={styles.requestBlockingTitle}>
-              相手の山札（{opponentDeckRevealCards.length}枚）
-            </p>
-            <div className={styles.opponentRevealCards}>
-              {opponentDeckRevealCards.length > 0 ? (
-                opponentDeckRevealCards.map((card, index) => {
-                  const isActive = opponentRevealActiveIndex === index;
-
-                  if (card.imageUrl) {
-                    return (
-                      <div
-                        key={`${opponentDeckRevealState.requestId}-${card.cardId}-${index}`}
-                        className={joinClassNames(
-                          styles.popupCardItem,
-                          isActive ? styles.popupCardItemActive : ''
-                        )}
-                      >
-                        <button
-                          ref={(node) => {
-                            if (node) {
-                              opponentRevealButtonRefs.current[index] = node;
-                            } else {
-                              delete opponentRevealButtonRefs.current[index];
-                            }
-                          }}
-                          type="button"
-                          className={joinClassNames(
-                            styles.popupCardButton,
-                            isActive ? styles.popupCardButtonActive : ''
-                          )}
-                          style={
-                            isActive
-                              ? {
-                                  '--popup-card-shift-x': `${opponentRevealActiveShift.x}px`,
-                                  '--popup-card-shift-y': `${opponentRevealActiveShift.y}px`,
-                                  '--popup-card-scale': String(POPUP_CARD_HOVER_SCALE),
-                                }
-                              : undefined
-                          }
-                          aria-label={`公開山札 ${index + 1} を拡大表示`}
-                          onMouseEnter={() => setOpponentRevealActiveIndex(index)}
-                          onMouseLeave={() => setOpponentRevealActiveIndex(null)}
-                          onFocus={() => setOpponentRevealActiveIndex(index)}
-                          onBlur={() => setOpponentRevealActiveIndex(null)}
-                        >
-                          <img
-                            src={card.imageUrl}
-                            alt={`公開山札 ${index + 1}`}
-                            className={joinClassNames(
-                              styles.opponentRevealCardImage,
-                              styles.popupCardImage
-                            )}
-                          />
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={`${opponentDeckRevealState.requestId}-${card.cardId}-${index}`}
-                      className={styles.opponentRevealCardFallback}
-                    >
-                      {card.cardId}
-                    </div>
-                  );
-                })
-              ) : (
-                <p className={styles.requestBlockingMeta}>公開カードはありません。</p>
-              )}
-            </div>
-            <div className={styles.requestBlockingActions}>
-              <button
-                type="button"
-                className={styles.requestApproveButton}
-                onClick={handleCloseOpponentDeckReveal}
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
+        <StackCardsModal
+          title={`相手の山札（${opponentDeckRevealCards.length}枚）`}
+          cards={opponentDeckRevealCards}
+          onClose={handleCloseOpponentDeckReveal}
+          allowCardDrag={false}
+          modalAriaLabel="相手山札閲覧モーダル"
+          modalDataZone="opponent-deck-reveal-cards-root"
+        />
       ) : null}
       {!hasBlockingRequest && isRandomDiscardConfigOpen ? (
         <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">

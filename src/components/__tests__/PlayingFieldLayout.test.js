@@ -648,8 +648,8 @@ test('shows opponent deck reveal modal when a new reveal request is approved', a
 
   await waitFor(() => {
     expect(screen.getByText('相手の山札（2枚）')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '公開山札 1 を拡大表示' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '閉じる' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展開カード 1 を拡大表示' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '閉じる' }).length).toBeGreaterThanOrEqual(1);
   });
 });
 
