@@ -6405,6 +6405,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
             <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
             <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
+            <p className={styles.interactionGuideLine}>相手山札: クリックで公開を要求</p>
           </aside>
         ) : null}
         {isBattleStartGuideVisible ? (
