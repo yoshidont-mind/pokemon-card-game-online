@@ -5527,6 +5527,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 isHighlighted={isZoneHighlighted(opponentActiveZoneId)}
                 data-zone={opponentActiveZoneId}
                 data-drop-group="active"
+                style={
+                  isOpponentActiveSingleHovering
+                    ? { zIndex: 'calc(var(--z-overlay) + 2)' }
+                    : undefined
+                }
               >
                 {opponentActive ? (
                   <DroppableStack
