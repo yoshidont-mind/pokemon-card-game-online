@@ -409,6 +409,7 @@ function applyRequestApproval({
 
   const board = ensureBoard(sessionDoc, playerId);
   const hand = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.HAND);
+  const deck = resolvePrivateZone(privateStateDoc, PRIVATE_ZONE.DECK);
 
   if (request.requestType === 'opponent-discard-random-hand') {
     const count = normalizeCount(request?.payload?.count, 1);
@@ -443,6 +444,23 @@ function applyRequestApproval({
     request.result = {
       revealedCount: hand.length,
       revealedCardIds: hand.map((ref) => ref?.cardId).filter(Boolean),
+    };
+    return;
+  }
+
+  if (request.requestType === 'opponent-reveal-deck') {
+    const count = normalizeCount(request?.payload?.count, 1);
+    const revealedCardIds = deck
+      .slice(0, count)
+      .map((ref) => ref?.cardId)
+      .filter(Boolean);
+
+    request.status = OPERATION_REQUEST_STATUS.COMPLETED;
+    request.resolvedAt = now;
+    request.resolvedByPlayerId = playerId;
+    request.result = {
+      revealedCount: revealedCardIds.length,
+      revealedCardIds,
     };
     return;
   }
@@ -1177,6 +1195,8 @@ export async function applyOperationMutation({
           ? 'opponent-reveal-hand'
           : action.opId === OPERATION_IDS.OP_B12
             ? 'opponent-discard-selected-hand'
+            : action.opId === OPERATION_IDS.OP_B14
+              ? 'opponent-reveal-deck'
           : null;
 
     if (!requestType) {

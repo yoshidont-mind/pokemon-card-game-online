@@ -783,6 +783,11 @@ function formatPendingRequestLabel(request) {
     return '手札を公開してよいか確認されています。';
   }
 
+  if (request.requestType === 'opponent-reveal-deck') {
+    const count = Number(request?.payload?.count || 1);
+    return `山札の上から ${count} 枚を公開してよいか確認されています。`;
+  }
+
   if (request.requestType === 'opponent-discard-selected-hand') {
     const selectedCount = Math.max(
       asArray(request?.payload?.cardIds).filter(Boolean).length,
@@ -2194,6 +2199,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [isOpponentHandMenuOpen, setIsOpponentHandMenuOpen] = useState(false);
   const [isRandomDiscardConfigOpen, setIsRandomDiscardConfigOpen] = useState(false);
   const [randomDiscardCount, setRandomDiscardCount] = useState(1);
+  const [isOpponentDeckRevealConfigOpen, setIsOpponentDeckRevealConfigOpen] = useState(false);
+  const [opponentDeckRevealCount, setOpponentDeckRevealCount] = useState(1);
+  const [isOpponentDeckRevealSelectAll, setIsOpponentDeckRevealSelectAll] = useState(false);
   const [isDeckPeekConfigOpen, setIsDeckPeekConfigOpen] = useState(false);
   const [pendingHandBulkAction, setPendingHandBulkAction] = useState(null);
   const [deckPeekCount, setDeckPeekCount] = useState(1);
@@ -2203,6 +2211,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const [editingSharedNoteId, setEditingSharedNoteId] = useState('');
   const [editingSharedNoteDraft, setEditingSharedNoteDraft] = useState('');
   const [opponentHandRevealState, setOpponentHandRevealState] = useState({
+    requestId: '',
+    cardIds: [],
+  });
+  const [opponentDeckRevealState, setOpponentDeckRevealState] = useState({
     requestId: '',
     cardIds: [],
   });
@@ -2232,6 +2244,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     discard: false,
     deck: false,
     prize: false,
+    hand: false,
   });
   const [stackModalState, setStackModalState] = useState({
     ownerPlayerId: '',
@@ -2259,6 +2272,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   const hasInitializedHandledRevealRef = useRef(false);
   const handledRandomDiscardRequestIdsRef = useRef(new Set());
   const hasInitializedHandledRandomDiscardRef = useRef(false);
+  const handledRevealDeckRequestIdsRef = useRef(new Set());
+  const hasInitializedHandledRevealDeckRef = useRef(false);
   const handledSelectedDiscardRequestIdsRef = useRef(new Set());
   const hasInitializedHandledSelectedDiscardRef = useRef(false);
   const handledDeckShuffleEventAtRef = useRef('');
@@ -2279,12 +2294,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     discard: null,
     deck: null,
     prize: null,
+    hand: null,
   });
   const opponentCountFlashTimeoutsRef = useRef({
     lost: null,
     discard: null,
     deck: null,
     prize: null,
+    hand: null,
   });
   const boardRootRef = useRef(null);
   const interactionGuideRef = useRef(null);
@@ -2538,6 +2555,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     () => toRevealRequestCards(opponentHandRevealState.cardIds, renderCardCatalog),
     [opponentHandRevealState.cardIds, renderCardCatalog]
   );
+  const opponentDeckRevealCards = useMemo(
+    () => toRevealRequestCards(opponentDeckRevealState.cardIds, renderCardCatalog),
+    [opponentDeckRevealState.cardIds, renderCardCatalog]
+  );
   const selectedOpponentRevealCardIds = useMemo(() => {
     if (!opponentRevealSelectedCardIds.length) {
       return [];
@@ -2570,11 +2591,15 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   );
   const hasBlockingRequest = Boolean(blockingRequest);
   const isOpponentHandRevealOpen = Boolean(opponentHandRevealState.requestId);
+  const isOpponentDeckRevealOpen = Boolean(opponentDeckRevealState.requestId);
+  const isOpponentRevealModalOpen = isOpponentHandRevealOpen || isOpponentDeckRevealOpen;
   const isHandBulkActionConfirmOpen = Boolean(pendingHandBulkAction);
   const isUiInteractionBlocked =
     hasBlockingRequest ||
     isOpponentHandRevealOpen ||
+    isOpponentDeckRevealOpen ||
     isRandomDiscardConfigOpen ||
+    isOpponentDeckRevealConfigOpen ||
     isDeckPeekConfigOpen ||
     isHandBulkActionConfirmOpen;
 
@@ -3078,6 +3103,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       ['discard', opponentDiscardCount],
       ['deck', opponentDeckCount],
       ['prize', opponentPrizeCount],
+      ['hand', opponentHandCount],
     ];
 
     zoneCountEntries.forEach(([zoneKey, nextCount]) => {
@@ -3104,7 +3130,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         opponentCountFlashTimeoutsRef.current[zoneKey] = null;
       }, OPPONENT_COUNT_FLASH_MS);
     });
-  }, [opponentDeckCount, opponentDiscardCount, opponentLostCount, opponentPrizeCount]);
+  }, [opponentDeckCount, opponentDiscardCount, opponentLostCount, opponentPrizeCount, opponentHandCount]);
 
   useEffect(() => {
     return () => {
@@ -3618,6 +3644,12 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
   }, [hasBlockingRequest, isRandomDiscardConfigOpen]);
 
   useEffect(() => {
+    if (hasBlockingRequest && isOpponentDeckRevealConfigOpen) {
+      setIsOpponentDeckRevealConfigOpen(false);
+    }
+  }, [hasBlockingRequest, isOpponentDeckRevealConfigOpen]);
+
+  useEffect(() => {
     if (hasBlockingRequest && isDeckPeekConfigOpen) {
       setIsDeckPeekConfigOpen(false);
     }
@@ -3656,6 +3688,9 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
     setIsRandomDiscardConfigOpen(false);
     setRandomDiscardCount(1);
+    setIsOpponentDeckRevealConfigOpen(false);
+    setOpponentDeckRevealCount(1);
+    setIsOpponentDeckRevealSelectAll(false);
     setIsDeckPeekConfigOpen(false);
     setDeckPeekCount(1);
     setIsDeckPeekOpen(false);
@@ -3663,6 +3698,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     setEditingSharedNoteId('');
     setEditingSharedNoteDraft('');
     setOpponentRevealSelectedCardIds([]);
+    setOpponentHandRevealState({
+      requestId: '',
+      cardIds: [],
+    });
+    setOpponentDeckRevealState({
+      requestId: '',
+      cardIds: [],
+    });
     setStackModalState({
       ownerPlayerId: '',
       ownerLabel: '',
@@ -3682,10 +3725,18 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     hasInitializedDeckShuffleEventRef.current = false;
     handledDeckInsertEventAtRef.current = '';
     hasInitializedDeckInsertEventRef.current = false;
+    hasInitializedHandledRevealRef.current = false;
+    hasInitializedHandledRevealDeckRef.current = false;
+    hasInitializedHandledRandomDiscardRef.current = false;
+    hasInitializedHandledSelectedDiscardRef.current = false;
+    handledRevealRequestIdsRef.current = new Set();
+    handledRevealDeckRequestIdsRef.current = new Set();
+    handledRandomDiscardRequestIdsRef.current = new Set();
+    handledSelectedDiscardRequestIdsRef.current = new Set();
   }, [ownerPlayerId]);
 
   useEffect(() => {
-    if (!isOpponentHandRevealOpen) {
+    if (!isOpponentRevealModalOpen) {
       setOpponentRevealActiveIndex(null);
       setOpponentRevealSelectedCardIds([]);
       setOpponentRevealActiveShift((previous) => {
@@ -3698,7 +3749,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
         return { ...POPUP_CARD_BASE_SHIFT };
       });
     }
-  }, [isOpponentHandRevealOpen]);
+  }, [isOpponentRevealModalOpen]);
 
   useEffect(() => {
     setOpponentRevealSelectedCardIds((previous) => {
@@ -3716,7 +3767,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   const recalcOpponentRevealCardShift = useCallback(() => {
     if (
-      !isOpponentHandRevealOpen ||
+      !isOpponentRevealModalOpen ||
       opponentRevealActiveIndex === null ||
       typeof window === 'undefined'
     ) {
@@ -3750,14 +3801,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       }
       return next;
     });
-  }, [isOpponentHandRevealOpen, opponentRevealActiveIndex]);
+  }, [isOpponentRevealModalOpen, opponentRevealActiveIndex]);
 
   useEffect(() => {
     recalcOpponentRevealCardShift();
   }, [recalcOpponentRevealCardShift]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !isOpponentHandRevealOpen) {
+    if (typeof window === 'undefined' || !isOpponentRevealModalOpen) {
       return undefined;
     }
 
@@ -3766,7 +3817,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isOpponentHandRevealOpen, recalcOpponentRevealCardShift]);
+  }, [isOpponentRevealModalOpen, recalcOpponentRevealCardShift]);
 
   const clearOpponentBoardRevealHover = useCallback(() => {
     setOpponentBoardRevealActiveIndex(null);
@@ -4090,6 +4141,56 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       setOpponentHandRevealState({
         requestId: request.requestId,
         cardIds: revealedCardIds,
+      });
+      setOpponentDeckRevealState({
+        requestId: '',
+        cardIds: [],
+      });
+      clearMutationNotice();
+    });
+  }, [clearMutationNotice, operationRequests, ownerPlayerId, pushAlertNotice]);
+
+  useEffect(() => {
+    const revealDeckRequestsForActor = operationRequests.filter(
+      (request) =>
+        request?.requestType === 'opponent-reveal-deck' &&
+        request?.actorPlayerId === ownerPlayerId
+    );
+
+    if (!hasInitializedHandledRevealDeckRef.current) {
+      revealDeckRequestsForActor
+        .filter((request) => request?.status && request.status !== 'pending')
+        .forEach((request) => {
+          if (request?.requestId) {
+            handledRevealDeckRequestIdsRef.current.add(request.requestId);
+          }
+        });
+      hasInitializedHandledRevealDeckRef.current = true;
+      return;
+    }
+
+    revealDeckRequestsForActor.forEach((request) => {
+      if (!request?.requestId || request.status === 'pending') {
+        return;
+      }
+      if (handledRevealDeckRequestIdsRef.current.has(request.requestId)) {
+        return;
+      }
+      handledRevealDeckRequestIdsRef.current.add(request.requestId);
+
+      if (request.status === 'rejected') {
+        pushAlertNotice('相手が山札公開リクエストを拒否しました。');
+        return;
+      }
+
+      const revealedCardIds = asArray(request?.result?.revealedCardIds).filter(Boolean);
+      setOpponentDeckRevealState({
+        requestId: request.requestId,
+        cardIds: revealedCardIds,
+      });
+      setOpponentHandRevealState({
+        requestId: '',
+        cardIds: [],
       });
       clearMutationNotice();
     });
@@ -4826,6 +4927,88 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     });
   }, [executeQuickOperation, opponentPlayerId]);
 
+  const handleOpenOpponentDeckRevealConfig = useCallback(() => {
+    if (
+      opponentDeckCount <= 0 ||
+      isMutating ||
+      isCoinSubmitting ||
+      isQuickActionSubmitting ||
+      isUiInteractionBlocked
+    ) {
+      return;
+    }
+    setIsOpponentDeckRevealSelectAll(false);
+    setOpponentDeckRevealCount(clampPositiveInt(1, Math.max(1, opponentDeckCount || 1)));
+    setIsOpponentDeckRevealConfigOpen(true);
+  }, [
+    isCoinSubmitting,
+    isMutating,
+    isQuickActionSubmitting,
+    isUiInteractionBlocked,
+    opponentDeckCount,
+  ]);
+
+  const handleCloseOpponentDeckRevealConfig = useCallback(() => {
+    setIsOpponentDeckRevealSelectAll(false);
+    setIsOpponentDeckRevealConfigOpen(false);
+  }, []);
+
+  const handleDecrementOpponentDeckRevealCount = useCallback(() => {
+    setOpponentDeckRevealCount((previous) =>
+      clampPositiveInt(previous - 1, Math.max(1, opponentDeckCount || 1))
+    );
+  }, [opponentDeckCount]);
+
+  const handleIncrementOpponentDeckRevealCount = useCallback(() => {
+    setOpponentDeckRevealCount((previous) =>
+      clampPositiveInt(previous + 1, Math.max(1, opponentDeckCount || 1))
+    );
+  }, [opponentDeckCount]);
+
+  const handleToggleOpponentDeckRevealSelectAll = useCallback(
+    (event) => {
+      const checked = Boolean(event?.target?.checked);
+      setIsOpponentDeckRevealSelectAll(checked);
+      if (checked) {
+        setOpponentDeckRevealCount(Math.max(1, opponentDeckCount || 1));
+      } else {
+        setOpponentDeckRevealCount((previous) =>
+          clampPositiveInt(previous, Math.max(1, opponentDeckCount || 1))
+        );
+      }
+    },
+    [opponentDeckCount]
+  );
+
+  const handleConfirmOpponentDeckRevealRequest = useCallback(async () => {
+    const clampedCount = isOpponentDeckRevealSelectAll
+      ? Math.max(1, opponentDeckCount || 1)
+      : clampPositiveInt(opponentDeckRevealCount, Math.max(1, opponentDeckCount || 1));
+    const succeeded = await executeQuickOperation({
+      opId: OPERATION_IDS.OP_B14,
+      payload: {
+        targetPlayerId: opponentPlayerId,
+        count: clampedCount,
+      },
+      invalidMessage: '山札公開リクエストを送信できませんでした。状態を確認してください。',
+      successMessage:
+        clampedCount > 1
+          ? `山札公開リクエスト（${clampedCount}枚）を送信しました。`
+          : '山札公開リクエスト（1枚）を送信しました。',
+    });
+    if (!succeeded) {
+      return;
+    }
+    setIsOpponentDeckRevealConfigOpen(false);
+    setIsOpponentDeckRevealSelectAll(false);
+  }, [
+    executeQuickOperation,
+    isOpponentDeckRevealSelectAll,
+    opponentDeckCount,
+    opponentDeckRevealCount,
+    opponentPlayerId,
+  ]);
+
   const handleOpenRandomDiscardConfig = useCallback(() => {
     setIsOpponentHandMenuOpen(false);
     setRandomDiscardCount(clampPositiveInt(1, Math.max(1, opponentHandCount || 1)));
@@ -4870,6 +5053,14 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
 
   const handleCloseOpponentHandReveal = useCallback(() => {
     setOpponentHandRevealState({
+      requestId: '',
+      cardIds: [],
+    });
+    setOpponentRevealSelectedCardIds([]);
+  }, []);
+
+  const handleCloseOpponentDeckReveal = useCallback(() => {
+    setOpponentDeckRevealState({
       requestId: '',
       cardIds: [],
     });
@@ -4927,6 +5118,8 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           ? selectedDiscardCount > 1
             ? `自分の手札から指定された${selectedDiscardCount}枚をトラッシュしました。`
             : '自分の手札から指定された1枚をトラッシュしました。'
+          : blockingRequest?.requestType === 'opponent-reveal-deck'
+            ? '自分の山札を公開しました。'
           : 'リクエストを承認して実行しました。';
     void executeQuickOperation({
       opId: INTERNAL_OPERATION_IDS.REQUEST_APPROVE,
@@ -5071,6 +5264,16 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
     isQuickActionSubmitting || isMutating || isCoinSubmitting || opponentHandCount <= 0;
   const randomDiscardMaxCount = Math.max(1, opponentHandCount || 1);
   const displayRandomDiscardCount = clampPositiveInt(randomDiscardCount, randomDiscardMaxCount);
+  const opponentDeckRevealMaxCount = Math.max(1, opponentDeckCount || 1);
+  const displayOpponentDeckRevealCount = isOpponentDeckRevealSelectAll
+    ? opponentDeckRevealMaxCount
+    : clampPositiveInt(opponentDeckRevealCount, opponentDeckRevealMaxCount);
+  const isOpponentDeckRevealAdjustDisabled =
+    isQuickActionSubmitting || isMutating || isCoinSubmitting || opponentDeckCount <= 1;
+  const isOpponentDeckRevealSubmitDisabled =
+    isQuickActionSubmitting || isMutating || isCoinSubmitting || opponentDeckCount <= 0;
+  const isOpponentDeckRevealStepDisabled =
+    isOpponentDeckRevealAdjustDisabled || isOpponentDeckRevealSelectAll;
   const isDeckPeekAdjustDisabled =
     isQuickActionSubmitting || isMutating || isCoinSubmitting || playerDeckCount <= 1;
   const isDeckPeekSubmitDisabled =
@@ -5090,6 +5293,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
       : 0;
   const isDraggingCard = activeDragPayload?.dragType === 'card';
   const isDraggingStack = activeDragPayload?.dragType === 'stack';
+  const isDraggingDeckInsertCandidate = isDraggingCard || isDraggingStack;
   const isDraggingCardFromPlayerStack =
     isDraggingCard && activeDragPayload?.sourceZone === 'player-stack';
   const draggingSourceStackKind =
@@ -5334,7 +5538,10 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           <div className={styles.opponentHandControl}>
             <button
               type="button"
-              className={styles.handCountPill}
+              className={joinClassNames(
+                styles.handCountPill,
+                opponentCountFlash.hand ? styles.handCountPillAlert : ''
+              )}
               data-zone="opponent-hand-count-pill"
               aria-label={`相手手札（${opponentHandCount}枚）`}
               aria-haspopup="menu"
@@ -5423,6 +5630,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
               <DeckPile
                 count={opponentDeckCount}
                 alt="Opponent Deck"
+                onActivate={!isQuickActionLocked ? handleOpenOpponentDeckRevealConfig : null}
                 countOverlayClassName={opponentCountFlash.deck ? styles.pileCountOverlayAlert : ''}
               />
             </ZoneTile>
@@ -5520,6 +5728,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 isHighlighted={isZoneHighlighted(opponentActiveZoneId)}
                 data-zone={opponentActiveZoneId}
                 data-drop-group="active"
+                style={
+                  isOpponentActiveSingleHovering
+                    ? { zIndex: 'calc(var(--z-overlay) + 2)' }
+                    : undefined
+                }
               >
                 {opponentActive ? (
                   <DroppableStack
@@ -5652,6 +5865,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             !isPlayerBattleStartCommitted ? styles.areaDividerWithBattleStart : ''
           )}
         >
+          <div className={styles.pokeballMark} aria-hidden="true">
+            <span className={styles.pokeballBandLeft} />
+            <span className={styles.pokeballBandRight} />
+            <span className={styles.pokeballCore} />
+          </div>
           {!isPlayerBattleStartCommitted ? (
             <button
               type="button"
@@ -6067,7 +6285,7 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                   ) : (
                     <DeckPile count={displayPlayerDeckCount} alt="Player Deck" />
                   )}
-                  {isDraggingCard ? (
+                  {isDraggingDeckInsertCandidate ? (
                     <div className={styles.deckInsertTargets}>
                       <DroppableZone
                         dropId="zone-player-deck-insert-top"
@@ -6184,10 +6402,11 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
             aria-label="操作ヒント"
           >
             <p className={styles.interactionGuideTitle}>操作ヒント</p>
-            <p className={styles.interactionGuideLine}>山札: クリックで閲覧</p>
+            <p className={styles.interactionGuideLine}>山札: クリックで閲覧（相手山札は公開依頼）</p>
             <p className={styles.interactionGuideLine}>トラッシュ/ロスト: クリックで展開・閉じる</p>
             <p className={styles.interactionGuideLine}>ベンチ/バトル場: クリックで展開、ダブルクリックで回復</p>
             <p className={styles.interactionGuideLine}>相手手札: クリックで公開/ランダム破壊を要求</p>
+            <p className={styles.interactionGuideLine}>相手山札: クリックで公開を要求</p>
           </aside>
         ) : null}
         {isBattleStartGuideVisible ? (
@@ -6666,6 +6885,16 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
           </div>
         </div>
       ) : null}
+      {!hasBlockingRequest && isOpponentDeckRevealOpen ? (
+        <StackCardsModal
+          title={`相手の山札（${opponentDeckRevealCards.length}枚）`}
+          cards={opponentDeckRevealCards}
+          onClose={handleCloseOpponentDeckReveal}
+          allowCardDrag={false}
+          modalAriaLabel="相手山札閲覧モーダル"
+          modalDataZone="opponent-deck-reveal-cards-root"
+        />
+      ) : null}
       {!hasBlockingRequest && isRandomDiscardConfigOpen ? (
         <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">
           <div className={styles.randomDiscardConfigCard}>
@@ -6712,6 +6941,76 @@ const PlayingField = ({ sessionId, playerId, sessionDoc, privateStateDoc }) => {
                 type="button"
                 className={styles.requestRejectButton}
                 onClick={handleCloseRandomDiscardConfig}
+                disabled={isQuickActionSubmitting || isMutating || isCoinSubmitting}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {!hasBlockingRequest && isOpponentDeckRevealConfigOpen ? (
+        <div className={styles.requestBlockingOverlay} role="dialog" aria-modal="true">
+          <div className={styles.randomDiscardConfigCard}>
+            <p className={styles.requestBlockingTitle}>相手山札の公開を要求</p>
+            <p className={styles.requestBlockingMeta}>
+              枚数を選択してください（相手山札: {opponentDeckCount}枚）
+            </p>
+            <div className={styles.randomDiscardCountRow}>
+              <button
+                type="button"
+                className={styles.randomDiscardStepButton}
+                onClick={handleDecrementOpponentDeckRevealCount}
+                disabled={isOpponentDeckRevealStepDisabled || displayOpponentDeckRevealCount <= 1}
+                aria-label="公開依頼枚数を1枚減らす"
+              >
+                -
+              </button>
+              <span className={styles.randomDiscardCountValue}>{displayOpponentDeckRevealCount} 枚</span>
+              <button
+                type="button"
+                className={styles.randomDiscardStepButton}
+                onClick={handleIncrementOpponentDeckRevealCount}
+                disabled={
+                  isOpponentDeckRevealStepDisabled ||
+                  displayOpponentDeckRevealCount >= opponentDeckRevealMaxCount
+                }
+                aria-label="公開依頼枚数を1枚増やす"
+              >
+                +
+              </button>
+            </div>
+            <label className={styles.deckPeekSelectAllRow}>
+              <input
+                type="checkbox"
+                className={styles.deckPeekSelectAllCheckbox}
+                checked={isOpponentDeckRevealSelectAll}
+                onChange={handleToggleOpponentDeckRevealSelectAll}
+                disabled={
+                  isQuickActionSubmitting || isMutating || isCoinSubmitting || opponentDeckCount <= 0
+                }
+                aria-label="公開依頼枚数を全て選択"
+              />
+              全て（{opponentDeckRevealMaxCount}枚）
+            </label>
+            <p className={styles.randomDiscardHint}>
+              {opponentDeckCount <= 0
+                ? '相手山札が0枚のため公開を要求できません。'
+                : '相手の承認後に公開されます。'}
+            </p>
+            <div className={styles.requestBlockingActions}>
+              <button
+                type="button"
+                className={styles.requestApproveButton}
+                onClick={handleConfirmOpponentDeckRevealRequest}
+                disabled={isOpponentDeckRevealSubmitDisabled}
+              >
+                枚数を確定して閲覧依頼
+              </button>
+              <button
+                type="button"
+                className={styles.requestRejectButton}
+                onClick={handleCloseOpponentDeckRevealConfig}
                 disabled={isQuickActionSubmitting || isMutating || isCoinSubmitting}
               >
                 キャンセル

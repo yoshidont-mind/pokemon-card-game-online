@@ -122,6 +122,7 @@ function buildMoveStackToZoneIntent({
   sourceBenchIndex = null,
   targetZoneKind,
   targetZoneId,
+  targetDeckEdge = null,
 }) {
   return accept({
     action: {
@@ -131,6 +132,12 @@ function buildMoveStackToZoneIntent({
       sourceBenchIndex: sourceStackKind === STACK_KINDS.BENCH ? sourceBenchIndex : null,
       targetZoneKind,
       targetZoneId,
+      targetDeckEdge:
+        targetZoneKind === ZONE_KINDS.DECK
+          ? targetDeckEdge === 'bottom'
+            ? 'bottom'
+            : 'top'
+          : null,
     },
     highlightTarget: {
       type: DROP_TYPES.ZONE,
@@ -250,7 +257,8 @@ export function resolveDropIntent({
         dropPayload.zoneKind === ZONE_KINDS.ACTIVE ||
         dropPayload.zoneKind === ZONE_KINDS.BENCH ||
         dropPayload.zoneKind === ZONE_KINDS.DISCARD ||
-        dropPayload.zoneKind === ZONE_KINDS.LOST;
+        dropPayload.zoneKind === ZONE_KINDS.LOST ||
+        dropPayload.zoneKind === ZONE_KINDS.DECK;
       if (!supportsStackTargetZone) {
         return reject(REJECT_REASONS.UNSUPPORTED_TARGET);
       }
@@ -281,6 +289,22 @@ export function resolveDropIntent({
           sourceBenchIndex: dragPayload.sourceBenchIndex,
           targetZoneKind: dropPayload.zoneKind,
           targetZoneId: dropPayload.zoneId,
+        });
+      }
+
+      if (dropPayload.zoneKind === ZONE_KINDS.DECK) {
+        const edge = dropPayload.edge === 'bottom' ? 'bottom' : dropPayload.edge === 'top' ? 'top' : null;
+        if (!edge) {
+          return reject(REJECT_REASONS.INVALID_PAYLOAD);
+        }
+
+        return buildMoveStackToZoneIntent({
+          actorPlayerId,
+          sourceStackKind,
+          sourceBenchIndex: dragPayload.sourceBenchIndex,
+          targetZoneKind: ZONE_KINDS.DECK,
+          targetZoneId: dropPayload.zoneId,
+          targetDeckEdge: edge,
         });
       }
 

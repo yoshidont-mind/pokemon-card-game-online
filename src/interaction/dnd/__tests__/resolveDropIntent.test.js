@@ -803,6 +803,97 @@ describe('resolveDropIntent', () => {
     expect(result.action.targetZoneKind).toBe(ZONE_KINDS.LOST);
   });
 
+  test('accepts moving occupied stack to deck top via stack drag payload', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerBench: [{ stackId: 's_player1_bench_1', cardIds: ['c_player1_020', 'c_player1_021'] }],
+      })
+    );
+    const dragPayload = buildStackDragPayload({
+      sourceStackKind: STACK_KINDS.BENCH,
+      sourceBenchIndex: 0,
+      previewCardId: 'c_player1_021',
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-deck-insert-top',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DECK,
+      edge: 'top',
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-stack-from-stack-to-zone');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.BENCH);
+    expect(result.action.sourceBenchIndex).toBe(0);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.DECK);
+    expect(result.action.targetDeckEdge).toBe('top');
+  });
+
+  test('accepts moving occupied stack to deck bottom via stack drag payload', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010', 'c_player1_011'] },
+      })
+    );
+    const dragPayload = buildStackDragPayload({
+      sourceStackKind: STACK_KINDS.ACTIVE,
+      previewCardId: 'c_player1_011',
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-deck-insert-bottom',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DECK,
+      edge: 'bottom',
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.kind).toBe('move-stack-from-stack-to-zone');
+    expect(result.action.sourceStackKind).toBe(STACK_KINDS.ACTIVE);
+    expect(result.action.targetZoneKind).toBe(ZONE_KINDS.DECK);
+    expect(result.action.targetDeckEdge).toBe('bottom');
+  });
+
+  test('rejects moving occupied stack to deck without edge', () => {
+    const boardSnapshot = createBoardSnapshot(
+      createSessionDoc({
+        playerActive: { stackId: 's_player1_active', cardIds: ['c_player1_010', 'c_player1_011'] },
+      })
+    );
+    const dragPayload = buildStackDragPayload({
+      sourceStackKind: STACK_KINDS.ACTIVE,
+      previewCardId: 'c_player1_011',
+    });
+    const dropPayload = buildZoneDropPayload({
+      zoneId: 'player-deck-insert-unknown',
+      targetPlayerId: 'player1',
+      zoneKind: ZONE_KINDS.DECK,
+    });
+
+    const result = resolveDropIntent({
+      dragPayload,
+      dropPayload,
+      boardSnapshot,
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toBe(REJECT_REASONS.INVALID_PAYLOAD);
+  });
+
   test('accepts swapping occupied stacks via stack drop target payload', () => {
     const boardSnapshot = createBoardSnapshot(
       createSessionDoc({

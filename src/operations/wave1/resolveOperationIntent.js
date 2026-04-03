@@ -98,6 +98,13 @@ function validateCorePayload(opId, payload, privateStateDoc) {
     }
   }
 
+  if (opId === 'OP-B14') {
+    const requestedCount = payload.count ?? 1;
+    if (!isPositiveInteger(requestedCount)) {
+      return 'count must be positive integer.';
+    }
+  }
+
   if (opId === 'OP-B09' || opId === 'OP-D04' || opId === 'OP-D06' || opId === 'OP-D07') {
     if (!asArray(payload.cardIds).length && !isPositiveInteger(payload.count)) {
       return 'cardIds or count is required.';
@@ -142,7 +149,7 @@ function validateCorePayload(opId, payload, privateStateDoc) {
     }
   }
 
-  if (opId === 'OP-A03' || opId === 'OP-B11' || opId === 'OP-B12') {
+  if (opId === 'OP-A03' || opId === 'OP-B11' || opId === 'OP-B12' || opId === 'OP-B14') {
     if (!payload.targetPlayerId || !isValidPlayerId(payload.targetPlayerId)) {
       return 'targetPlayerId is required for request operation.';
     }

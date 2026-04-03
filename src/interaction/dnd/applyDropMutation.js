@@ -403,8 +403,13 @@ function moveStackFromStackToZone({ sessionDoc, privateStateDoc, playerId, actio
   const sourceStackKind =
     action?.sourceStackKind === STACK_KINDS.BENCH ? STACK_KINDS.BENCH : STACK_KINDS.ACTIVE;
   const targetZoneKind = action?.targetZoneKind;
+  const targetDeckEdge = action?.targetDeckEdge;
 
-  if (targetZoneKind !== ZONE_KINDS.DISCARD && targetZoneKind !== ZONE_KINDS.LOST) {
+  if (
+    targetZoneKind !== ZONE_KINDS.DISCARD &&
+    targetZoneKind !== ZONE_KINDS.LOST &&
+    targetZoneKind !== ZONE_KINDS.DECK
+  ) {
     throw new GameStateError(
       ERROR_CODES.INVALID_STATE,
       `Unsupported targetZoneKind for stack move: ${String(targetZoneKind)}`
@@ -435,6 +440,7 @@ function moveStackFromStackToZone({ sessionDoc, privateStateDoc, playerId, actio
       imageUrl: resolveImageUrlFromPrivateState(privateStateDoc, cardId),
     })
   );
+  const movingCardIds = sourceStack.cardIds.slice();
 
   if (sourceStackKind === STACK_KINDS.ACTIVE) {
     board.active = null;
@@ -445,8 +451,38 @@ function moveStackFromStackToZone({ sessionDoc, privateStateDoc, playerId, actio
 
   if (targetZoneKind === ZONE_KINDS.DISCARD) {
     board.discard = [...asArray(board.discard), ...movingCardRefs];
-  } else {
+  } else if (targetZoneKind === ZONE_KINDS.LOST) {
     board.lostZone = [...asArray(board.lostZone), ...movingCardRefs];
+  } else {
+    if (targetDeckEdge !== 'top' && targetDeckEdge !== 'bottom') {
+      throw new GameStateError(ERROR_CODES.INVALID_STATE, 'targetDeckEdge must be top or bottom.');
+    }
+
+    const deck = asArray(privateStateDoc?.zones?.deck);
+    const counters = resolvePlayerCounters(sessionDoc, playerId);
+    const orderedCardIdsForDeck = movingCardIds.slice().reverse();
+    const deckRefs = orderedCardIdsForDeck.map((cardId) =>
+      createCardRef({
+        cardId,
+        orientation: ORIENTATION.VERTICAL,
+        isFaceDown: true,
+        visibility: VISIBILITY.OWNER_ONLY,
+      })
+    );
+    if (targetDeckEdge === 'top') {
+      deck.unshift(...deckRefs);
+    } else {
+      deck.push(...deckRefs);
+    }
+    privateStateDoc.zones.deck = deck;
+    counters.deckCount = deck.length;
+
+    const turnContext = ensureTurnContext(sessionDoc);
+    turnContext.lastDeckInsertEvent = {
+      byPlayerId: playerId,
+      position: targetDeckEdge,
+      at: new Date().toISOString(),
+    };
   }
 
   if (

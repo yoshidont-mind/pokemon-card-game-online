@@ -462,9 +462,15 @@ const HandTray = ({
                       aria-label={`手札 ${index + 1} を拡大表示`}
                       aria-pressed={pinnedIndex === index}
                       onMouseEnter={() => setHoveredIndex(index)}
-                      onMouseLeave={() => setHoveredIndex(null)}
+                      onMouseLeave={() => {
+                        setHoveredIndex(null);
+                        setPinnedIndex(null);
+                      }}
                       onFocus={() => setHoveredIndex(index)}
-                      onBlur={() => setHoveredIndex(null)}
+                      onBlur={() => {
+                        setHoveredIndex(null);
+                        setPinnedIndex(null);
+                      }}
                       onClick={() => handleCardClick(index)}
                     >
                       <img src={card.imageUrl} alt={`Hand Card ${index + 1}`} className={styles.handCardImage} />

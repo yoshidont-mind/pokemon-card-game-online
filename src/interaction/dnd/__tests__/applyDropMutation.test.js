@@ -753,6 +753,125 @@ describe('mutateDocsForDropIntent', () => {
     ]);
   });
 
+  test('moves whole active stack to deck top when stack-move intent uses top edge', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    privateStateDoc.zones.deck = [
+      { cardId: 'c_player1_099', orientation: 'vertical', isFaceDown: true, visibility: 'ownerOnly' },
+      { cardId: 'c_player1_098', orientation: 'vertical', isFaceDown: true, visibility: 'ownerOnly' },
+    ];
+    sessionDoc.publicState.players.player1.counters.deckCount = 2;
+    sessionDoc.publicState.players.player1.board.active = {
+      stackId: 's_player1_active',
+      cardIds: ['c_player1_010', 'c_player1_011'],
+      damage: 30,
+      specialConditions: {
+        poisoned: true,
+        burned: false,
+        asleep: false,
+        paralyzed: false,
+        confused: false,
+      },
+      orientation: 'vertical',
+      isFaceDown: false,
+    };
+    privateStateDoc.cardCatalog.c_player1_010 = {
+      cardId: 'c_player1_010',
+      imageUrl: 'https://example.com/10.jpg',
+      ownerPlayerId: 'player1',
+    };
+    privateStateDoc.cardCatalog.c_player1_011 = {
+      cardId: 'c_player1_011',
+      imageUrl: 'https://example.com/11.jpg',
+      ownerPlayerId: 'player1',
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-stack-from-stack-to-zone',
+          sourceStackKind: 'active',
+          targetZoneKind: 'deck',
+          targetDeckEdge: 'top',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.active).toBeNull();
+    expect(result.privateStateDoc.zones.deck.map((entry) => entry.cardId)).toEqual([
+      'c_player1_011',
+      'c_player1_010',
+      'c_player1_099',
+      'c_player1_098',
+    ]);
+    expect(result.sessionDoc.publicState.players.player1.counters.deckCount).toBe(4);
+    expect(result.sessionDoc.publicState.turnContext.lastDeckInsertEvent.position).toBe('top');
+  });
+
+  test('moves whole bench stack to deck bottom when stack-move intent uses bottom edge', () => {
+    const { sessionDoc, privateStateDoc } = createDocs();
+    privateStateDoc.zones.deck = [
+      { cardId: 'c_player1_099', orientation: 'vertical', isFaceDown: true, visibility: 'ownerOnly' },
+      { cardId: 'c_player1_098', orientation: 'vertical', isFaceDown: true, visibility: 'ownerOnly' },
+    ];
+    sessionDoc.publicState.players.player1.counters.deckCount = 2;
+    sessionDoc.publicState.players.player1.board.bench = [
+      {
+        stackId: 's_player1_bench_1',
+        cardIds: ['c_player1_020', 'c_player1_021'],
+        damage: 0,
+        specialConditions: {
+          poisoned: false,
+          burned: false,
+          asleep: false,
+          paralyzed: false,
+          confused: false,
+        },
+        orientation: 'vertical',
+        isFaceDown: false,
+      },
+    ];
+    privateStateDoc.cardCatalog.c_player1_020 = {
+      cardId: 'c_player1_020',
+      imageUrl: 'https://example.com/20.jpg',
+      ownerPlayerId: 'player1',
+    };
+    privateStateDoc.cardCatalog.c_player1_021 = {
+      cardId: 'c_player1_021',
+      imageUrl: 'https://example.com/21.jpg',
+      ownerPlayerId: 'player1',
+    };
+
+    const result = mutateDocsForDropIntent({
+      sessionDoc,
+      privateStateDoc,
+      playerId: 'player1',
+      intent: {
+        accepted: true,
+        action: {
+          kind: 'move-stack-from-stack-to-zone',
+          sourceStackKind: 'bench',
+          sourceBenchIndex: 0,
+          targetZoneKind: 'deck',
+          targetDeckEdge: 'bottom',
+        },
+      },
+    });
+
+    expect(result.sessionDoc.publicState.players.player1.board.bench[0]).toBeNull();
+    expect(result.privateStateDoc.zones.deck.map((entry) => entry.cardId)).toEqual([
+      'c_player1_099',
+      'c_player1_098',
+      'c_player1_021',
+      'c_player1_020',
+    ]);
+    expect(result.sessionDoc.publicState.players.player1.counters.deckCount).toBe(4);
+    expect(result.sessionDoc.publicState.turnContext.lastDeckInsertEvent.position).toBe('bottom');
+  });
+
   test('moves a card from discard source zone to hand', () => {
     const { sessionDoc, privateStateDoc } = createDocs();
     sessionDoc.publicState.players.player1.board.discard = [

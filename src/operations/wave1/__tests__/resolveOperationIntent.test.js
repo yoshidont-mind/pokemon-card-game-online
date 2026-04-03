@@ -213,6 +213,50 @@ describe('resolveOperationIntent', () => {
     expect(result.action.payload.targetPlayerId).toBe('player2');
   });
 
+  test('accepts OP-B14 reveal-deck request when target/count are valid', () => {
+    const intent = buildOperationIntent({
+      opId: OPERATION_IDS.OP_B14,
+      actorPlayerId: 'player1',
+      payload: {
+        targetPlayerId: 'player2',
+        count: 3,
+      },
+    });
+
+    const result = resolveOperationIntent({
+      intent,
+      sessionDoc: createSessionDoc(),
+      privateStateDoc: createPrivateStateDoc(),
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(result.action.mode).toBe('request');
+    expect(result.action.payload.targetPlayerId).toBe('player2');
+    expect(result.action.payload.count).toBe(3);
+  });
+
+  test('rejects OP-B14 reveal-deck request when count is invalid', () => {
+    const intent = buildOperationIntent({
+      opId: OPERATION_IDS.OP_B14,
+      actorPlayerId: 'player1',
+      payload: {
+        targetPlayerId: 'player2',
+        count: 0,
+      },
+    });
+
+    const result = resolveOperationIntent({
+      intent,
+      sessionDoc: createSessionDoc(),
+      privateStateDoc: createPrivateStateDoc(),
+      actorPlayerId: 'player1',
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.message).toMatch(/count/i);
+  });
+
   test('accepts request resolution intent with requestId and action', () => {
     const intent = buildOperationIntent({
       opId: INTERNAL_OPERATION_IDS.REQUEST_APPROVE,

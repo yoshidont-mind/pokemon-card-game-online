@@ -33,6 +33,12 @@ const CATALOG = Object.freeze({
     mode: 'request',
     requestType: 'opponent-discard-selected-hand',
   },
+  [OPERATION_IDS.OP_B14]: {
+    group: 'B',
+    label: '相手山札公開（相手承認）',
+    mode: 'request',
+    requestType: 'opponent-reveal-deck',
+  },
 
   [OPERATION_IDS.OP_C02]: { group: 'C', label: '入れ替え', mode: 'direct' },
   [OPERATION_IDS.OP_C03]: { group: 'C', label: 'ベンチ展開', mode: 'direct' },
