@@ -1,384 +1,408 @@
 # pokemon-card-game-online
 
-ポケモンカードゲームの対戦を、オンラインでシミュレーションするためのWebアプリです。  
-デッキコードから公式デッキページを参照してカード画像を取得し、2人対戦の盤面をリアルタイムで共有することを目指しています。
+ポケモンカードゲームの盤面を、オンラインで共有しながら手動操作で対戦できる Web アプリです。
 
-> この README は、2026-02-18 時点でリポジトリ内コードを確認して書いています。  
-> 将来構想と現行実装を混同しないため、未実装の項目は明示しています。
+本プロジェクトは「顔見知り同士が、通話しながらカジュアルに遊ぶ」用途を前提にしています。  
+そのため、システム側がルールを厳密に強制するのではなく、紙のポケカに近い見た目と直感的な操作で、盤面共有と状態復元を安定して行うことを主目的としています。
+
+> この README は、2026-04-03 時点の実装を確認して更新しています。
 
 ## 目次
 - [概要](#概要)
+- [現在できること](#現在できること)
 - [技術スタック](#技術スタック)
 - [アーキテクチャ概要](#アーキテクチャ概要)
 - [画面ルーティング一覧](#画面ルーティング一覧)
-- [ローカルAPI（プロキシ）一覧](#ローカルapiプロキシ一覧)
-- [Firestore データモデル](#firestore-データモデル)
+- [Firestore データ構成（概要）](#firestore-データ構成概要)
 - [リポジトリ構成](#リポジトリ構成)
-- [セットアップ（ローカル開発）](#セットアップローカル開発)
-- [開発ルール（AI駆動開発の土台）](#開発ルールai駆動開発の土台)
-- [Coding Convention（現行実装ベース）](#coding-convention現行実装ベース)
-- [既知の課題 / TODO](#既知の課題--todo)
+- [セットアップローカル開発](#セットアップローカル開発)
+- [デプロイ構成](#デプロイ構成)
+- [開発ルール](#開発ルール)
+- [既知の制約](#既知の制約)
 - [References](#references)
-
----
 
 ## 概要
 
-### 現在できること（実装済み）
-- Firestore 上に対戦セッションを作成し、参加できる
-- `/home` で初期サイド枚数（3〜6、既定6）を指定してセッション開始できる
-- デッキコードを入力し、`https://www.pokemon-card.com/deck/confirm.html/deckID/[deckCode]` からカード画像URLを抽出できる
-- 抽出したカードをデッキとして保存し、盤面画面へ遷移できる
-- デッキ保存時、セッション設定の初期サイド枚数ぶんを裏向きサイドとして自動配布できる
-- 盤面情報を Firestore の `onSnapshot` でリアルタイム同期できる
-- 盤面に公開エリア（自分/相手）を持ち、カードを一時公開して相手に確認してもらえる
-- テスト用画面で `public/sample_gamedata.json` をセッションに反映できる
-- 手札カード / ダメカン / 状態異常の DnD 操作（Phase 04）を実行できる
-- Operation Panel から Wave1 操作 intent を実行できる（Phase 05 進行中）
-- 相手秘匿領域に作用する操作（`OP-B11`, `OP-B12`）を相手承認リクエスト経由で扱える
+このアプリで扱うのは「自動処理されるポケカ」ではなく、「プレイヤーが自分で動かすポケカ」です。
 
-### 盤面UI（Phase 03 時点）
-- 盤面レイアウトを「上: 相手領域 / 中央: スタジアム / 下: 自分領域」の紙プレイ寄せ構成に更新
-- 主要ゾーンに `data-zone` / `data-drop-group` を付与（Phase 04 の DnD 実装準備）
-- 手札エリアを浮遊トレイ化し、トグルで最小化/展開できる
-- 小道具BOX（ダメカン/状態異常）を右下ドッキングの折りたたみUIで追加
-- 裏向きカード画像は `card-back.jpg` に統一
+- デッキコードから公式デッキページを参照し、カード画像と枚数を取り込む
+- Firestore に対戦状態を保存し、同じ URL から盤面を復元する
+- 盤面上で、山札・手札・バトル場・ベンチ・サイド・トラッシュ・ロスト・公開エリア・スタジアム・ダメカン・状態異常を手動操作する
+- 相手の秘匿領域に触る操作は、承認リクエストを挟んで扱う
 
-### 操作基盤（Phase 05 進行中）
-- `src/components/operation/OperationPanel.js` を追加し、Wave1 操作をUIから実行可能にした
-- `src/operations/wave1/*` で intent 生成・検証・mutation の共通基盤を追加
-- `publicState.operationRequests` を導入し、相手承認フロー（approve/reject）を実装
-- 相手承認リクエストの「解決済み結果（公開/破棄カード）」を OperationPanel で確認可能
-- DnD の受け入れ先を `prize` / `stadium` に拡張
-- コイントスUIは `public/coin-front.png`（表）/ `public/coin-back.png`（裏）を利用
-- 完了判定用の手動検証シナリオを整備
-  - `references/implementation_plans/260219_phase05_manual_validation_scenarios.md`
-  - `references/implementation_logs/260219_phase05_manual_validation_scenarios_log.md`
-- 今後のUI方針:
-  - 直感GUI（DnD / 盤面クリック / モーダル）を第一優先
-  - **現行/今後実装するすべての操作で「紙版ポケカに慣れた人が直感的に使えること」を最優先する**
-  - OperationPanel は補助導線へ縮退（cardId手入力をプレイヤー必須操作にしない）
-  - 右上通知ポップアップは、通常フローのメッセージを緑系、拒否/失敗/権限不足など逸脱系メッセージを赤系で統一し、今後追加する全メッセージにも同方針を適用する
+UI/UX 方針:
 
-### これから実現したいこと（要件）
-- ポケカ対戦に必要な手動操作を画面上で再現する
-  - 例: ドロー、シャッフル、トラッシュ、場に出す、ダメカン配置、重ねる
-- 2人対戦時の操作競合を破綻なく扱う
-- 将来的にスマホ対応（現状はPC優先）
+- 紙版ポケカに慣れた人が直感的に使えることを最優先にする
+- 可能な限り、ドラッグ&ドロップ・クリック・展開モーダルで操作する
+- cardId 手入力のような開発者都合の操作を、プレイヤー必須導線にしない
+- 通知は右上ポップアップに集約し、通常メッセージは緑系、拒否・失敗系は赤系で統一する
 
-### 実現しなくてよいこと（現時点）
-- カード文言を解釈して処理を自動化するルールエンジン
-  - 例: 技選択に応じた自動ダメカン計算、きぜつ時の自動トラッシュ
-- ルール遵守をシステム側で厳密に強制する仕組み
-  - 例: ターン管理の強制、与ダメージ妥当性チェック、サポート使用回数制限の自動検証
+スコープ外:
 
-### 運用前提（重要）
-- 本サイトは「オンラインで」「友人等の顔見知り同士が」「別途通話等で会話可能な状況」で遊ぶためのカジュアル対戦ツール
-- プレイヤー双方がポケカのルールに則って手動操作する前提
-- 本アプリは盤面共有・状態再現に主眼を置き、ジャッジ相当の厳密な不正防止はスコープ外
+- カード文言を解釈して自動でダメージ計算するルールエンジン
+- ターン制約やサポート使用回数などの厳密な自動ジャッジ
+- 不正防止を目的とした完全なサーバー裁定
 
----
+## 現在できること
+
+### セッション開始前
+
+- `/` でホーム画面を表示できる
+- 初期サイド枚数を 3〜6 枚で選択してセッションを開始できる
+- `/join` から既存セッションへ参加できる
+- 開始前画面は共通のプリプレイシェルを使い、背景に流れるカード演出を表示する
+
+### デッキ準備
+
+- デッキコードを入力して、公式デッキページからカード画像 URL と枚数を取得できる
+- 開発時はローカル Express プロキシ、本番では Firebase Hosting + Cloud Functions 経由で取得する
+- 取り込んだ 60 枚デッキをモーダル内で一覧表示できる
+- 各カードはホバーで拡大表示できる
+- 「このデッキを使う」で、手札 7 枚と初期サイドを含むセッション状態を作成できる
+
+### 対戦盤面
+
+- プレイヤー 2 人の盤面を Firestore `onSnapshot` でリアルタイム同期できる
+- 盤面は以下のゾーンを持つ
+  - 山札
+  - 手札
+  - バトル場
+  - ベンチ
+  - サイド
+  - トラッシュ
+  - ロスト
+  - 公開エリア
+  - スタジアム
+  - コイン
+- プレイマット中央にポケモンカード風のモンスターボールマークを表示する
+- 相手側の手札枚数・山札枚数・サイド枚数などを常時表示できる
+- 相手側の山札 / トラッシュ / ロスト / サイド / 手札枚数変化に視覚フィードバックを入れている
+
+### 対戦開始フロー
+
+- 盤面中央に `対戦スタート！` ボタンを表示する
+- 両プレイヤーが開始準備を完了するまで、相手のバトル場 / ベンチは裏向き表示にする
+- 両者が開始すると、相手側の初期配置カードを表向きに反転表示する
+- 自分だけ開始済みの場合は `相手の開始準備を待っています・・・` を表示する
+
+### 盤面操作
+
+- 手札を下部のフローティングトレイとして表示できる
+- 手札トレイは開閉でき、位置もドラッグで変更できる
+- 小道具 BOX を右下に表示し、開閉できる
+- ダメカン `10 / 50 / 100` と状態異常バッジをドラッグできる
+- カードはゾーン間ドラッグ&ドロップで移動できる
+- バトル場 / ベンチの複数カードスタックをまとめてドラッグできる
+- スタック単位で以下が可能
+  - 別のバトル場 / ベンチとのスワップ
+  - トラッシュ / ロストへのまとめ移動
+  - 山札の上 / 下へのまとめ移動
+- 山札・トラッシュ・ロスト・ベンチ・バトル場・公開エリア・スタジアムのカードは、必要な箇所でホバー拡大できる
+- トラッシュ / ロスト / バトル場 / ベンチ（複数枚時）はクリックで展開モーダルを開ける
+- 展開モーダルはドラッグ移動でき、カード拡大表示も画面内に収まるよう補正される
+- バトル場 / ベンチはダブルクリックでダメージ / 状態異常調整ポップオーバーを開ける
+- 山札はクリックで閲覧枚数選択モーダルを開ける
+- 山札閲覧モーダルでは「もう一枚閲覧」ができる
+- 手札内ではカードのホバー拡大ができ、全てトラッシュ / 全て山札に戻す操作も可能
+
+### 相手承認付き操作
+
+- 相手手札の公開要求
+- 相手手札からのランダム破壊要求
+- 相手手札公開後の選択破壊要求
+- 相手山札の公開要求
+- 承認 / 拒否は中央ブロッキングモーダルで処理する
+- 結果は右上通知で確認できる
+
+### ガイド / 補助 UI
+
+- 左上の設定アイコンから、以下の表示 ON/OFF を切り替えられる
+  - 操作ヒント
+  - バトルのはじめかた
+  - ターンの流れ
+  - 状態異常の効果
+- `バトルのはじめかた` / `ターンの流れ` / `状態異常の効果` はドラッグ移動と位置リセットに対応している
+- 共有メモ欄を使ってプレイヤー同士でテキスト共有できる
 
 ## 技術スタック
 
-フロントエンド:
-- React `^18.3.1`（Create React App）
-- React Router DOM `^6.23.1`
-- Bootstrap `^5.3.3` / React Bootstrap `^2.10.2`
+### フロントエンド
 
-ローカルAPI（スクレイピング補助）:
-- Express `^4.19.2`
-- Axios `^1.7.2`
-- Cheerio `^1.0.0-rc.12`
-- CORS `^2.8.5`
+- React `18`
+- Create React App (`react-scripts@5`)
+- React Router DOM `6`
+- CSS Modules + 通常 CSS
+- Bootstrap `5`
+- React Bootstrap
+- Font Awesome
+- DnD Kit (`@dnd-kit/core`, `@dnd-kit/modifiers`, `@dnd-kit/utilities`)
 
-データストア:
-- Firebase Firestore / Firebase Auth（Web SDK `firebase ^12.9.0`）
+### BaaS / インフラ
 
-テスト:
-- Jest + React Testing Library（CRA標準）
+- Firebase Authentication
+  - 匿名認証
+- Firestore
+  - 対戦セッション
+  - プレイヤーごとの秘匿状態
+  - プロキシ停止制御ドキュメント
+- Firebase Hosting
+  - SPA 配信
+  - `/api/proxy` を Cloud Functions に rewrite
+- Firebase Cloud Functions v2
+  - `proxyDeck`: 公式デッキページ取得プロキシ
+  - `budgetGuard`: 予算超過時のプロキシ停止
 
----
+### 開発用ローカルプロキシ
+
+- Node.js
+- Express
+- Axios
+- Cheerio
+- CORS
+
+### テスト
+
+- Jest
+- React Testing Library
+- Firebase Rules Unit Testing
+- Node built-in test runner（Firestore Rules テスト）
+
+### 実行環境
+
+- Node.js `20` 系
 
 ## アーキテクチャ概要
 
-### 実行形態（ローカル）
-- フロント: `npm start`（`http://localhost:3000`）
-- プロキシ: `node proxy-server.js`（`http://localhost:3001`）
-- DB: Firestore（クラウド）
+### 開発時
 
-### データフロー
 ```text
-Browser (React)
-  ├─ Firestore: セッション作成・更新・購読
-  └─ Local Proxy (Express, :3001)
-        └─ pokemon-card.com の deck/confirm を取得・解析
+Browser (React @ :3000)
+  ├─ Firestore / Firebase Auth
+  └─ Local Proxy (Express @ :3001)
+       └─ pokemon-card.com/deck/confirm.html
 ```
 
-### 主要フロー
-1. セッション作成 (`/home`)
-- `Home` が V2 スキーマの `sessions/{sessionId}` と `privateState/{playerId}` を初期化し、`/session?id=...&playerId=1` へ遷移
+### 本番時
 
-2. デッキ取り込み (`/session`)
-- 入力したデッキコードでプロキシAPIを呼び、カード画像URLを取得
-- `cardId` を払い出して `privateState/{playerId}` の `cardCatalog` / `zones.deck` / `zones.hand` に保存
-- `sessions/{sessionId}.publicState.players.{playerId}.counters` を同期更新
+```text
+Browser
+  ├─ Firebase Hosting
+  ├─ Firestore / Firebase Auth
+  └─ /api/proxy
+       └─ Firebase Functions v2 (proxyDeck)
+            └─ pokemon-card.com/deck/confirm.html
+```
 
-3. 盤面同期 (`/session` -> `PlayingField`)
-- `sessions/{sessionId}`（公開情報）と `privateState/{playerId}`（自分の秘匿情報）を購読して描画
+### 状態の持ち方
 
----
+- 公開盤面は `sessions/{sessionId}` に保存
+- プレイヤー固有の秘匿情報は `sessions/{sessionId}/privateState/{playerId}` に保存
+- そのため、同じ URL に再アクセスすると盤面復元できる
 
 ## 画面ルーティング一覧
 
-`src/App.js` ベースで整理:
-
 | URL | 実装 | 用途 |
 |---|---|---|
-| `/home` | `src/components/Home.js` | セッション作成・参加導線（初期サイド枚数の設定を含む） |
-| `/join` | `src/components/Join.js` | セッションID入力で参加 |
-| `/session?id=...&playerId=...` | `src/components/Session.js` | デッキコード入力・取り込み・保存・盤面遷移 |
-| `/test/pokemon` | `src/components/PokemonTest.js` | ポケモン表示コンポーネントの見た目確認 |
-| `/test/update-gamedata` | `src/components/UpdateGameDataTest.js` | JSONをセッションへ反映するテスト |
-| `/test/playing-field` | `src/components/PlayingFieldTest.js` | テスト用プレースホルダ画面 |
+| `/` | `src/components/Home.js` | ホーム画面、初期サイド枚数設定、セッション開始 |
+| `/home` | `Navigate` | `/` へのリダイレクト |
+| `/join` | `src/components/Join.js` | セッション ID を入力して参加 |
+| `/session?id=...&playerId=...` | `src/components/Session.js` | デッキ準備、対戦盤面表示 |
+| `/test/pokemon` | `src/components/PokemonTest.js` | カード表示確認 |
+| `/test/update-gamedata` | `src/components/UpdateGameDataTest.js` | JSON 反映テスト |
+| `/test/playing-field` | `src/components/PlayingFieldTest.js` | 盤面表示テスト |
 
-注意:
-- `src/App.js` に `/` ルートは定義されていないため、開発時は `http://localhost:3000/home` を直接開く
-
----
-
-## ローカルAPI（プロキシ）一覧
-
-`proxy-server.js`:
-
-- `GET /proxy?url=<targetUrl>`
-  - 取得したHTMLの `script` と `hidden input` を解析
-  - 返却:
-    - `imageUrls: string[]`
-    - `cardData: { id: string, count: number }[]`
-  - `url` 未指定時は `400`
-
-想定呼び出し:
-- `http://localhost:3001/proxy?url=https://www.pokemon-card.com/deck/confirm.html/deckID/<deckCode>`
-
----
-
-## Firestore データモデル
+## Firestore データ構成（概要）
 
 主要コレクション:
+
 - `sessions`
 - `sessions/{sessionId}/privateState/{playerId}`
+- `system/control_proxy`
 
-`sessions/{sessionId}` の基本形（V2）:
+### `sessions/{sessionId}`
 
-```json
-{
-  "version": 2,
-  "status": "waiting",
-  "createdAt": "2026-02-18T00:00:00.000Z",
-  "createdBy": "player1",
-  "updatedAt": "2026-02-18T00:00:00.000Z",
-  "updatedBy": "player1",
-  "revision": 0,
-  "participants": {
-    "player1": {
-      "uid": null,
-      "displayName": null,
-      "joinedAt": null,
-      "lastSeenAt": null,
-      "connectionState": "unknown"
-    },
-    "player2": {
-      "uid": null,
-      "displayName": null,
-      "joinedAt": null,
-      "lastSeenAt": null,
-      "connectionState": "unknown"
-    }
-  },
-  "publicState": {
-    "turnContext": {
-      "turnNumber": null,
-      "currentPlayer": null
-    },
-    "players": {
-      "player1": {
-        "board": {
-          "active": null,
-          "bench": [],
-          "discard": [],
-          "lostZone": [],
-          "prize": [],
-          "markers": []
-        },
-        "counters": {
-          "deckCount": 0,
-          "handCount": 0
-        }
-      },
-      "player2": {
-        "board": {
-          "active": null,
-          "bench": [],
-          "discard": [],
-          "lostZone": [],
-          "prize": [],
-          "markers": []
-        },
-        "counters": {
-          "deckCount": 0,
-          "handCount": 0
-        }
-      }
-    },
-    "stadium": null,
-    "operationRequests": []
-  }
-}
-```
+- セッション全体の公開状態
+- 参加者情報
+- revision / updatedAt / updatedBy
+- 公開盤面
+  - バトル場
+  - ベンチ
+  - 公開エリア
+  - トラッシュ
+  - ロスト
+  - サイド
+  - スタジアム
+- カウンタ
+  - 山札枚数
+  - 手札枚数
+- 承認リクエスト配列 `publicState.operationRequests`
+- 対戦開始準備状態
 
-`sessions/{sessionId}/privateState/{playerId}` の基本形:
+### `sessions/{sessionId}/privateState/{playerId}`
 
-```json
-{
-  "ownerPlayerId": "player1",
-  "updatedAt": "2026-02-18T00:00:00.000Z",
-  "updatedBy": "player1",
-  "revision": 0,
-  "zones": {
-    "deck": [],
-    "hand": []
-  },
-  "cardCatalog": {},
-  "initialDeckCardIds": [],
-  "uiPrefs": {
-    "handTrayOpen": false,
-    "toolboxOpen": false
-  }
-}
-```
+- プレイヤー本人だけが持つ秘匿状態
+- 山札
+- 手札
+- 山札閲覧中領域
+- `cardCatalog`
+- UI 設定
+  - 手札トレイ開閉
+  - 小道具 BOX 開閉
 
-補足:
-- 旧V1セッション（`player1/player2` 直下構造）は `compatRead` + `migrateV1ToV2` で読み取り互換対応
-- 移行CLI:
-  - `npm run migrate:sessions:v2 -- --project <projectId> --dry-run`
-  - `npm run migrate:sessions:v2 -- --project <projectId> --write --limit 10`
-  - `npm run verify:sessions:v2 -- --project <projectId>`
+### `system/control_proxy`
 
----
+- Cloud Functions 側のプロキシ有効 / 無効フラグ
+- 予算ガードが停止したかどうか
+- 最終通知情報
 
 ## リポジトリ構成
 
-主要ディレクトリ/ファイル:
-
 - `src/`
-  - `components/`: 画面・UIコンポーネント
-  - `css/`: 盤面やカード表示のスタイル
-  - `firebase.js`: Firebase初期化
-  - `game-state/`: V2スキーマ・ビルダー・移行・Invariant
-- `scripts/firestore/`: V1→V2移行CLI / V2検証CLI
+  - `components/`: 画面・UI
+  - `interaction/dnd/`: DnD payload / intent / mutation
+  - `game-state/`: Firestore スキーマ、builder、transaction
+  - `operations/wave1/`: 承認付き操作の intent / mutation
+  - `css/`: スタイル
+  - `utils/`: 背景演出などの補助関数
 - `public/`
-  - `sample_gamedata.json`: 盤面テスト用データ
-- `proxy-server.js`: デッキページ解析用のローカルプロキシ
-- `references/documents/`: 設計メモ・運用ドキュメント置き場
+  - カード裏面、コイン画像、サンプルデータなど
+- `functions/`
+  - Firebase Functions v2
+- `proxy-server.js`
+  - ローカル開発用 Express プロキシ
+- `scripts/firestore/`
+  - V1 -> V2 移行 / 検証 CLI
+- `references/`
+  - 要件定義、ロードマップ、実装手順書、実装ログ
 
----
+補足:
+
+- `src/components/operation/OperationPanel.js` はリポジトリ内に残っていますが、現行の主要 UI 導線では使っていません。現在の方針は GUI 中心です。
 
 ## セットアップ（ローカル開発）
 
 ### 前提
-- Node.js 20系（`.nvmrc` は `20.19.6`）
-- npm 10系
-- Firestore へアクセス可能な Firebase プロジェクト設定
+
+- Node.js `20` 系
+- npm
+- Firebase プロジェクトへアクセス可能
+- 匿名認証を有効化済み
 
 ### 1. 依存インストール
+
 ```bash
 npm ci
+cd functions && npm ci
 ```
 
-### 2. プロキシ起動（ターミナル1）
+### 2. ローカルプロキシ起動
+
+別ターミナルで実行:
+
 ```bash
 node proxy-server.js
 ```
 
-### 3. フロント起動（ターミナル2）
+デフォルトでは開発時のデッキ取得先は `http://localhost:3001/proxy` です。
+
+### 3. フロント起動
+
+別ターミナルで実行:
+
 ```bash
 npm start
 ```
 
-Auth/Firestore Emulator を使う場合:
+### 4. Emulator を使う場合
+
 ```bash
+firebase emulators:start --only auth,firestore
 REACT_APP_USE_FIREBASE_EMULATORS=true npm start
-firebase emulators:start --only auth,firestore --project demo-pokemon-card-game-online
 ```
 
-### 4. 動作確認
-1. `http://localhost:3000/home` を開く
-2. 「セッションを作成」
-3. デッキコードを入力して「デッキ情報を取得」
-4. 「このデッキを保存」
+### 5. 動作確認
 
-### トラブルシュート
-- `Missing or insufficient permissions`
-  - Firestore Rules / 参加者slot（`participants.player1|player2.uid`）を確認
-  - Firebase Authentication の Anonymous provider が有効化されているか確認
-- `npm ci` の `ENOTEMPTY ... node_modules/.cache/babel-loader`
-  - `npm start` が動作中のことが多い。先に停止して再実行
+1. `http://localhost:3000/` を開く
+2. `セッションを開始` でセッションを作る
+3. デッキコードを入力して `デッキ情報を取得`
+4. `このデッキを使う`
+5. 別ブラウザか別端末で `/join` から同じセッションへ参加する
 
 ### テスト
+
 ```bash
 CI=true npm test -- --watch=false
 npm run build
 firebase emulators:exec --only auth,firestore --project demo-pokemon-card-game-online "npm run test:rules"
 ```
 
----
+### よくあるトラブル
 
-## 開発ルール（AI駆動開発の土台）
+- `Missing or insufficient permissions`
+  - Firestore Rules
+  - 匿名認証
+  - `participants.player1 / player2` の占有状態
+  を確認する
+- `npm ci` の `ENOTEMPTY ... node_modules/.cache/babel-loader`
+  - `npm start` やテスト実行中プロセスを止めてから再実行する
+- `デッキ情報の取得に失敗しました。`
+  - 開発時は `proxy-server.js` が起動しているか確認する
 
-### Git運用（main直push禁止）
-- `main` への直接 push は禁止
-- 必ず:
-1. 作業ブランチ作成
-2. 変更・コミット
-3. push
-4. PR 作成
-5. レビュー後に merge
+## デプロイ構成
 
-### `references` 配下ドキュメントの命名規則
-- `references/documents/` に追加するファイル名は、先頭を必ず `yymmdd_n_` 形式にする
-  - `yymmdd`: 作成年月日（例: `260218`）
-  - `n`: その日の連番（`1`, `2`, `3`, ...）
-  - 例: `260218_3_realtime_state_design.md`
+本番は Firebase 内で完結する構成です。
 
-### 秘匿情報の扱い
-- `.env*`、秘密鍵、トークン、サービスアカウントJSONはコミットしない
-- チャットや議事録にも平文で貼らない
+- Hosting
+  - フロント配信
+- Functions
+  - `/api/proxy` を `proxyDeck` に rewrite
+- Firestore / Auth
+  - セッション状態と認証
+- Budget Guard
+  - Pub/Sub 通知を受けて、閾値超過時にプロキシを自動停止可能
 
-詳細なガードレールは `AGENTS.md` を参照。
+開発時のみ、ローカル Express プロキシも利用します。
 
----
+## 開発ルール
 
-## Coding Convention（現行実装ベース）
+### Git 運用
 
-- 関数コンポーネント + Hooks ベース（Class Componentなし）
-- 盤面状態は Firestore ドキュメントを中心に同期
-- CSS は `src/css/*` と module CSS の併用
-- コンポーネント名は PascalCase、ルートは React Router で定義
+- `main` への直接 push はしない
+- 基本フロー:
+  1. 作業ブランチ作成
+  2. 変更
+  3. コミット
+  4. push
+  5. PR
+  6. merge
 
----
+### `references` 配下ドキュメント命名規則
 
-## 既知の課題 / TODO
+- `references/documents/` の新規ドキュメント名は `yymmdd_n_...` 形式にする
+- 例: `260218_3_db_session_requirements_spec.md`
 
-- `PlayingField` の操作ボタンはUI中心で、実際の状態更新ロジックは未実装箇所が多い
-- `PlayingFieldTest.js` はサンプルデータ固定の表示確認用途で、実対戦フロー結合テストではない
-- `CardForm.js` は `GET /card/:number` を呼ぶが、`proxy-server.js` 側に該当APIがない
-- `App.test.js` はスモークテストのみで、ルーティング/操作の実運用テストは未整備
-- スマホ最適化は未着手（現状PC優先）
+### 秘匿情報
 
----
+- `.env*`
+- 秘密鍵
+- サービスアカウント JSON
+- アクセストークン
+
+これらはコミットしないこと。
+
+詳細な運用ルールは `AGENTS.md` を参照してください。
+
+## 既知の制約
+
+- ルールの厳密な自動強制は行っていない
+- プレイヤー同士がルールを理解して手動操作する前提
+- スマホ最適化はまだ本格対応前で、現状は PC 優先
+- `CardForm.js` など、一部に現行導線では使っていない旧実装 / 検証用コードが残っている
+- Create React App ベースのため、将来的にはビルド基盤の刷新余地がある
 
 ## References
 
 - `references/documents/260218_3_db_session_requirements_spec.md`
 - `references/documents/260218_4_full_implementation_roadmap.md`
+- `references/documents/260220_1_notes_on_how_each_operation_should_be_implemented.md`
+- `references/documents/260222_2_free_deployment_hosting_options_analysis.md`
